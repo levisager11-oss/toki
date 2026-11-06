@@ -42,3 +42,6 @@ export const CloseIcon = () => (
 export const ShareIcon = () => (
   <svg viewBox="0 0 16 16" aria-hidden="true" width="16" height="16"><path d="M8 10V2M4.5 5.5 8 2l3.5 3.5M3 9v5h10V9" fill="none" stroke="currentColor" strokeWidth="1.6" /></svg>
 );
+export const UserIcon = () => (
+  <svg {...tab}><path d="M10 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM3.5 17.5c.8-3.3 3.3-5 6.5-5s5.7 1.7 6.5 5" strokeLinejoin="round" /></svg>
+);

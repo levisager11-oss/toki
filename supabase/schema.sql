@@ -243,3 +243,71 @@ end $$;
 revoke execute on function public.games_single_featured() from public, anon, authenticated;
 create trigger games_single_featured after insert or update of featured on public.games
   for each row when (new.featured) execute function public.games_single_featured();
+
+
+-- Player accounts: anyone can sign up to play. An invite code makes a creator or admin.
+alter type public.user_role add value if not exists 'player';
+
+create or replace function public.handle_new_user() returns trigger
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_code text := nullif(trim(new.raw_user_meta_data ->> 'invite'), '');
+  v_username text := lower(new.raw_user_meta_data ->> 'username');
+  v_role public.user_role := 'player';
+begin
+  if v_code is not null then
+    select role into v_role from public.invites where code = v_code and used_by is null for update;
+    if v_role is null then
+      raise exception 'invalid_invite';
+    end if;
+  end if;
+  insert into public.profiles (id, username, role) values (new.id, v_username, v_role);
+  if v_code is not null then
+    update public.invites set used_by = new.id, used_at = now() where code = v_code;
+  end if;
+  if v_role = 'admin' then
+    update public.games set created_by = new.id where created_by is null;
+  end if;
+  return new;
+end $$;
+
+-- A player who gets an invite later can use it to become a creator (or admin).
+create function public.redeem_invite(p_code text) returns public.user_role
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_role public.user_role;
+begin
+  if auth.uid() is null then
+    raise exception 'login_required';
+  end if;
+  update public.invites set used_by = auth.uid(), used_at = now()
+    where code = p_code and used_by is null returning role into v_role;
+  if v_role is null then
+    raise exception 'invalid_invite';
+  end if;
+  update public.profiles set role = v_role where id = auth.uid() and role = 'player';
+  return v_role;
+end $$;
+revoke execute on function public.redeem_invite(text) from public, anon;
+grant execute on function public.redeem_invite(text) to authenticated;
+
+-- Only creators and admins add games and upload images.
+alter policy "members add games" on public.games
+  with check ((select public.my_role()) in ('admin', 'creator') and created_by = (select auth.uid()));
+alter policy "members upload thumbnails" on storage.objects
+  with check (bucket_id = 'thumbnails' and (storage.foldername(name))[1] = (select auth.uid())::text and (select public.my_role()) in ('admin', 'creator'));
+
+-- Cloud saves: one save per player per game. data = { "keys": { ... }, "t": <ms timestamp> }.
+create table public.game_saves (
+  user_id uuid not null default auth.uid() references public.profiles(id) on delete cascade,
+  game_id uuid not null references public.games(id) on delete cascade,
+  data jsonb not null check (pg_column_size(data) <= 1048576),
+  updated_at timestamptz not null default now(),
+  primary key (user_id, game_id)
+);
+create index game_saves_game_idx on public.game_saves(game_id);
+alter table public.game_saves enable row level security;
+create policy "own saves: read" on public.game_saves for select to authenticated using (user_id = (select auth.uid()));
+create policy "own saves: add" on public.game_saves for insert to authenticated with check (user_id = (select auth.uid()));
+create policy "own saves: change" on public.game_saves for update to authenticated using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
+create policy "own saves: delete" on public.game_saves for delete to authenticated using (user_id = (select auth.uid()));

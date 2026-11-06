@@ -10,6 +10,7 @@ import { COVERS, coverFor } from "../pixel/scenes";
 import { Cover } from "../components/Cover";
 import { NotFound } from "./NotFound";
 import { LinkCheck } from "../components/LinkCheck";
+import { SaveSupport } from "../components/SaveSupport";
 
 const MAX_IMAGE = 2 * 1024 * 1024;
 const MAX_SHOTS = 4;
@@ -150,6 +151,7 @@ export function GameForm() {
           <input id="url" type="url" required placeholder="https://" value={url} onChange={(e) => setUrl(e.target.value)} aria-describedby="url-help" />
           <small id="url-help">{t("form.urlHelp")}</small>
           <LinkCheck url={url.trim()} />
+          <SaveSupport open={!orig} />
 
           <label htmlFor="slug">{t("form.slug")}</label>
           <div className="prefix">

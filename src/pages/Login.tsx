@@ -1,11 +1,13 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { safeNext } from "../lib/nav";
 import { supabase } from "../lib/supabase";
 import { useI18n } from "../lib/i18n";
 
 export function Login() {
   const { t } = useI18n();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
@@ -18,7 +20,7 @@ export function Login() {
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setBusy(false);
     if (error) setErr(error.message.toLowerCase().includes("confirm") ? t("login.notConfirmed") : t("login.failed"));
-    else navigate("/my-games");
+    else navigate(safeNext(params.get("next")));
   };
 
   return (
@@ -33,7 +35,7 @@ export function Login() {
         {err && <p className="error" role="alert">{err}</p>}
         <button className="btn primary" disabled={busy}>{busy ? t("loading") : t("login.submit")}</button>
       </form>
-      <p className="alt">{t("login.noAccount")} <Link to="/signup">{t("login.signup")}</Link></p>
+      <p className="alt">{t("login.noAccount")} <Link to={`/signup${location.search}`}>{t("login.signup")}</Link></p>
     </section>
   );
 }

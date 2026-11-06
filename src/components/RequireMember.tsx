@@ -2,8 +2,10 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
+import { canCreate } from "../lib/types";
 
-export function RequireMember({ admin, children }: { admin?: boolean; children: ReactNode }) {
+/** For pages only creators (or with `admin`, only admins) can use. `player` lets any logged-in account in. */
+export function RequireMember({ admin, player, children }: { admin?: boolean; player?: boolean; children: ReactNode }) {
   const { session, profile, loading } = useAuth();
   const { t } = useI18n();
   if (loading) return <p className="msg">{t("loading")}</p>;
@@ -14,6 +16,8 @@ export function RequireMember({ admin, children }: { admin?: boolean; children: 
         <Link to="/login" className="btn primary">{t("nav.login")}</Link>
       </div>
     );
-  if (!profile || (admin && profile.role !== "admin")) return <p className="msg">{t("auth.noRights")}</p>;
+  if (!profile) return <p className="msg">{t("auth.noRights")}</p>;
+  const allowed = admin ? profile.role === "admin" : player || canCreate(profile);
+  if (!allowed) return <p className="msg">{t("auth.noRights")}</p>;
   return <>{children}</>;
 }

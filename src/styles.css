@@ -299,3 +299,14 @@ h1, h2 { text-wrap: balance; }
   .player-bar .actions .btn { flex: 1 1 40%; }
   .table .stats { order: 5; width: 100%; padding-left: 78px; }
 }
+
+/* save support */
+.hint.saved { color: var(--fg); }
+.save-support { border: 1px solid var(--line); border-left: 3px solid var(--accent); background: var(--surface); padding: 10px 12px; margin-top: 10px; }
+.save-support summary { cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.save-support summary span { font-size: 13px; color: var(--muted); }
+.save-support p { font-size: 14px; margin: 10px 0; }
+.save-support .actions { margin-bottom: 8px; }
+.save-support pre { max-height: 160px; overflow: auto; background: var(--bg); border: 1px solid var(--line); padding: 8px; font-size: 11px; margin: 8px 0 0; }
+.side-foot .who { text-decoration: none; font-weight: 700; }
+.side-foot .who.active { text-decoration: underline; }

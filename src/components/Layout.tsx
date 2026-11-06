@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
-import { HeartTabIcon, HomeIcon, KeyIcon, ListIcon, LogoMark, PlusIcon, SearchIcon } from "./icons";
+import { canCreate } from "../lib/types";
+import { HeartTabIcon, HomeIcon, KeyIcon, ListIcon, LogoMark, PlusIcon, SearchIcon, UserIcon } from "./icons";
 
 export function Layout() {
   const { t, lang, setLang } = useI18n();
@@ -54,7 +55,7 @@ export function Layout() {
           <NavLink to="/" end>{t("nav.discover")}</NavLink>
           <NavLink to="/favorites">{t("nav.favorites")}</NavLink>
         </nav>
-        {profile && (
+        {canCreate(profile) && profile && (
           <nav className="navgroup" aria-label={t("nav.create")}>
             <h4>{t("nav.create")}</h4>
             <NavLink to="/my-games">{t("nav.myGames")}</NavLink>
@@ -65,7 +66,7 @@ export function Layout() {
         <div className="side-foot">
           {profile ? (
             <>
-              <span className="who">@{profile.username}</span>
+              <NavLink to="/account" className="who">@{profile.username}</NavLink>
               <button type="button" className="linkish" onClick={() => signOut().then(() => navigate("/"))}>{t("nav.logout")}</button>
             </>
           ) : (
@@ -84,12 +85,10 @@ export function Layout() {
           </form>
           <div className="spacer" />
           {langSwitch}
-          {profile && (
+          {canCreate(profile) && (
             <Link to="/add" className="btn primary desktop-only"><span aria-hidden="true">+</span>{t("nav.addGame")}</Link>
           )}
-          {profile ? (
-            <button type="button" className="linkish mobile-only" onClick={() => signOut().then(() => navigate("/"))}>{t("nav.logout")}</button>
-          ) : null}
+
         </header>
         <main className="content">
           <Outlet />
@@ -101,9 +100,14 @@ export function Layout() {
         <NavLink to="/favorites"><HeartTabIcon /><span>{t("nav.favorites")}</span></NavLink>
         {profile ? (
           <>
-            <NavLink to="/my-games"><ListIcon /><span>{t("nav.myGames")}</span></NavLink>
-            <NavLink to="/add"><PlusIcon /><span>{t("nav.addGame")}</span></NavLink>
+            {canCreate(profile) && (
+              <>
+                <NavLink to="/my-games"><ListIcon /><span>{t("nav.myGames")}</span></NavLink>
+                <NavLink to="/add"><PlusIcon /><span>{t("nav.addGame")}</span></NavLink>
+              </>
+            )}
             {profile.role === "admin" && <NavLink to="/invites"><KeyIcon /><span>{t("nav.invites")}</span></NavLink>}
+            <NavLink to="/account"><UserIcon /><span>{t("nav.account")}</span></NavLink>
           </>
         ) : (
           <NavLink to="/login"><KeyIcon /><span>{t("nav.login")}</span></NavLink>
