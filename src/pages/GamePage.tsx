@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { useMediaQuery } from "../lib/useMediaQuery";
+
+const LANDSCAPE_PHONE = "(orientation: landscape) and (pointer: coarse) and (max-height: 600px)";
 import { Link, useParams } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
@@ -17,6 +20,9 @@ export function GamePage() {
   const [isFull, setIsFull] = useState(false);
   // iPhones can't put a page element into real fullscreen, so we fill the screen with CSS instead.
   const [pseudoFull, setPseudoFull] = useState(false);
+  // Phone turned sideways: the game fills the screen on its own; turning back to portrait leaves.
+  const landscapePhone = useMediaQuery(LANDSCAPE_PHONE);
+  const fillScreen = pseudoFull || landscapePhone;
   const game = games?.find((g) => g.slug === slug);
 
   useEffect(() => {
@@ -43,7 +49,11 @@ export function GamePage() {
   }, []);
 
   useEffect(() => {
-    if (!pseudoFull) return;
+    if (!landscapePhone) setPseudoFull(false);
+  }, [landscapePhone]);
+
+  useEffect(() => {
+    if (!fillScreen) return;
     document.documentElement.classList.add("no-scroll");
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setPseudoFull(false);
     document.addEventListener("keydown", onKey);
@@ -51,7 +61,7 @@ export function GamePage() {
       document.documentElement.classList.remove("no-scroll");
       document.removeEventListener("keydown", onKey);
     };
-  }, [pseudoFull]);
+  }, [fillScreen]);
 
   if (error) return <p className="msg">{t("error")}</p>;
   if (!games) return <p className="msg">{t("loading")}</p>;
@@ -81,8 +91,8 @@ export function GamePage() {
   return (
     <>
       <section className="player">
-        <div className={`frame ${isFull ? "is-full" : ""} ${pseudoFull ? "pseudo-full" : ""}`} ref={frameWrap}>
-          {pseudoFull && (
+        <div className={`frame ${isFull ? "is-full" : ""} ${fillScreen ? "pseudo-full" : ""}`} ref={frameWrap}>
+          {pseudoFull && !landscapePhone && (
             <button type="button" className="close-full" onClick={() => setPseudoFull(false)} aria-label={t("game.exitFullscreen")}>
               <CloseIcon />
             </button>
