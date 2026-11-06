@@ -1,14 +1,14 @@
 import { useI18n } from "../lib/i18n";
 import { useFavorites } from "../lib/local";
 import { useGames } from "../lib/useGames";
-import { GameGrid } from "../components/GameCard";
+import { GameGrid, GridSkeleton } from "../components/GameCard";
 
 export function Favorites() {
   const { t } = useI18n();
   const { games, error } = useGames();
   const { favs } = useFavorites();
   if (error) return <p className="msg">{t("error")}</p>;
-  if (!games) return <p className="msg">{t("loading")}</p>;
+  if (!games) return <section><div className="sechead"><h1 className="h">{t("favs.title")}</h1></div><GridSkeleton count={4} /></section>;
   const list = favs.map((s) => games.find((g) => g.slug === s)).filter((g) => !!g);
   return (
     <section>

@@ -1,8 +1,14 @@
-// Favorites and recently played live in this browser only (no account needed).
+// Favorites, recently played and the visitor id live in this browser only (no account needed).
+// A favorite also counts as a public like.
 import { useCallback, useEffect, useState } from "react";
+import { setLike } from "./games";
+import { patchGame } from "./useGames";
+import type { Game } from "./types";
 
 const FAV_KEY = "toki.favorites";
 const RECENT_KEY = "toki.recent";
+const SYNCED_KEY = "toki.likesSynced"; // favorites the server already counts as likes
+const VISITOR_KEY = "toki.visitor";
 const EVENT = "toki:local";
 
 function read(key: string): string[] {
@@ -36,13 +42,54 @@ function useList(key: string) {
   return list;
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+let memoryVisitor: string | null = null;
+
+/** Random id for this browser, so a visitor counts once per like and once per day per play. */
+export function visitorId(): string {
+  try {
+    const v = localStorage.getItem(VISITOR_KEY);
+    if (v && UUID.test(v)) return v;
+    const fresh = crypto.randomUUID();
+    localStorage.setItem(VISITOR_KEY, fresh);
+    return fresh;
+  } catch {
+    return (memoryVisitor ??= crypto.randomUUID());
+  }
+}
+
+function withLikes(g: Game, likes: number): Game {
+  return { ...g, stats: { plays: g.stats?.plays ?? 0, likes: Math.max(0, likes) } };
+}
+
+function sendLike(game: Pick<Game, "id" | "slug">, on: boolean) {
+  setLike(game.id, visitorId(), on).then((n) => {
+    if (n === null) return; // offline: syncLikes retries on the next visit
+    const synced = read(SYNCED_KEY).filter((s) => s !== game.slug);
+    write(SYNCED_KEY, on ? [game.slug, ...synced] : synced);
+    patchGame(game.id, (g) => withLikes(g, n));
+  });
+}
+
 export function useFavorites() {
   const favs = useList(FAV_KEY);
-  const toggle = useCallback((slug: string) => {
+  const toggle = useCallback((game: Pick<Game, "id" | "slug">) => {
     const cur = read(FAV_KEY);
-    write(FAV_KEY, cur.includes(slug) ? cur.filter((s) => s !== slug) : [slug, ...cur]);
+    const on = !cur.includes(game.slug);
+    write(FAV_KEY, on ? [game.slug, ...cur] : cur.filter((s) => s !== game.slug));
+    patchGame(game.id, (g) => withLikes(g, (g.stats?.likes ?? 0) + (on ? 1 : -1)));
+    sendLike(game, on);
   }, []);
   return { favs, isFav: (slug: string) => favs.includes(slug), toggle };
+}
+
+/** Sends likes for favorites saved before likes existed, or that failed to send. */
+export function syncLikes(games: Game[]) {
+  const favs = new Set(read(FAV_KEY));
+  const synced = new Set(read(SYNCED_KEY));
+  for (const g of games) {
+    if (favs.has(g.slug) !== synced.has(g.slug)) sendLike(g, favs.has(g.slug));
+  }
 }
 
 export function useRecent() {

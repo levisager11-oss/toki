@@ -115,6 +115,30 @@ const en = {
   "cat.sports": "Sports",
   "cat.strategy": "Strategy",
   "cat.other": "Other",
+  "stats.plays": "{n} play|{n} plays",
+  "stats.likes": "{n} like|{n} likes",
+  "fav.save": "Favorite",
+  "fav.saved": "Favorited",
+  "game.share": "Share",
+  "game.copied": "Link copied",
+  "game.screenshots": "Screenshots",
+  "game.screenshotN": "{title}, screenshot {n}",
+  "home.popular": "Popular",
+  "home.pickFeatured": "Choose a highlighted game",
+  "form.screenshots": "Screenshots (optional, up to 4)",
+  "form.screenshotsHelp": "Shown below the game. PNG, JPG, WebP or GIF, max. 2 MB each.",
+  "form.addScreenshot": "Add screenshot",
+  "form.removeScreenshot": "Remove screenshot {n}",
+  "form.preview": "Preview",
+  "form.showPreview": "Try the game here",
+  "form.hidePreview": "Hide preview",
+  "check.checking": "Checking the link…",
+  "check.ok": "Looks good: this game can run inside Toki.",
+  "check.blocked": "This site doesn't allow being shown inside other sites. Players will have to use “Open in new tab”.",
+  "check.isolation": "This site is missing two headers Toki needs (Cross-Origin-Resource-Policy and Cross-Origin-Embedder-Policy), so it may not load inside Toki. Try the preview below.",
+  "check.unreachable": "Couldn't open this link. Check that it's right and that the site is online.",
+  "check.failed": "Couldn't check this link. Try the preview below to see if it loads.",
+  "my.plays14": "Plays in the last 14 days",
 };
 
 type Key = keyof typeof en;
@@ -234,6 +258,30 @@ const de: Record<Key, string> = {
   "cat.sports": "Sport",
   "cat.strategy": "Strategie",
   "cat.other": "Andere",
+  "stats.plays": "{n}× gespielt|{n}× gespielt",
+  "stats.likes": "{n} Like|{n} Likes",
+  "fav.save": "Favorit",
+  "fav.saved": "Gespeichert",
+  "game.share": "Teilen",
+  "game.copied": "Link kopiert",
+  "game.screenshots": "Screenshots",
+  "game.screenshotN": "{title}, Screenshot {n}",
+  "home.popular": "Beliebt",
+  "home.pickFeatured": "Hervorgehobenes Spiel wählen",
+  "form.screenshots": "Screenshots (optional, bis zu 4)",
+  "form.screenshotsHelp": "Werden unter dem Spiel gezeigt. PNG, JPG, WebP oder GIF, je max. 2 MB.",
+  "form.addScreenshot": "Screenshot hinzufügen",
+  "form.removeScreenshot": "Screenshot {n} entfernen",
+  "form.preview": "Vorschau",
+  "form.showPreview": "Spiel hier ausprobieren",
+  "form.hidePreview": "Vorschau ausblenden",
+  "check.checking": "Link wird geprüft…",
+  "check.ok": "Sieht gut aus: Dieses Spiel läuft in Toki.",
+  "check.blocked": "Diese Seite lässt sich nicht in anderen Seiten anzeigen. Spieler müssen „In neuem Tab öffnen“ benutzen.",
+  "check.isolation": "Dieser Seite fehlen zwei Header, die Toki braucht (Cross-Origin-Resource-Policy und Cross-Origin-Embedder-Policy). Das Spiel lädt deshalb vielleicht nicht in Toki. Probier die Vorschau unten aus.",
+  "check.unreachable": "Dieser Link lässt sich nicht öffnen. Prüfe, ob er stimmt und die Seite online ist.",
+  "check.failed": "Der Link konnte nicht geprüft werden. Probier mit der Vorschau unten, ob er lädt.",
+  "my.plays14": "Gespielt in den letzten 14 Tagen",
 };
 
 export type Lang = "en" | "de";
@@ -252,9 +300,17 @@ function initialLang(): Lang {
 interface I18n {
   lang: Lang;
   setLang: (l: Lang) => void;
-  t: (key: Key, vars?: Record<string, string>) => string;
+  t: (key: Key, vars?: Record<string, string | number>) => string;
 }
 const I18nContext = createContext<I18n>(null!);
+
+/** Fills in {name} placeholders. "one|many" strings pick a form by the number n. */
+export function format(text: string, vars?: Record<string, string | number>): string {
+  let s = text;
+  if (s.includes("|") && typeof vars?.n === "number") s = s.split("|")[vars.n === 1 ? 0 : 1];
+  if (vars) for (const [k, v] of Object.entries(vars)) s = s.split(`{${k}}`).join(String(v));
+  return s;
+}
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(initialLang);
@@ -269,11 +325,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       /* ignore */
     }
   };
-  const t = (key: Key, vars?: Record<string, string>) => {
-    let s = dicts[lang][key] ?? key;
-    if (vars) for (const [k, v] of Object.entries(vars)) s = s.replace(`{${k}}`, v);
-    return s;
-  };
+  const t = (key: Key, vars?: Record<string, string | number>) => format(dicts[lang][key] ?? key, vars);
   return <I18nContext.Provider value={{ lang, setLang, t }}>{children}</I18nContext.Provider>;
 }
 
