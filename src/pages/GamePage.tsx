@@ -68,33 +68,20 @@ export function GamePage() {
 
   useEffect(() => {
     if (!fillScreen) return;
-    // iPhones keep scrolling the page under a fixed layer, and their toolbar changes the
-    // screen height, which left a strip of the page showing below the game when the page
-    // was scrolled down. So: pin the page where it is, size the game to the visible area,
-    // and put the page back where it was afterwards.
+    // On iPhones a fixed layer over a scrolled page leaves a strip of the page showing, and
+    // moving the page itself (e.g. pinning <body> with a negative offset) makes taps inside
+    // the game land in the wrong place. So: go to the top of the page, where the game layer
+    // and the page line up, block scrolling while the game fills the screen, and go back
+    // to where the visitor was afterwards.
     const y = window.scrollY;
-    const body = document.body.style;
     const html = document.documentElement;
+    window.scrollTo(0, 0);
     html.classList.add("no-scroll");
-    body.position = "fixed";
-    body.top = `-${y}px`;
-    body.left = "0";
-    body.right = "0";
-
-    const vv = window.visualViewport;
-    const fit = () => {
-      if (vv) html.style.setProperty("--screen-h", `${vv.height}px`);
-    };
-    fit();
-    vv?.addEventListener("resize", fit);
 
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setPseudoFull(false);
     document.addEventListener("keydown", onKey);
     return () => {
-      vv?.removeEventListener("resize", fit);
-      html.style.removeProperty("--screen-h");
       html.classList.remove("no-scroll");
-      body.position = body.top = body.left = body.right = "";
       window.scrollTo(0, y);
       document.removeEventListener("keydown", onKey);
     };
