@@ -4,7 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Toki</title>
-    <meta name="description" content="Browser games by Levi and friends." />
+    <meta name="description" content="Browser games by Levi and friends. Play free, no account needed." />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Toki" />
+    <meta property="og:title" content="Toki" />
+    <meta property="og:description" content="Browser games by Levi and friends. Play free, no account needed." />
+    <meta name="twitter:card" content="summary_large_image" />
 
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
@@ -21,7 +26,10 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;700;800&family=Silkscreen&display=swap" />
+    <!-- Fonts load without blocking the first paint; system fonts show until they arrive. -->
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;700;800&family=Silkscreen&display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;700;800&family=Silkscreen&display=swap" media="print" onload="this.media='all'" />
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;700;800&family=Silkscreen&display=swap" /></noscript>
   </head>
   <body>
     <div id="root"></div>
