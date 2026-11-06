@@ -6,7 +6,7 @@ import { markPlayed } from "../lib/local";
 import { useGames } from "../lib/useGames";
 import { GameGrid } from "../components/GameCard";
 import { FavButton } from "../components/FavButton";
-import { FullscreenIcon } from "../components/icons";
+import { CloseIcon, FullscreenIcon } from "../components/icons";
 
 export function GamePage() {
   const { slug = "" } = useParams();
@@ -15,6 +15,8 @@ export function GamePage() {
   const { games, error } = useGames();
   const frameWrap = useRef<HTMLDivElement>(null);
   const [isFull, setIsFull] = useState(false);
+  // iPhones can't put a page element into real fullscreen, so we fill the screen with CSS instead.
+  const [pseudoFull, setPseudoFull] = useState(false);
   const game = games?.find((g) => g.slug === slug);
 
   useEffect(() => {
@@ -28,10 +30,28 @@ export function GamePage() {
   }, [game]);
 
   useEffect(() => {
-    const onChange = () => setIsFull(document.fullscreenElement === frameWrap.current);
+    const onChange = () => {
+      const d = document as Document & { webkitFullscreenElement?: Element };
+      setIsFull((d.fullscreenElement ?? d.webkitFullscreenElement) === frameWrap.current);
+    };
     document.addEventListener("fullscreenchange", onChange);
-    return () => document.removeEventListener("fullscreenchange", onChange);
+    document.addEventListener("webkitfullscreenchange", onChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onChange);
+      document.removeEventListener("webkitfullscreenchange", onChange);
+    };
   }, []);
+
+  useEffect(() => {
+    if (!pseudoFull) return;
+    document.documentElement.classList.add("no-scroll");
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setPseudoFull(false);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.documentElement.classList.remove("no-scroll");
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [pseudoFull]);
 
   if (error) return <p className="msg">{t("error")}</p>;
   if (!games) return <p className="msg">{t("loading")}</p>;
@@ -44,10 +64,15 @@ export function GamePage() {
     );
 
   const fullscreen = () => {
-    const el = frameWrap.current;
+    const el = frameWrap.current as (HTMLDivElement & { webkitRequestFullscreen?: () => void }) | null;
     if (!el) return;
-    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-    else el.requestFullscreen?.().catch(() => {});
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+      return;
+    }
+    if (el.requestFullscreen) el.requestFullscreen().catch(() => setPseudoFull(true));
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    else setPseudoFull(true);
   };
   const desc = (lang === "de" && game.description_de) || game.description;
   const canEdit = profile && (profile.role === "admin" || profile.id === game.created_by);
@@ -56,7 +81,12 @@ export function GamePage() {
   return (
     <>
       <section className="player">
-        <div className={`frame ${isFull ? "is-full" : ""}`} ref={frameWrap}>
+        <div className={`frame ${isFull ? "is-full" : ""} ${pseudoFull ? "pseudo-full" : ""}`} ref={frameWrap}>
+          {pseudoFull && (
+            <button type="button" className="close-full" onClick={() => setPseudoFull(false)} aria-label={t("game.exitFullscreen")}>
+              <CloseIcon />
+            </button>
+          )}
           <iframe
             key={game.play_url}
             src={game.play_url}

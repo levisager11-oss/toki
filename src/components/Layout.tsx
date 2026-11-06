@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
-import { LogoMark, SearchIcon } from "./icons";
+import { HeartTabIcon, HomeIcon, KeyIcon, ListIcon, LogoMark, PlusIcon, SearchIcon } from "./icons";
 
 export function Layout() {
   const { t, lang, setLang } = useI18n();
@@ -34,8 +34,16 @@ export function Layout() {
   const onSearch = (e: FormEvent) => {
     e.preventDefault();
     const v = q.trim();
+    searchRef.current?.blur(); // closes the phone keyboard
     navigate(v ? `/?q=${encodeURIComponent(v)}` : "/");
   };
+
+  const langSwitch = (
+    <div className="lang" role="group" aria-label="Language / Sprache">
+      <button type="button" className={lang === "en" ? "on" : ""} aria-pressed={lang === "en"} onClick={() => setLang("en")}>EN</button>
+      <button type="button" className={lang === "de" ? "on" : ""} aria-pressed={lang === "de"} onClick={() => setLang("de")}>DE</button>
+    </div>
+  );
 
   return (
     <div className="app">
@@ -68,24 +76,39 @@ export function Layout() {
 
       <div className="main">
         <header className="top">
+          <Link to="/" className="logo mobile-only"><LogoMark />toki</Link>
           <form className="search" role="search" onSubmit={onSearch}>
             <SearchIcon />
-            <input ref={searchRef} id="search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("search.placeholder")} aria-label={t("search.placeholder")} />
+            <input ref={searchRef} id="search" type="search" enterKeyHint="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("search.placeholder")} aria-label={t("search.placeholder")} />
             <kbd aria-hidden="true">/</kbd>
           </form>
           <div className="spacer" />
-          <div className="lang" role="group" aria-label="Language / Sprache">
-            <button type="button" className={lang === "en" ? "on" : ""} aria-pressed={lang === "en"} onClick={() => setLang("en")}>EN</button>
-            <button type="button" className={lang === "de" ? "on" : ""} aria-pressed={lang === "de"} onClick={() => setLang("de")}>DE</button>
-          </div>
+          {langSwitch}
           {profile && (
-            <Link to="/add" className="btn primary"><span aria-hidden="true">+</span>{t("nav.addGame")}</Link>
+            <Link to="/add" className="btn primary desktop-only"><span aria-hidden="true">+</span>{t("nav.addGame")}</Link>
           )}
+          {profile ? (
+            <button type="button" className="linkish mobile-only" onClick={() => signOut().then(() => navigate("/"))}>{t("nav.logout")}</button>
+          ) : null}
         </header>
         <main className="content">
           <Outlet />
         </main>
       </div>
+
+      <nav className="tabbar" aria-label="Toki">
+        <NavLink to="/" end><HomeIcon /><span>{t("nav.discover")}</span></NavLink>
+        <NavLink to="/favorites"><HeartTabIcon /><span>{t("nav.favorites")}</span></NavLink>
+        {profile ? (
+          <>
+            <NavLink to="/my-games"><ListIcon /><span>{t("nav.myGames")}</span></NavLink>
+            <NavLink to="/add"><PlusIcon /><span>{t("nav.addGame")}</span></NavLink>
+            {profile.role === "admin" && <NavLink to="/invites"><KeyIcon /><span>{t("nav.invites")}</span></NavLink>}
+          </>
+        ) : (
+          <NavLink to="/login"><KeyIcon /><span>{t("nav.login")}</span></NavLink>
+        )}
+      </nav>
     </div>
   );
 }

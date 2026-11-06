@@ -18,10 +18,24 @@ export const PlayIcon = () => (
     <path d="M4 2v12l10-6z" fill="currentColor" />
   </svg>
 );
-export const LogoMark = () => (
-  <svg viewBox="0 0 8 8" aria-hidden="true" width="24" height="24" shapeRendering="crispEdges">
-    <rect width="8" height="8" fill="var(--fg)" />
-    <path fill="var(--accent)" d="M1 2h6v1H1zM0 3h8v3H0zM1 6h2v1H1zM5 6h2v1H5z" />
-    <path fill="var(--fg)" d="M1 4h3v1H1zM2 3h1v3H2zM5 4h1v1H5zM6 3h1v1H6z" />
-  </svg>
+export const LogoMark = () => <img src="/favicon.svg" alt="" width="24" height="24" className="logo-mark" />;
+
+const tab = { viewBox: "0 0 20 20", width: 22, height: 22, "aria-hidden": true, fill: "none", stroke: "currentColor", strokeWidth: 1.7 } as const;
+export const HomeIcon = () => (
+  <svg {...tab}><path d="M3 9.5 10 3l7 6.5V17h-4.5v-4.5h-5V17H3z" strokeLinejoin="round" /></svg>
+);
+export const HeartTabIcon = () => (
+  <svg {...tab}><path d="M10 17s-7-4.4-7-9.2A3.8 3.8 0 0 1 10 5.6a3.8 3.8 0 0 1 7 2.2C17 12.6 10 17 10 17Z" strokeLinejoin="round" /></svg>
+);
+export const ListIcon = () => (
+  <svg {...tab}><path d="M3 4h14M3 10h14M3 16h14" /></svg>
+);
+export const PlusIcon = () => (
+  <svg {...tab}><path d="M10 3.5v13M3.5 10h13" /></svg>
+);
+export const KeyIcon = () => (
+  <svg {...tab}><path d="M3 16.5 9.3 10.2M7 14.5l2 2M12.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" /></svg>
+);
+export const CloseIcon = () => (
+  <svg viewBox="0 0 16 16" aria-hidden="true" width="18" height="18"><path d="M3 3l10 10M13 3 3 13" fill="none" stroke="currentColor" strokeWidth="1.8" /></svg>
 );
