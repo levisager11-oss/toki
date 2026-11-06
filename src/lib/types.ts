@@ -1,4 +1,7 @@
-export type Role = "admin" | "creator";
+export type Role = "admin" | "creator" | "player";
+
+/** Creators and admins add games; players only play. */
+export const canCreate = (p: { role: Role } | null | undefined) => p?.role === "admin" || p?.role === "creator";
 
 export interface Profile {
   id: string;

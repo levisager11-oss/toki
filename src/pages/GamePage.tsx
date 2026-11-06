@@ -6,6 +6,7 @@ import { useMediaQuery } from "../lib/useMediaQuery";
 import { markPlayed, visitorId } from "../lib/local";
 import { plays, recordPlay } from "../lib/games";
 import { useGames } from "../lib/useGames";
+import { useSaveBridge } from "../lib/saves";
 import { GameGrid, Plays } from "../components/GameCard";
 import { FavButton } from "../components/FavButton";
 import { CloseIcon, FullscreenIcon, ShareIcon } from "../components/icons";
@@ -20,6 +21,7 @@ export function GamePage() {
   const { profile } = useAuth();
   const { games, error } = useGames();
   const frameWrap = useRef<HTMLDivElement>(null);
+  const gameFrame = useRef<HTMLIFrameElement>(null);
   const [isFull, setIsFull] = useState(false);
   // iPhones can't put a page element into real fullscreen, so we fill the screen with CSS instead.
   const [pseudoFull, setPseudoFull] = useState(false);
@@ -29,6 +31,7 @@ export function GamePage() {
   const game = games?.find((g) => g.slug === slug);
   const [shared, setShared] = useState(false);
   const gameId = game?.id;
+  const saves = useSaveBridge(gameFrame, gameId, game?.play_url, profile?.id);
 
   useEffect(() => {
     if (!gameId) return;
@@ -153,6 +156,7 @@ export function GamePage() {
             </button>
           )}
           <iframe
+            ref={gameFrame}
             key={game.play_url}
             src={game.play_url}
             title={game.title}
@@ -176,6 +180,12 @@ export function GamePage() {
             <button type="button" className="btn primary" onClick={fullscreen}><FullscreenIcon />{t("game.fullscreen")}</button>
           </div>
         </div>
+        {saves === "account" && <p className="hint saved">✓ {t("saves.account")}</p>}
+        {saves === "device" && (
+          <p className="hint saved">
+            {t("saves.device")} <Link to={`/signup?next=/game/${game.slug}`}>{t("saves.signup")}</Link>
+          </p>
+        )}
         <p className="hint">
           {t("game.notLoading")}{" "}
           <a href={game.play_url} target="_blank" rel="noopener noreferrer">{t("game.openDirect")} ↗</a>
