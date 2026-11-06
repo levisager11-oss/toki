@@ -115,7 +115,9 @@ export function useSaveBridge(frame: RefObject<HTMLIFrameElement>, gameId: strin
         if (userId) {
           pending.current = save;
           clearTimeout(timer.current);
-          timer.current = setTimeout(flushCloud, CLOUD_WAIT_MS);
+          // A save made while the app is closing goes up right away.
+          if (document.hidden) flushCloud();
+          else timer.current = setTimeout(flushCloud, CLOUD_WAIT_MS);
         }
       }
     };

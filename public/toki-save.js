@@ -24,7 +24,8 @@
     raw.set.call(ls, MARK, String(t));
     send("store", { keys: keys(), t: t });
   }
-  function later() { clearTimeout(timer); timer = setTimeout(flush, 400); }
+  // Games often save while the app is closing: send that right away.
+  function later() { if (document.hidden) return flush(); clearTimeout(timer); timer = setTimeout(flush, 400); }
 
   ["setItem", "removeItem", "clear"].forEach(function (name) {
     var fn = P[name];
