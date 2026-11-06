@@ -126,3 +126,16 @@ create policy "members upload thumbnails" on storage.objects for insert to authe
   with check (bucket_id = 'thumbnails' and (storage.foldername(name))[1] = (select auth.uid())::text and (select public.my_role()) is not null);
 create policy "members manage own thumbnails" on storage.objects for delete to authenticated
   using (bucket_id = 'thumbnails' and (storage.foldername(name))[1] = (select auth.uid())::text);
+
+-- Accounts are invite-only, so an email confirmation adds nothing: confirm on creation.
+create function public.auto_confirm_user() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if new.email_confirmed_at is null then
+    new.email_confirmed_at := now();
+  end if;
+  return new;
+end $$;
+revoke execute on function public.auto_confirm_user() from public, anon, authenticated;
+create trigger auto_confirm_user before insert on auth.users
+  for each row execute function public.auto_confirm_user();

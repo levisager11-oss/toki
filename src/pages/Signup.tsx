@@ -32,8 +32,11 @@ export function Signup() {
         options: { data: { invite: code, username: name }, emailRedirectTo: `${window.location.origin}/login` },
       });
       if (error) return setErr(error.message.includes("Database error") ? t("signup.badInvite") : error.message);
-      if (data.session) navigate("/my-games");
-      else setDone(true);
+      if (data.session) return navigate("/my-games");
+      // Invited accounts are confirmed on creation, so log straight in.
+      const { error: loginError } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (loginError) setDone(true);
+      else navigate("/my-games");
     } finally {
       setBusy(false);
     }
