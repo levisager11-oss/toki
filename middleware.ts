@@ -1,8 +1,8 @@
 // Link previews: chat apps don't run the site's JavaScript, so for them we fill in the
 // page title, description and image on the server. Normal visitors pass straight through.
-import { coverFor } from "./src/pixel/scenes";
-import { SUPABASE_KEY, SUPABASE_URL } from "./server/config";
-import { injectMeta, PREVIEW_BOT, type PageMeta } from "./server/meta";
+import { coverFor } from "./src/pixel/scenes.js";
+import { SUPABASE_KEY, SUPABASE_URL } from "./server/config.js";
+import { injectMeta, PREVIEW_BOT, type PageMeta } from "./server/meta.js";
 
 export const config = { matcher: ["/", "/game/:slug*"] };
 
