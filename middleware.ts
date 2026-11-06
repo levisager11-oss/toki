@@ -23,8 +23,9 @@ async function gameMeta(slug: string, origin: string): Promise<PageMeta | null> 
 }
 
 export default async function middleware(request: Request) {
-  if (!PREVIEW_BOT.test(request.headers.get("user-agent") ?? "")) return;
   const url = new URL(request.url);
+  // "?og" shows what preview bots get, for testing in a normal browser.
+  if (!PREVIEW_BOT.test(request.headers.get("user-agent") ?? "") && !url.searchParams.has("og")) return;
   try {
     const slug = /^\/game\/([a-z0-9-]+)\/?$/.exec(url.pathname)?.[1];
     const meta = slug
