@@ -139,3 +139,107 @@ end $$;
 revoke execute on function public.auto_confirm_user() from public, anon, authenticated;
 create trigger auto_confirm_user before insert on auth.users
   for each row execute function public.auto_confirm_user();
+
+
+-- Play counts, likes, screenshots, and one featured game at a time.
+-- Visitors have no account, so each browser sends a random "visitor" id it keeps in localStorage.
+
+create table public.game_stats (
+  game_id uuid primary key references public.games(id) on delete cascade,
+  plays integer not null default 0 check (plays >= 0),
+  likes integer not null default 0 check (likes >= 0)
+);
+
+-- One row per game, browser and day: a browser adds at most one play per game per day.
+create table public.game_plays (
+  game_id uuid not null references public.games(id) on delete cascade,
+  visitor uuid not null,
+  day date not null default current_date,
+  primary key (game_id, visitor, day)
+);
+create index game_plays_day_idx on public.game_plays(game_id, day);
+
+create table public.game_likes (
+  game_id uuid not null references public.games(id) on delete cascade,
+  visitor uuid not null,
+  created_at timestamptz not null default now(),
+  primary key (game_id, visitor)
+);
+
+alter table public.game_stats enable row level security;
+alter table public.game_plays enable row level security;
+alter table public.game_likes enable row level security;
+create policy "stats are public" on public.game_stats for select using (true);
+-- game_plays and game_likes have no policies: only the functions below touch them.
+
+create function public.record_play(p_game uuid, p_visitor uuid) returns void
+language plpgsql security definer set search_path = '' as $$
+begin
+  insert into public.game_plays (game_id, visitor) values (p_game, p_visitor) on conflict do nothing;
+  if found then
+    insert into public.game_stats (game_id, plays) values (p_game, 1)
+    on conflict (game_id) do update set plays = public.game_stats.plays + 1;
+  end if;
+end $$;
+
+-- Returns the game's like count after the change.
+create function public.set_like(p_game uuid, p_visitor uuid, p_like boolean) returns integer
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_likes integer;
+begin
+  if p_like then
+    insert into public.game_likes (game_id, visitor) values (p_game, p_visitor) on conflict do nothing;
+    if found then
+      insert into public.game_stats (game_id, likes) values (p_game, 1)
+      on conflict (game_id) do update set likes = public.game_stats.likes + 1;
+    end if;
+  else
+    delete from public.game_likes where game_id = p_game and visitor = p_visitor;
+    if found then
+      update public.game_stats set likes = greatest(likes - 1, 0) where game_id = p_game;
+    end if;
+  end if;
+  select likes into v_likes from public.game_stats where game_id = p_game;
+  return coalesce(v_likes, 0);
+end $$;
+
+-- Daily plays for the last 14 days (oldest first) for the caller's games, or all games for admins.
+create function public.my_game_stats() returns table (game_id uuid, daily integer[])
+language sql stable security definer set search_path = '' as $$
+  select g.id,
+    array(
+      select count(p.visitor)::integer
+      from generate_series(current_date - 13, current_date, interval '1 day') d
+      left join public.game_plays p on p.game_id = g.id and p.day = d::date
+      group by d order by d
+    )
+  from public.games g
+  where g.created_by = auth.uid() or public.my_role() = 'admin'
+$$;
+
+revoke execute on function public.record_play(uuid, uuid) from public;
+revoke execute on function public.set_like(uuid, uuid, boolean) from public;
+revoke execute on function public.my_game_stats() from public, anon;
+grant execute on function public.record_play(uuid, uuid) to anon, authenticated;
+grant execute on function public.set_like(uuid, uuid, boolean) to anon, authenticated;
+grant execute on function public.my_game_stats() to authenticated;
+
+-- Up to 4 screenshot links per game.
+create function public.all_https(urls text[]) returns boolean
+language sql immutable set search_path = '' as $$
+  select coalesce(bool_and(u ~ '^https://' and char_length(u) <= 500), true) from unnest(urls) u
+$$;
+alter table public.games add column screenshots text[] not null default '{}'
+  check (cardinality(screenshots) <= 4 and public.all_https(screenshots));
+
+-- Only one featured game: featuring a game un-features the others in the same step.
+create function public.games_single_featured() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  update public.games set featured = false where featured and id <> new.id;
+  return null;
+end $$;
+revoke execute on function public.games_single_featured() from public, anon, authenticated;
+create trigger games_single_featured after insert or update of featured on public.games
+  for each row when (new.featured) execute function public.games_single_featured();
