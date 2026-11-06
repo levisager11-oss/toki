@@ -9,8 +9,11 @@ import { CATEGORIES, type Category, type Game } from "../lib/types";
 import { COVERS, coverFor } from "../pixel/scenes";
 import { Cover } from "../components/Cover";
 import { NotFound } from "./NotFound";
+import { LinkCheck } from "../components/LinkCheck";
 
 const MAX_IMAGE = 2 * 1024 * 1024;
+const MAX_SHOTS = 4;
+const IMAGE_TYPES = "image/png,image/jpeg,image/webp,image/gif";
 
 export function GameForm() {
   const { slug: editSlug } = useParams();
@@ -31,6 +34,7 @@ export function GameForm() {
   const [cover, setCover] = useState<string>("");
   const [image, setImage] = useState<string | null>(null);
   const [featured, setFeatured] = useState(false);
+  const [shots, setShots] = useState<string[]>([]);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -52,6 +56,7 @@ export function GameForm() {
       setCover(coverFor(g.slug, g.cover));
       setImage(g.thumbnail_url);
       setFeatured(g.featured);
+      setShots(g.screenshots ?? []);
     });
   }, [editSlug]);
 
@@ -67,16 +72,31 @@ export function GameForm() {
     if (!slugEdited) setSlug(slugify(v));
   };
 
-  const upload = async (file: File) => {
+  /** Uploads an image and returns its public link, or null (with an error shown) if it failed. */
+  const uploadImage = async (file: File): Promise<string | null> => {
     setErr("");
-    if (file.size > MAX_IMAGE) return setErr(t("form.imageTooBig"));
+    if (file.size > MAX_IMAGE) {
+      setErr(t("form.imageTooBig"));
+      return null;
+    }
     const ext = (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "");
     const path = `${profile!.id}/${crypto.randomUUID()}.${ext}`;
     setBusy(true);
     const { error } = await supabase.storage.from("thumbnails").upload(path, file, { contentType: file.type, upsert: false });
     setBusy(false);
-    if (error) return setErr(t("form.error"));
-    setImage(supabase.storage.from("thumbnails").getPublicUrl(path).data.publicUrl);
+    if (error) {
+      setErr(t("form.error"));
+      return null;
+    }
+    return supabase.storage.from("thumbnails").getPublicUrl(path).data.publicUrl;
+  };
+  const upload = async (file: File) => {
+    const link = await uploadImage(file);
+    if (link) setImage(link);
+  };
+  const addShot = async (file: File) => {
+    const link = await uploadImage(file);
+    if (link) setShots((s) => [...s, link].slice(0, MAX_SHOTS));
   };
 
   const submit = async (e: FormEvent) => {
@@ -95,13 +115,10 @@ export function GameForm() {
       engine: engine.trim() || null,
       cover: previewCover,
       thumbnail_url: image,
-      featured,
+      screenshots: shots,
+      featured, // the database un-features the previous game
     };
     setBusy(true);
-    if (featured && profile?.role === "admin") {
-      // only one featured game at a time
-      await supabase.from("games").update({ featured: false }).eq("featured", true).neq("slug", orig?.slug ?? "");
-    }
     const res = orig
       ? await supabase.from("games").update(row).eq("id", orig.id)
       : await supabase.from("games").insert({ ...row, created_by: profile!.id });
@@ -132,6 +149,7 @@ export function GameForm() {
           <label htmlFor="url">{t("form.url")}</label>
           <input id="url" type="url" required placeholder="https://" value={url} onChange={(e) => setUrl(e.target.value)} aria-describedby="url-help" />
           <small id="url-help">{t("form.urlHelp")}</small>
+          <LinkCheck url={url.trim()} />
 
           <label htmlFor="slug">{t("form.slug")}</label>
           <div className="prefix">
@@ -183,10 +201,29 @@ export function GameForm() {
           <div className="actions">
             <label className="btn file">
               {t("form.upload")}
-              <input id="image" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
+              <input id="image" type="file" accept={IMAGE_TYPES} onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
             </label>
             {image && <button type="button" className="btn" onClick={() => setImage(null)}>{t("form.removeImage")}</button>}
           </div>
+
+          <span className="label-text" id="shots-label">{t("form.screenshots")}</span>
+          <small>{t("form.screenshotsHelp")}</small>
+          <ul className="shot-pick" aria-labelledby="shots-label">
+            {shots.map((src, n) => (
+              <li key={src}>
+                <img src={src} alt="" />
+                <button type="button" className="shot-remove" aria-label={t("form.removeScreenshot", { n: n + 1 })} onClick={() => setShots((s) => s.filter((x) => x !== src))}>×</button>
+              </li>
+            ))}
+          </ul>
+          {shots.length < MAX_SHOTS && (
+            <div className="actions">
+              <label className="btn file">
+                {t("form.addScreenshot")}
+                <input type="file" accept={IMAGE_TYPES} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) addShot(f); }} />
+              </label>
+            </div>
+          )}
         </div>
 
         <div className="form-foot">

@@ -22,7 +22,9 @@ export interface Game {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  screenshots: string[];
   author?: { username: string } | null;
+  stats?: { plays: number; likes: number } | null;
 }
 
 export const CATEGORIES = [

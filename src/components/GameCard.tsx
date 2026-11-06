@@ -1,26 +1,45 @@
 import { Link } from "react-router-dom";
 import type { Game } from "../lib/types";
 import { useI18n } from "../lib/i18n";
+import { compact, plays } from "../lib/games";
 import { Cover } from "./Cover";
 import { FavButton } from "./FavButton";
+import { PlayIcon } from "./icons";
+
+const by = (g: Game) => (g.author ? `@${g.author.username}` : "Toki");
+
+/** Play count with a small play icon; nothing while a game has no plays yet. */
+export function Plays({ game }: { game: Game }) {
+  const { t } = useI18n();
+  const n = plays(game);
+  if (!n) return null;
+  return (
+    <span className="plays" title={t("stats.plays", { n })}>
+      <PlayIcon size={10} />
+      <span aria-hidden="true">{compact(n)}</span>
+      <span className="sr-only">{t("stats.plays", { n })}</span>
+    </span>
+  );
+}
 
 export function GameCard({ game }: { game: Game }) {
   const { t } = useI18n();
   return (
     <article className="card">
-      <Link to={`/game/${game.slug}`} className="thumb">
-        <Cover slug={game.slug} cover={game.cover} image={game.thumbnail_url} />
+      <Link to={`/game/${game.slug}`} className="thumb" tabIndex={-1} aria-hidden="true">
+        <Cover slug={game.slug} cover={game.cover} image={game.thumbnail_url} animate="hover" />
         <span className="tag">{t(`cat.${game.category}`)}</span>
       </Link>
       <div className="row">
         <div className="info">
           <Link to={`/game/${game.slug}`} className="title">{game.title}</Link>
           <span className="sub">
-            {game.author ? `@${game.author.username}` : "Toki"}
+            {by(game)}
             {game.engine ? ` · ${game.engine}` : ""}
           </span>
+          <Plays game={game} />
         </div>
-        <FavButton slug={game.slug} />
+        <FavButton game={game} />
       </div>
     </article>
   );
@@ -39,11 +58,28 @@ export function GameGrid({ games }: { games: Game[] }) {
 export function RecentItem({ game }: { game: Game }) {
   return (
     <Link to={`/game/${game.slug}`} className="ritem">
-      <Cover slug={game.slug} cover={game.cover} image={game.thumbnail_url} />
+      <Cover slug={game.slug} cover={game.cover} image={game.thumbnail_url} animate="hover" />
       <span>
         <b>{game.title}</b>
-        <span className="sub">{game.author ? `@${game.author.username}` : "Toki"}</span>
+        <span className="sub">{by(game)}</span>
       </span>
     </Link>
+  );
+}
+
+/** Grey placeholder cards while the games list loads. */
+export function GridSkeleton({ count = 8 }: { count?: number }) {
+  return (
+    <div className="grid" aria-hidden="true">
+      {Array.from({ length: count }, (_, i) => (
+        <div className="card skel" key={i}>
+          <div className="thumb"><div className="cover" /></div>
+          <div className="info">
+            <span className="bar" style={{ width: "70%" }} />
+            <span className="bar" style={{ width: "40%" }} />
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }

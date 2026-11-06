@@ -13,8 +13,8 @@ export const FullscreenIcon = () => (
     <path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" fill="none" stroke="currentColor" strokeWidth="1.6" />
   </svg>
 );
-export const PlayIcon = () => (
-  <svg viewBox="0 0 16 16" aria-hidden="true" width="14" height="14">
+export const PlayIcon = ({ size = 14 }: { size?: number }) => (
+  <svg viewBox="0 0 16 16" aria-hidden="true" width={size} height={size}>
     <path d="M4 2v12l10-6z" fill="currentColor" />
   </svg>
 );
@@ -38,4 +38,7 @@ export const KeyIcon = () => (
 );
 export const CloseIcon = () => (
   <svg viewBox="0 0 16 16" aria-hidden="true" width="18" height="18"><path d="M3 3l10 10M13 3 3 13" fill="none" stroke="currentColor" strokeWidth="1.8" /></svg>
+);
+export const ShareIcon = () => (
+  <svg viewBox="0 0 16 16" aria-hidden="true" width="16" height="16"><path d="M8 10V2M4.5 5.5 8 2l3.5 3.5M3 9v5h10V9" fill="none" stroke="currentColor" strokeWidth="1.6" /></svg>
 );
