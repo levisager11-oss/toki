@@ -7,6 +7,7 @@ import { markPlayed, visitorId } from "../lib/local";
 import { plays, recordPlay } from "../lib/games";
 import { useGames } from "../lib/useGames";
 import { useSaveBridge } from "../lib/saves";
+import { matchIsolation } from "../lib/isolation";
 import { GameGrid, Plays } from "../components/GameCard";
 import { FavButton } from "../components/FavButton";
 import { CloseIcon, FullscreenIcon, ShareIcon } from "../components/icons";
@@ -18,7 +19,7 @@ const PLAY_AFTER_MS = 10_000;
 export function GamePage() {
   const { slug = "" } = useParams();
   const { t, lang } = useI18n();
-  const { profile } = useAuth();
+  const { profile, session, ready: authReady } = useAuth();
   const { games, error } = useGames();
   const frameWrap = useRef<HTMLDivElement>(null);
   const gameFrame = useRef<HTMLIFrameElement>(null);
@@ -31,7 +32,15 @@ export function GamePage() {
   const game = games?.find((g) => g.slug === slug);
   const [shared, setShared] = useState(false);
   const gameId = game?.id;
-  const saves = useSaveBridge(gameFrame, gameId, game?.play_url, profile?.id);
+  const userId = session?.user.id;
+  const saves = useSaveBridge(gameFrame, gameId, game?.play_url, userId);
+  // Loads the game again, e.g. to continue from newer progress made on another device.
+  const [frameRun, setFrameRun] = useState(0);
+  const isolated = game?.needs_isolation === true;
+
+  useEffect(() => {
+    if (game) matchIsolation(isolated);
+  }, [game, isolated]);
 
   useEffect(() => {
     if (!gameId) return;
@@ -88,7 +97,7 @@ export function GamePage() {
   }, [fillScreen]);
 
   if (error) return <p className="msg">{t("error")}</p>;
-  if (!games)
+  if (!games || !authReady)
     return (
       <section className="player skel" aria-busy="true" aria-label={t("loading")}>
         <div className="frame" />
@@ -142,12 +151,13 @@ export function GamePage() {
               <CloseIcon />
             </button>
           )}
+          {/* Starts again after logging in or out, so the game gets the right save. */}
           <iframe
             ref={gameFrame}
-            key={game.play_url}
+            key={`${game.play_url}|${userId ?? ""}|${frameRun}`}
             src={game.play_url}
             title={game.title}
-            allow="fullscreen; autoplay; gamepad; cross-origin-isolated; clipboard-write; screen-wake-lock"
+            allow={`fullscreen; autoplay; gamepad;${isolated ? " cross-origin-isolated;" : ""} clipboard-write; screen-wake-lock`}
             allowFullScreen
           />
         </div>
@@ -167,8 +177,14 @@ export function GamePage() {
             <button type="button" className="btn primary" onClick={fullscreen}><FullscreenIcon />{t("game.fullscreen")}</button>
           </div>
         </div>
-        {saves === "account" && <p className="hint saved">✓ {t("saves.account")}</p>}
-        {saves === "device" && (
+        {saves.conflict && (
+          <div className="check warn save-conflict" role="alert">
+            <p>{t("saves.conflict")}</p>
+            <button type="button" className="btn" onClick={() => setFrameRun((n) => n + 1)}>{t("saves.loadNewer")}</button>
+          </div>
+        )}
+        {saves.status === "account" && !saves.conflict && <p className="hint saved">✓ {t("saves.account")}</p>}
+        {saves.status === "device" && (
           <p className="hint saved">
             {t("saves.device")} <Link to={`/signup?next=/game/${game.slug}`}>{t("saves.signup")}</Link>
           </p>

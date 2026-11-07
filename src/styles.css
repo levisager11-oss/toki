@@ -310,3 +310,13 @@ h1, h2 { text-wrap: balance; }
 .save-support pre { max-height: 160px; overflow: auto; background: var(--bg); border: 1px solid var(--line); padding: 8px; font-size: 11px; margin: 8px 0 0; }
 .side-foot .who { text-decoration: none; font-weight: 700; }
 .side-foot .who.active { text-decoration: underline; }
+
+/* newer progress from another device, and earlier versions on the account page */
+.save-conflict { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.save-conflict p { margin: 0; flex: 1 1 260px; }
+.save-history { margin-top: 32px; display: flex; flex-direction: column; gap: 8px; }
+.save-history h2 { margin: 0; font-size: 18px; font-weight: 800; }
+.save-history h3 { margin: 12px 0 4px; font-size: 14px; font-weight: 700; }
+.save-history ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.save-history li { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--muted); }
+.save-history li .btn { flex: none; }

@@ -5,7 +5,7 @@ import { useI18n } from "../lib/i18n";
 type Result = "checking" | "ok" | "blocked" | "isolation" | "unreachable" | "failed";
 const WAIT_MS = 700;
 
-async function check(url: string, signal: AbortSignal): Promise<Result> {
+async function check(url: string, isolation: boolean, signal: AbortSignal): Promise<Result> {
   const { data } = await supabase.auth.getSession();
   const res = await fetch(`/api/check?url=${encodeURIComponent(url)}`, {
     headers: { authorization: `Bearer ${data.session?.access_token ?? ""}` },
@@ -15,11 +15,12 @@ async function check(url: string, signal: AbortSignal): Promise<Result> {
   const r = (await res.json()) as { reachable: boolean; framable: boolean; isolation: boolean };
   if (!r.reachable) return "unreachable";
   if (!r.framable) return "blocked";
-  return r.isolation ? "ok" : "isolation";
+  // Only games with "needs isolation" on need the game's site to send isolation headers.
+  return !isolation || r.isolation ? "ok" : "isolation";
 }
 
 /** Tells a member right away whether a game link will work inside Toki, with a live preview. */
-export function LinkCheck({ url }: { url: string }) {
+export function LinkCheck({ url, isolation = false }: { url: string; isolation?: boolean }) {
   const { t } = useI18n();
   const [result, setResult] = useState<Result | null>(null);
   const [preview, setPreview] = useState(false);
@@ -31,7 +32,7 @@ export function LinkCheck({ url }: { url: string }) {
     const ctl = new AbortController();
     setResult("checking");
     const id = setTimeout(() => {
-      check(url, ctl.signal)
+      check(url, isolation, ctl.signal)
         .then(setResult)
         .catch(() => !ctl.signal.aborted && setResult("failed"));
     }, WAIT_MS);
@@ -39,7 +40,7 @@ export function LinkCheck({ url }: { url: string }) {
       clearTimeout(id);
       ctl.abort();
     };
-  }, [url, valid]);
+  }, [url, valid, isolation]);
 
   if (!valid || !result) return null;
   const tone = result === "ok" ? "good" : result === "checking" ? "" : result === "failed" ? "" : "warn";
@@ -53,7 +54,7 @@ export function LinkCheck({ url }: { url: string }) {
       )}
       {preview && (
         <div className="frame preview">
-          <iframe src={url} title={t("form.preview")} allow="autoplay; gamepad; cross-origin-isolated; fullscreen" />
+          <iframe src={url} title={t("form.preview")} allow={`autoplay; gamepad;${isolation ? " cross-origin-isolated;" : ""} fullscreen`} />
         </div>
       )}
     </div>

@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
 import { canCreate } from "../lib/types";
+import { matchIsolation, pageIsolated } from "../lib/isolation";
 import { HeartTabIcon, HomeIcon, KeyIcon, ListIcon, LogoMark, PlusIcon, SearchIcon, UserIcon } from "./icons";
 
 export function Layout() {
@@ -19,6 +20,10 @@ export function Layout() {
   }, [params]);
   useEffect(() => {
     window.scrollTo(0, 0);
+  }, [location.pathname]);
+  useEffect(() => {
+    // Only game pages can be isolated (the game page checks its own game).
+    if (pageIsolated() && !location.pathname.startsWith("/game/")) matchIsolation(false);
   }, [location.pathname]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

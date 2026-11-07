@@ -35,6 +35,7 @@ export function GameForm() {
   const [cover, setCover] = useState<string>("");
   const [image, setImage] = useState<string | null>(null);
   const [featured, setFeatured] = useState(false);
+  const [isolation, setIsolation] = useState(false);
   const [shots, setShots] = useState<string[]>([]);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -57,6 +58,7 @@ export function GameForm() {
       setCover(coverFor(g.slug, g.cover));
       setImage(g.thumbnail_url);
       setFeatured(g.featured);
+      setIsolation(g.needs_isolation === true);
       setShots(g.screenshots ?? []);
     });
   }, [editSlug]);
@@ -118,6 +120,7 @@ export function GameForm() {
       thumbnail_url: image,
       screenshots: shots,
       featured, // the database un-features the previous game
+      needs_isolation: isolation,
     };
     setBusy(true);
     const res = orig
@@ -150,7 +153,12 @@ export function GameForm() {
           <label htmlFor="url">{t("form.url")}</label>
           <input id="url" type="url" required placeholder="https://" value={url} onChange={(e) => setUrl(e.target.value)} aria-describedby="url-help" />
           <small id="url-help">{t("form.urlHelp")}</small>
-          <LinkCheck url={url.trim()} />
+          <LinkCheck url={url.trim()} isolation={isolation} />
+          <label className="check">
+            <input id="isolation" type="checkbox" checked={isolation} onChange={(e) => setIsolation(e.target.checked)} aria-describedby="isolation-help" />
+            {t("form.isolation")}
+          </label>
+          <small id="isolation-help">{t("form.isolationHelp")}</small>
           <SaveSupport open={!orig} />
 
           <label htmlFor="slug">{t("form.slug")}</label>

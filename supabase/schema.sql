@@ -311,3 +311,134 @@ create policy "own saves: read" on public.game_saves for select to authenticated
 create policy "own saves: add" on public.game_saves for insert to authenticated with check (user_id = (select auth.uid()));
 create policy "own saves: change" on public.game_saves for update to authenticated using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
 create policy "own saves: delete" on public.game_saves for delete to authenticated using (user_id = (select auth.uid()));
+
+
+-- Per game: send cross-origin isolation headers (COOP/COEP) only for games that need them,
+-- e.g. Godot 4 exports with threads. Every other game page gets no such headers.
+alter table public.games add column needs_isolation boolean not null default false;
+
+-- Safe cloud saves. A device sends its save together with the account versions it knows
+-- ("bases": the "t" of the account save it started from). A save only replaces the account
+-- copy when it was made on top of it. Otherwise the account copy stays and the other save
+-- is kept as a conflict copy. Earlier versions are kept so a bad overwrite can be undone.
+alter table public.game_saves add column device text check (device is null or char_length(device) <= 64);
+
+create table public.game_save_history (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  game_id uuid not null references public.games(id) on delete cascade,
+  data jsonb not null check (pg_column_size(data) <= 1048576),
+  kind text not null check (kind in ('earlier', 'conflict')),
+  device text check (device is null or char_length(device) <= 64),
+  saved_at timestamptz not null default now()
+);
+create index game_save_history_user_game_idx on public.game_save_history(user_id, game_id, id desc);
+create index game_save_history_game_idx on public.game_save_history(game_id);
+alter table public.game_save_history enable row level security;
+create policy "own save history: read" on public.game_save_history for select to authenticated using (user_id = (select auth.uid()));
+
+-- The "t" of a save, or null.
+create function public.save_t(d jsonb) returns numeric
+language sql immutable set search_path = '' as $$
+  select case when jsonb_typeof(d -> 't') = 'number' then (d ->> 't')::numeric end
+$$;
+
+-- Keeps the 10 newest earlier versions and the 5 newest conflict copies per player and game.
+create function public.trim_save_history(p_user uuid, p_game uuid) returns void
+language sql security definer set search_path = '' as $$
+  delete from public.game_save_history h
+  where h.user_id = p_user and h.game_id = p_game
+    and h.id not in (
+      select id from (
+        select id, row_number() over (partition by kind order by id desc) as n
+        from public.game_save_history where user_id = p_user and game_id = p_game
+      ) r where (kind = 'earlier' and n <= 10) or (kind = 'conflict' and n <= 5)
+    )
+$$;
+
+-- Returns {"ok": true} when the save is now the account save, or {"ok": false, "current": <account save>}.
+create function public.put_game_save(p_game uuid, p_data jsonb, p_bases numeric[], p_device text) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_user uuid := auth.uid();
+  v_t numeric := public.save_t(p_data);
+  v_cur jsonb;
+  v_cur_device text;
+  v_last timestamptz;
+begin
+  if v_user is null then
+    raise exception 'login_required';
+  end if;
+  if v_t is null or v_t <= 0 or jsonb_typeof(p_data -> 'keys') is distinct from 'object' then
+    raise exception 'bad_save';
+  end if;
+  p_device := left(p_device, 64);
+  perform pg_advisory_xact_lock(hashtextextended(v_user::text || p_game::text, 0));
+  select data, device into v_cur, v_cur_device from public.game_saves where user_id = v_user and game_id = p_game;
+
+  if v_cur is null then
+    insert into public.game_saves (user_id, game_id, data, device, updated_at) values (v_user, p_game, p_data, p_device, now());
+    return jsonb_build_object('ok', true);
+  end if;
+  if public.save_t(v_cur) = v_t then
+    return jsonb_build_object('ok', true); -- already stored (a repeated request)
+  end if;
+
+  if public.save_t(v_cur) = any(coalesce(p_bases, '{}')) then
+    -- Keep the replaced version when another device made it, or every 30 minutes of play.
+    select max(saved_at) into v_last from public.game_save_history
+      where user_id = v_user and game_id = p_game and kind = 'earlier';
+    if v_cur_device is distinct from p_device or v_last is null or v_last < now() - interval '30 minutes' then
+      insert into public.game_save_history (user_id, game_id, data, kind, device) values (v_user, p_game, v_cur, 'earlier', v_cur_device);
+      perform public.trim_save_history(v_user, p_game);
+    end if;
+    update public.game_saves set data = p_data, device = p_device, updated_at = now() where user_id = v_user and game_id = p_game;
+    return jsonb_build_object('ok', true);
+  end if;
+
+  -- Made on top of an older version (or none): keep the account copy, and this save as a conflict copy (one per device).
+  update public.game_save_history set data = p_data, saved_at = now()
+    where user_id = v_user and game_id = p_game and kind = 'conflict' and device is not distinct from p_device;
+  if not found then
+    insert into public.game_save_history (user_id, game_id, data, kind, device) values (v_user, p_game, p_data, 'conflict', p_device);
+    perform public.trim_save_history(v_user, p_game);
+  end if;
+  return jsonb_build_object('ok', false, 'current', v_cur);
+end $$;
+
+-- Makes a kept version the account save again (as the newest one, so every device picks it up).
+create function public.restore_game_save(p_id bigint) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_user uuid := auth.uid();
+  v_game uuid;
+  v_data jsonb;
+  v_cur jsonb;
+  v_cur_device text;
+begin
+  select game_id, data into v_game, v_data from public.game_save_history where id = p_id and user_id = v_user;
+  if v_game is null then
+    raise exception 'not_found';
+  end if;
+  perform pg_advisory_xact_lock(hashtextextended(v_user::text || v_game::text, 0));
+  select data, device into v_cur, v_cur_device from public.game_saves where user_id = v_user and game_id = v_game;
+  v_data := jsonb_set(v_data, '{t}', to_jsonb(greatest(floor(extract(epoch from clock_timestamp()) * 1000), coalesce(public.save_t(v_cur), 0) + 1)));
+  if v_cur is not null then
+    insert into public.game_save_history (user_id, game_id, data, kind, device) values (v_user, v_game, v_cur, 'earlier', v_cur_device);
+    perform public.trim_save_history(v_user, v_game);
+  end if;
+  insert into public.game_saves (user_id, game_id, data, device, updated_at) values (v_user, v_game, v_data, null, now())
+    on conflict (user_id, game_id) do update set data = excluded.data, device = null, updated_at = now();
+  return v_data;
+end $$;
+
+revoke execute on function public.trim_save_history(uuid, uuid) from public, anon, authenticated;
+revoke execute on function public.put_game_save(uuid, jsonb, numeric[], text) from public, anon;
+revoke execute on function public.restore_game_save(bigint) from public, anon;
+grant execute on function public.put_game_save(uuid, jsonb, numeric[], text) to authenticated;
+grant execute on function public.restore_game_save(bigint) to authenticated;
+
+-- Saves are only written through put_game_save / restore_game_save, so no device can
+-- overwrite newer progress directly.
+drop policy "own saves: add" on public.game_saves;
+drop policy "own saves: change" on public.game_saves;

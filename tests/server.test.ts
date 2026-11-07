@@ -1,6 +1,7 @@
 import { inflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { checkHeaders, isCheckableUrl } from "../server/embed-check";
+import { gameSlug, needsIsolation } from "../server/isolation";
 import { injectMeta, PREVIEW_BOT } from "../server/meta";
 import { encodePng } from "../server/png";
 import { coverPng, sceneRgb } from "../server/cover-image";
@@ -90,5 +91,24 @@ describe("pixel scenes", () => {
     const png = coverPng("orbit", "toki");
     expect(png.readUInt32BE(16)).toBe(1200);
     expect(png.readUInt32BE(20)).toBe(630);
+  });
+});
+
+describe("isolation", () => {
+  it("finds game pages", () => {
+    expect(gameSlug("/game/deepsub")).toBe("deepsub");
+    expect(gameSlug("/game/deepsub/")).toBe("deepsub");
+    expect(gameSlug("/")).toBeUndefined();
+    expect(gameSlug("/edit/deepsub")).toBeUndefined();
+  });
+  const reply = (body: unknown, ok = true) => (async () => ({ ok, json: async () => body })) as unknown as typeof fetch;
+  it("is on only when the game says so", async () => {
+    expect(await needsIsolation("iso-on", reply([{ needs_isolation: true }]))).toBe(true);
+    expect(await needsIsolation("iso-off", reply([{ needs_isolation: false }]))).toBe(false);
+    expect(await needsIsolation("iso-missing", reply([]))).toBe(false);
+  });
+  it("is off when the database can't be asked, so games still load", async () => {
+    expect(await needsIsolation("iso-error", reply(null, false))).toBe(false);
+    expect(await needsIsolation("iso-throws", (async () => { throw new Error("down"); }) as unknown as typeof fetch)).toBe(false);
   });
 });

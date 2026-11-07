@@ -35,9 +35,16 @@ The public Supabase URL and publishable key are in `.env`. They are safe to comm
 
 ## Games that need special browser settings
 
-Toki sends `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: credentialless`, so games that use threads (Godot 4, some Unity builds) can run inside the game page.
+Most games need nothing. Games that use threads (Godot 4 exports with thread support, some Unity builds) only run with *cross-origin isolation*. For those, tick **“Needs cross-origin isolation”** in the game form. Only then does that game's page get
 
-For that to work, the game's own site must allow being embedded. Its responses need:
+```
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: credentialless
+```
+
+(`middleware.ts`, and `vite.config.ts` for local runs). All other pages and games get neither header, because with them the browser only shows games whose own site sends matching headers.
+
+The game's own site must then allow being embedded. Its responses need:
 
 ```
 Cross-Origin-Resource-Policy: cross-origin
@@ -47,3 +54,12 @@ Cross-Origin-Embedder-Policy: require-corp
 The game form checks this as soon as you paste a link, and lets you try the game right there.
 
 If a game still won't load inside Toki, the game page has an "Open in new tab" link.
+
+## Saves
+
+Games that include `public/toki-save.js` send their localStorage to Toki (`src/lib/saves.ts`). For logged-in players:
+
+- Toki answers the game's "hello" only once the account save is loaded or known to be missing, never with “nothing” while it is loading.
+- A save only replaces the account save when it was made on top of it (`put_game_save` in `supabase/schema.sql`). A save from a device that had an older version, or none, never overwrites newer progress: the account copy stays, and the other one is kept as a conflict copy.
+- Logging out sends nothing.
+- Earlier versions are kept (`game_save_history`) and can be restored on the *Account* page.
