@@ -69,7 +69,7 @@ h1, h2 { text-wrap: balance; }
 .btn.fav-btn[aria-pressed="true"] { color: var(--danger); }
 .btn.fav-btn[aria-pressed="true"] path, .fav[aria-pressed="true"] path { fill: currentColor; }
 
-.content { padding: 28px 28px 64px; max-width: 1240px; display: flex; flex-direction: column; gap: 40px; }
+.content { padding: 28px 28px 64px; max-width: 2400px; display: flex; flex-direction: column; gap: 40px; }
 .msg { color: var(--muted); display: flex; flex-direction: column; align-items: flex-start; gap: 12px; margin: 0; }
 .msg p { margin: 0; }
 .note { color: var(--muted); font-size: 13px; margin: 24px 0 0; }
@@ -320,3 +320,9 @@ h1, h2 { text-wrap: balance; }
 .save-history ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .save-history li { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--muted); }
 .save-history li .btn { flex: none; }
+
+/* Big screens: the game is as big as the window allows (16:9), so it fills large monitors too. */
+@media (min-width: 861px) {
+  .player { width: min(100%, calc((100vh - 220px) * 16 / 9)); }
+  .player .frame:not(.is-full):not(.pseudo-full) { max-height: none; }
+}
