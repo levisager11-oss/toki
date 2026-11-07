@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
 import { canCreate } from "../lib/types";
+import { SaveHistory } from "../components/SaveHistory";
 
 export function Account() {
   const { t } = useI18n();
@@ -45,6 +46,8 @@ export function Account() {
           <button className="btn" disabled={busy}>{busy ? t("loading") : t("account.redeem")}</button>
         </form>
       )}
+
+      <SaveHistory />
 
       <div className="actions" style={{ marginTop: 32 }}>
         <button type="button" className="btn" onClick={() => signOut().then(() => navigate("/"))}>{t("nav.logout")}</button>

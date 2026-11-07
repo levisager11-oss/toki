@@ -26,6 +26,8 @@ export interface Game {
   created_at: string;
   updated_at: string;
   screenshots: string[];
+  /** The game only runs with cross-origin isolation (e.g. Godot 4 with threads). Off for most games. */
+  needs_isolation?: boolean;
   author?: { username: string } | null;
   stats?: { plays: number; likes: number } | null;
 }
