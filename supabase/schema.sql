@@ -385,10 +385,12 @@ begin
   end if;
 
   if public.save_t(v_cur) = any(coalesce(p_bases, '{}')) then
-    -- Keep the replaced version when another device made it, or every 30 minutes of play.
+    -- Keep the replaced version when another device made it, every 30 minutes of play, or when
+    -- the new save is less than half the size (a "new game" or wipe), so a reset can be undone.
     select max(saved_at) into v_last from public.game_save_history
       where user_id = v_user and game_id = p_game and kind = 'earlier';
-    if v_cur_device is distinct from p_device or v_last is null or v_last < now() - interval '30 minutes' then
+    if v_cur_device is distinct from p_device or v_last is null or v_last < now() - interval '30 minutes'
+      or octet_length(p_data::text) * 2 < octet_length(v_cur::text) then
       insert into public.game_save_history (user_id, game_id, data, kind, device) values (v_user, p_game, v_cur, 'earlier', v_cur_device);
       perform public.trim_save_history(v_user, p_game);
     end if;
