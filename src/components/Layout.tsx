@@ -4,6 +4,7 @@ import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
 import { canCreate } from "../lib/types";
 import { matchIsolation, pageIsolated } from "../lib/isolation";
+import { useBottomBarFix } from "../lib/useBottomBarFix";
 import { HeartTabIcon, HomeIcon, KeyIcon, ListIcon, LogoMark, PlusIcon, SearchIcon, UserIcon } from "./icons";
 
 export function Layout() {
@@ -14,6 +15,8 @@ export function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const searchRef = useRef<HTMLInputElement>(null);
+  const tabbarRef = useRef<HTMLElement>(null);
+  useBottomBarFix(tabbarRef);
 
   useEffect(() => {
     setQ(params.get("q") ?? "");
@@ -100,7 +103,7 @@ export function Layout() {
         </main>
       </div>
 
-      <nav className="tabbar" aria-label="Toki">
+      <nav ref={tabbarRef} className="tabbar" aria-label="Toki">
         <NavLink to="/" end><HomeIcon /><span>{t("nav.discover")}</span></NavLink>
         <NavLink to="/favorites"><HeartTabIcon /><span>{t("nav.favorites")}</span></NavLink>
         {profile ? (

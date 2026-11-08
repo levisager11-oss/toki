@@ -210,6 +210,7 @@ h1, h2 { text-wrap: balance; }
     color: var(--muted); text-decoration: none; font-size: 11px; font-weight: 500; border-top: 2px solid transparent; margin-top: -1px; }
   .tabbar a span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tabbar a.active { color: var(--fg); border-top-color: var(--fg); }
+  .tabbar.kb-open { visibility: hidden; }
 
   .feature { grid-template-columns: minmax(0, 1fr); }
   .feature-cover { border-right: 0; border-bottom: 1px solid var(--fg); }
