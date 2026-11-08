@@ -62,4 +62,4 @@ Games that include `public/toki-save.js` send their localStorage to Toki (`src/l
 - Toki answers the game's "hello" only once the account save is loaded or known to be missing, never with “nothing” while it is loading.
 - A save only replaces the account save when it was made on top of it (`put_game_save` in `supabase/schema.sql`). A save from a device that had an older version, or none, never overwrites newer progress: the account copy stays, and the other one is kept as a conflict copy.
 - Logging out sends nothing.
-- Earlier versions are kept (`game_save_history`) and can be restored on the *Account* page.
+- Earlier versions are kept (`game_save_history`) and can be restored on the *Account* page. A copy is kept every 30 minutes of play, when another device saves, and always right before a save shrinks to less than half its size (a "new game" or wipe).
