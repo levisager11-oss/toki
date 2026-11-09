@@ -49,7 +49,7 @@ export const TIMEOUT_MS = 240_000;
 
 export async function complete(
   config: ProviderConfig,
-  req: { messages: ChatMessage[]; maxTokens: number; temperature?: number },
+  req: { messages: ChatMessage[]; maxTokens: number; temperature?: number; timeoutMs?: number },
   fetchImpl?: typeof fetch,
 ): Promise<Completion> {
   if (!config.apiKey || !config.model || (!config.baseUrl && config.provider !== "anthropic")) throw new AiError("not_configured");
@@ -106,7 +106,7 @@ const QUIRKS = new Map<string, { zeroMinP?: boolean; noStreamOptions?: boolean; 
 
 async function openaiCompatible(
   config: ProviderConfig,
-  req: { messages: ChatMessage[]; maxTokens: number; temperature?: number },
+  req: { messages: ChatMessage[]; maxTokens: number; temperature?: number; timeoutMs?: number },
   fetchImpl: (url: string, init: RequestInit) => Promise<Response>,
 ): Promise<Completion> {
   const key = `${config.baseUrl} ${config.model}`;
@@ -128,7 +128,7 @@ async function openaiCompatible(
           ...(quirks.noStream ? {} : { stream: true, ...(quirks.noStreamOptions ? {} : { stream_options: { include_usage: true } }) }),
           ...(quirks.zeroMinP ? { min_p: 0 } : {}),
         }),
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal: AbortSignal.timeout(req.timeoutMs ?? TIMEOUT_MS),
       });
       raw = await res.text();
     } catch (e) {

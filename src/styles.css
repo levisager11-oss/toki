@@ -801,3 +801,32 @@ a.author:hover { text-decoration: underline; color: var(--fg); }
 .lost { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 24px 0; }
 .lost-code { font-family: var(--f-px); font-size: clamp(56px, 12vw, 96px); line-height: 1; color: var(--fg); text-shadow: 4px 4px 0 var(--accent); }
 .lost p { margin: 0; color: var(--muted); max-width: 50ch; }
+
+/* AI helpers (free AI): translate links, drafts and summaries, suggestions */
+.ai-translate { display: inline-block; font-size: 13px; margin: 2px 0 6px; }
+.msg-row .ai-translate { margin: 0 0 2px; }
+.ai-start { align-self: flex-start; }
+.ai-inline { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 8px; }
+.ai-panel { display: flex; flex-direction: column; gap: 6px; border-left: 3px solid var(--accent); background: var(--bg); padding: 10px 12px; }
+.ai-box { border: 1px solid var(--line); border-left: 3px solid var(--accent); background: var(--surface); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ai-box-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.ai-box .actions { margin-top: 2px; }
+.ai-box-note { margin: 0; }
+.ai-box p { margin: 0; overflow-wrap: anywhere; }
+.ai-text h3 { margin: 10px 0 2px; }
+.ai-text h3:first-child { margin-top: 0; }
+.ai-text p { margin: 0 0 4px; }
+.ai-text ul { margin: 0 0 4px; padding-left: 18px; }
+.ai-text li { overflow-wrap: anywhere; }
+.suggest { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.suggest-why { margin: 0; }
+.helper { margin-top: 12px; }
+.helper-list { display: flex; flex-direction: column; gap: 8px; max-height: 340px; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; }
+.helper-msg { max-width: 85%; padding: 6px 10px; background: var(--bg); border: 1px solid var(--line); overflow-wrap: anywhere; }
+.helper-msg.mine { align-self: flex-end; background: var(--surface); border-color: var(--fg); }
+.helper-msg p { margin: 0; }
+.helper-starters { display: flex; flex-wrap: wrap; gap: 6px; }
+.helper-form { display: flex; gap: 8px; flex-wrap: nowrap; margin: 0; }
+.helper-form input { flex: 1 1 auto; min-width: 0; }
+.helper-setup { margin: 16px 0; }
+.helper-guide { white-space: pre-wrap; font-family: var(--f-ui); font-size: 13px; background: var(--surface); border: 1px solid var(--line); padding: 8px 10px; max-height: 260px; overflow: auto; margin: 0; }

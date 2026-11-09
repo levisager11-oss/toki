@@ -11,6 +11,9 @@ import { Cover } from "../components/Cover";
 import { NotFound } from "./NotFound";
 import { LinkCheck } from "../components/LinkCheck";
 import { SaveSupport } from "../components/SaveSupport";
+import { AiBox } from "../components/AiBits";
+import { HelperSetup } from "../components/HelperSetup";
+import { assistError, describeGame, useFreeAi } from "../lib/assist";
 
 const MAX_IMAGE = 2 * 1024 * 1024;
 const MAX_SHOTS = 4;
@@ -220,6 +223,10 @@ export function GameForm() {
           <textarea id="description" rows={3} maxLength={1000} value={description} onChange={(e) => setDescription(e.target.value)} />
           <label htmlFor="description-de">{t("form.descriptionDe")}</label>
           <textarea id="description-de" rows={3} maxLength={1000} value={descriptionDe} onChange={(e) => setDescriptionDe(e.target.value)} />
+          <DescribeWithAi
+            game={{ title: title.trim(), category, engine: engine.trim(), controls: controls.trim(), description: description.trim(), description_de: descriptionDe.trim(), play_url: url.trim() }}
+            onUse={(d) => { setDescription(d.en); setDescriptionDe(d.de); }}
+          />
           <label htmlFor="controls">{t("form.controls")}</label>
           <input id="controls" maxLength={500} placeholder={t("form.controlsHelp")} value={controls} onChange={(e) => setControls(e.target.value)} />
 
@@ -290,6 +297,8 @@ export function GameForm() {
           )}
         </div>
 
+        {orig && <HelperSetup gameId={orig.id} />}
+
         <div className="form-foot">
           {err && <p className="error" role="alert">{err}</p>}
           <div className="actions">
@@ -307,5 +316,46 @@ export function GameForm() {
         </div>
       </form>
     </section>
+  );
+}
+
+/** "Write with AI": the description in English and German, from what's filled in and the game's page. */
+function DescribeWithAi({ game, onUse }: { game: Parameters<typeof describeGame>[0]; onUse: (d: { en: string; de: string }) => void }) {
+  const { t } = useI18n();
+  const on = useFreeAi();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [draft, setDraft] = useState<{ en: string; de: string } | null>(null);
+  if (!on) return null;
+  const write = async () => {
+    if (!game.title) return setErr(t("form.ai.needTitle"));
+    setBusy(true);
+    setErr("");
+    try {
+      setDraft(await describeGame(game));
+    } catch (e) {
+      setErr(t(`assist.err.${assistError(e)}`));
+    }
+    setBusy(false);
+  };
+  return (
+    <div className="ai-inline">
+      <button type="button" className="btn ai-start" onClick={write} disabled={busy}>
+        <span aria-hidden="true">✦ </span>{busy ? t("assist.writing") : game.description || game.description_de ? t("form.ai.improve") : t("form.ai.write")}
+      </button>
+      <small>{t("form.ai.help")}</small>
+      {err && <p className="error" role="alert">{err}</p>}
+      {draft && (
+        <AiBox title={t("form.ai.draft")} onClose={() => setDraft(null)}>
+          <p className="label">English</p>
+          <p className="fb-body">{draft.en}</p>
+          <p className="label">Deutsch</p>
+          <p className="fb-body">{draft.de}</p>
+          <div className="actions">
+            <button type="button" className="btn primary" onClick={() => { onUse(draft); setDraft(null); }}>{t("assist.use")}</button>
+          </div>
+        </AiBox>
+      )}
+    </div>
   );
 }

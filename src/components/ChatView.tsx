@@ -9,6 +9,7 @@ import {
   deleteMessage, LIMITS, listMessages, markChatRead, MESSAGE_PAGE, reportMessage, sendMessage, SocialError,
   type ChatKind, type Message, type Person,
 } from "../lib/social";
+import { TranslateToggle, useTranslate } from "./AiBits";
 import { Avatar } from "./Avatar";
 
 /**
@@ -179,7 +180,7 @@ export function ChatView({ chatId, kind, compact }: { chatId: string; kind: Chat
                   <time dateTime={m.created_at} title={new Date(m.created_at).toLocaleString(lang === "de" ? "de-CH" : "en")}>{ago(m.created_at, lang)}</time>
                 </div>
               )}
-              <p className="body">{m.body}</p>
+              <MessageText id={m.id} body={m.body} />
               <div className="msg-tools">
                 {(mine || isAdmin) && <button type="button" className="linkish" onClick={() => remove(m.id)}>{t("chat.delete")}</button>}
                 {!mine && (reported.has(m.id)
@@ -205,5 +206,15 @@ export function ChatView({ chatId, kind, compact }: { chatId: string; kind: Chat
       </form>
       {(kind === "public" || kind === "game") && <p className="hint">{t("chat.roomRules")}</p>}
     </div>
+  );
+}
+
+function MessageText({ id, body }: { id: number; body: string }) {
+  const tr = useTranslate("message", id, body);
+  return (
+    <>
+      <p className="body">{tr.texts?.[0] ?? body}</p>
+      <TranslateToggle tr={tr} />
+    </>
   );
 }

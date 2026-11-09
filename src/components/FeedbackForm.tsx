@@ -1,6 +1,8 @@
 import { useId, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
+import { useAuth } from "../lib/auth";
+import { similarFeedback, useFreeAi, type SimilarPost } from "../lib/assist";
 import {
   createPost, deviceSummary, FeedbackError, KINDS, LIMITS, similarPosts,
   type FeedbackKind, type FeedbackPost,
@@ -30,12 +32,27 @@ export function FeedbackForm({ gameId, posts, kind: initialKind = "bug", onPoste
   const info = useMemo(device, []);
   const similar = useMemo(() => (title.trim().length >= 4 ? similarPosts(title, posts) : []), [title, posts]);
   const isBug = kind === "bug";
+  const { session } = useAuth();
+  const freeAi = useFreeAi() && !!session;
+  // What the free AI found for exactly this text (checked once before posting).
+  const [aiFound, setAiFound] = useState<{ key: string; posts: SimilarPost[] } | null>(null);
+  const [checking, setChecking] = useState(false);
+  const key = `${kind}\n${title.trim()}\n${body.trim()}`;
+  const found = aiFound?.key === key ? aiFound.posts : [];
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (title.trim().length < 3) return setErr(t("fb.err.tooShort"));
-    setBusy(true);
     setErr("");
+    if (freeAi && kind !== "other" && aiFound?.key !== key) {
+      setChecking(true);
+      const list = await similarFeedback({ game_id: gameId, kind, title: title.trim(), body: body.trim() }).catch(() => []);
+      setChecking(false);
+      setAiFound({ key, posts: list });
+      // Show what it found first; posting anyway is one more tap.
+      if (list.length) return;
+    }
+    setBusy(true);
     try {
       const p = await createPost({
         game_id: gameId,
@@ -115,9 +132,22 @@ export function FeedbackForm({ gameId, posts, kind: initialKind = "bug", onPoste
         </>
       )}
 
+      {found.length > 0 && (
+        <div className="fb-similar ai-similar" role="status">
+          <span><span aria-hidden="true">✦ </span>{t("fb.form.aiSimilar")}</span>
+          <ul>
+            {found.map((p) => (
+              <li key={p.id}><Link to={`/feedback/${p.id}`}>{p.title}</Link> <span className="sub">· {t("fb.votes", { n: p.vote_count })}</span></li>
+            ))}
+          </ul>
+          <small>{t("fb.form.aiSimilarHelp")}</small>
+        </div>
+      )}
       {err && <p className="error" role="alert">{err}</p>}
       <div className="actions fb-form-actions">
-        <button className="btn primary" disabled={busy}>{busy ? t("fb.form.sending") : t("fb.form.submit")}</button>
+        <button className="btn primary" disabled={busy || checking}>
+          {checking ? t("fb.form.checking") : busy ? t("fb.form.sending") : found.length ? t("fb.form.postAnyway") : t("fb.form.submit")}
+        </button>
         <button type="button" className="btn" onClick={onCancel} disabled={busy}>{t("form.cancel")}</button>
       </div>
     </form>

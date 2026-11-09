@@ -3,9 +3,10 @@ import { useI18n } from "../lib/i18n";
 import { ago } from "../lib/feedback";
 import { AiSetup } from "../components/AiSetup";
 import { ModelPicker } from "../components/ModelPicker";
+import { FreeAiCard } from "../components/FreeAiCard";
 import {
   ApiError, connectError, developersWithQuotas, getAiSettings, monthOverview, recentUsage, saveAiSettings, setQuota, testAi, usd,
-  type Overview, type Provider, type TestResult, type UsageRow,
+  type AiSettings, type Overview, type Provider, type TestResult, type UsageRow,
 } from "../lib/ai";
 
 type Form = { enabled: boolean; provider: Provider; base_url: string; model: string; input_price: string; output_price: string; monthly_cap: string; default_quota: string };
@@ -14,6 +15,7 @@ type Form = { enabled: boolean; provider: Provider; base_url: string; model: str
 export function AiAdmin() {
   const { t, lang } = useI18n();
   const [form, setForm] = useState<Form | null>(null);
+  const [settings, setSettings] = useState<AiSettings | null>(null);
   const [overview, setOverview] = useState<Overview | null>(null);
   const [devs, setDevs] = useState<{ id: string; username: string; quota: number | null }[]>([]);
   const [usage, setUsage] = useState<UsageRow[]>([]);
@@ -32,6 +34,7 @@ export function AiAdmin() {
   useEffect(() => {
     getAiSettings()
       .then((s) => {
+        setSettings(s);
         const f: Form = {
           enabled: s.enabled,
           provider: s.provider,
@@ -132,8 +135,11 @@ export function AiAdmin() {
 
       <AiSetup provider={form.provider} />
 
+      {settings && <FreeAiCard settings={settings} />}
+
       <form className="form ai-card" onSubmit={save} aria-labelledby="ai-settings-h">
         <h2 id="ai-settings-h">{t("ai.settings")}</h2>
+        <p className="hint">{t("ai.strongLead")}</p>
         <label className="fb-check">
           <input type="checkbox" checked={form.enabled} onChange={set("enabled")} />
           <span>{t("ai.enabled")}</span>

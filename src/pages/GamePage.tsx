@@ -15,6 +15,9 @@ import { GameUpdates } from "../components/GameUpdates";
 import { GameChat } from "../components/GameChat";
 import { Leaderboard, useScoreBridge } from "../components/Leaderboard";
 import { setPlaying } from "../lib/useBadges";
+import { TranslateToggle, useTranslate } from "../components/AiBits";
+import { GameHelper } from "../components/GameHelper";
+import { useFreeAi } from "../lib/assist";
 import { CloseIcon, FullscreenIcon, ShareIcon } from "../components/icons";
 
 const LANDSCAPE_PHONE = "(orientation: landscape) and (pointer: coarse) and (max-height: 600px)";
@@ -36,6 +39,8 @@ export function GamePage() {
   const fillScreen = pseudoFull || landscapePhone;
   const game = findGame(games, slug);
   const [shared, setShared] = useState(false);
+  const [helper, setHelper] = useState(false);
+  const freeAi = useFreeAi();
   const gameId = game?.id;
   const userId = session?.user.id;
   const saves = useSaveBridge(gameFrame, gameId, game?.play_url, userId);
@@ -190,10 +195,16 @@ export function GamePage() {
           <div className="actions">
             <FavButton game={game} withLabel />
             <button type="button" className="btn" onClick={share} aria-live="polite"><ShareIcon />{shared ? t("game.copied") : t("game.share")}</button>
+            {freeAi && (
+              <button type="button" className="btn" onClick={() => setHelper((h) => !h)} aria-expanded={helper}>
+                <span aria-hidden="true">✦ </span>{t("helper.open")}
+              </button>
+            )}
             {canEdit && <Link to={`/edit/${game.slug}`} className="btn">{t("game.edit")}</Link>}
             <button type="button" className="btn primary" onClick={fullscreen}><FullscreenIcon />{t("game.fullscreen")}</button>
           </div>
         </div>
+        {freeAi && helper && <GameHelper key={game.id} game={game} onClose={() => setHelper(false)} />}
         {(saves.lost || saves.conflict) && (
           <div className="check warn save-conflict" role="alert">
             <p>{t(saves.lost ? (userId ? "saves.lostAccount" : "saves.lostDevice") : "saves.conflict")}</p>
@@ -230,7 +241,7 @@ export function GamePage() {
           {desc && (
             <div>
               <h2>{t("game.about")}</h2>
-              <p>{desc}</p>
+              <AboutText gameId={game.id} text={desc} translatable={desc === game.description} />
             </div>
           )}
           {game.controls && (
@@ -253,6 +264,17 @@ export function GamePage() {
           <GameGrid games={more} />
         </section>
       )}
+    </>
+  );
+}
+
+/** The game's description, with "Translate" when it's only in the other language. */
+function AboutText({ gameId, text, translatable }: { gameId: string; text: string; translatable: boolean }) {
+  const tr = useTranslate("game", gameId, translatable ? text : "");
+  return (
+    <>
+      <p>{tr.texts?.[0] ?? text}</p>
+      <TranslateToggle tr={tr} />
     </>
   );
 }

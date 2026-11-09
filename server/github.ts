@@ -101,6 +101,12 @@ export function github(cfg: ServerEnv["github"], fetchImpl: typeof fetch = fetch
           const r = await call<{ tree: TreeEntry[] }>(`/repos/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`, token);
           return r.tree;
         },
+        /** First lines of the newest commit messages on the default branch, since a time if given. */
+        async commits(since?: string): Promise<string[]> {
+          const q = `per_page=60${since ? `&since=${encodeURIComponent(since)}` : ""}`;
+          const r = await call<{ commit: { message: string } }[]>(`/repos/${repo}/commits?${q}`, token);
+          return r.map((c) => c.commit.message.split("\n")[0].trim()).filter(Boolean);
+        },
         async read(path: string, ref: string): Promise<string> {
           return call<string>(`/repos/${repo}/contents/${enc(path)}?ref=${encodeURIComponent(ref)}`, token, {}, "application/vnd.github.raw+json");
         },

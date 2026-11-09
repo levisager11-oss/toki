@@ -41,6 +41,9 @@
     },
     "api/github.ts": {
       "maxDuration": 60
+    },
+    "api/assist.ts": {
+      "maxDuration": 60
     }
   }
 }

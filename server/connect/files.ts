@@ -119,6 +119,8 @@ export function applyEdits(files: Record<string, string>, edits: unknown): { cha
 
 /** Reads the one JSON object the AI answers with, also inside a ``` block or with text around it. */
 export function parseAiJson(text: string): Record<string, unknown> {
+  // Thinking models (e.g. Qwen) may write their thoughts first, which can contain braces too.
+  text = text.replace(/<think>[\s\S]*?<\/think>/gi, "");
   const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(text);
   const body = fenced ? fenced[1] : text;
   const start = body.indexOf("{");

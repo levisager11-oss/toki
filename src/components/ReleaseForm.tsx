@@ -5,6 +5,9 @@ import {
   type Fixable, type Release,
 } from "../lib/releases";
 import { KindTag } from "./FeedbackBits";
+import { AiBox } from "./AiBits";
+import { githubRepos, type GitHubInfo } from "../lib/ai";
+import { assistError, draftRelease, useFreeAi } from "../lib/assist";
 
 /** Posting or editing an update, and choosing the feedback it fixes. */
 export function ReleaseForm({ gameId, release, suggestedVersion = "", onSaved, onCancel }: {
@@ -18,6 +21,7 @@ export function ReleaseForm({ gameId, release, suggestedVersion = "", onSaved, o
 }) {
   const { t } = useI18n();
   const id = useId();
+  const freeAi = useFreeAi();
   const [version, setVersion] = useState(release?.version ?? suggestedVersion);
   const [title, setTitle] = useState(release?.title ?? "");
   const [notes, setNotes] = useState(release?.notes ?? "");
@@ -74,6 +78,16 @@ export function ReleaseForm({ gameId, release, suggestedVersion = "", onSaved, o
           <input id={`${id}-t`} maxLength={RELEASE_LIMITS.title} value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("rel.form.titleHelp")} autoComplete="off" />
         </div>
       </div>
+      {freeAi && !release && (
+        <ReleaseDraft
+          gameId={gameId}
+          fixes={[...picked]}
+          onUse={(d) => {
+            if (d.title) setTitle(d.title.slice(0, RELEASE_LIMITS.title));
+            setNotes(d.notes.slice(0, RELEASE_LIMITS.notes));
+          }}
+        />
+      )}
       <label htmlFor={`${id}-n`}>{t("rel.form.notes")}</label>
       <small>{t("rel.form.notesHelp")}</small>
       <textarea id={`${id}-n`} rows={7} maxLength={RELEASE_LIMITS.notes} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t("rel.form.notesPlaceholder")} />
@@ -103,5 +117,86 @@ export function ReleaseForm({ gameId, release, suggestedVersion = "", onSaved, o
         <button type="button" className="btn" onClick={onCancel} disabled={busy}>{t("form.cancel")}</button>
       </div>
     </form>
+  );
+}
+
+const repoKey = (gameId: string | null) => `toki.releaseRepo.${gameId ?? "toki"}`;
+
+/** "Write with AI": a draft from a few words, the ticked feedback and the code's changes on GitHub. */
+function ReleaseDraft({ gameId, fixes, onUse }: { gameId: string | null; fixes: string[]; onUse: (d: { title: string; notes: string }) => void }) {
+  const { t, lang } = useI18n();
+  const id = useId();
+  const [open, setOpen] = useState(false);
+  const [notes, setNotes] = useState("");
+  const [repos, setRepos] = useState<NonNullable<GitHubInfo["repos"]> | null>(null);
+  const [repo, setRepo] = useState(() => {
+    try {
+      return localStorage.getItem(repoKey(gameId)) ?? "";
+    } catch {
+      return "";
+    }
+  });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [draft, setDraft] = useState<{ title: string; notes: string; commits: number; commitsError: boolean } | null>(null);
+
+  useEffect(() => {
+    if (!open || repos) return;
+    githubRepos().then((g) => setRepos(g.repos ?? [])).catch(() => setRepos([]));
+  }, [open, repos]);
+
+  const write = async () => {
+    setBusy(true);
+    setErr("");
+    const [inst, name] = repo.split("|");
+    try {
+      localStorage.setItem(repoKey(gameId), repo);
+    } catch {
+      /* only a convenience */
+    }
+    try {
+      setDraft(await draftRelease({ game_id: gameId, notes: notes.trim(), fixes, lang, ...(name ? { installation_id: Number(inst), repo: name } : {}) }));
+    } catch (e) {
+      setErr(t(`assist.err.${assistError(e)}`));
+    }
+    setBusy(false);
+  };
+
+  if (!open)
+    return (
+      <button type="button" className="btn ai-start" onClick={() => setOpen(true)}><span aria-hidden="true">✦ </span>{t("rel.ai.open")}</button>
+    );
+  return (
+    <div className="ai-panel">
+      <label htmlFor={`${id}-w`}>{t("rel.ai.notes")}</label>
+      <textarea id={`${id}-w`} rows={2} maxLength={1500} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t("rel.ai.notesPlaceholder")} />
+      {repos && repos.length > 0 && (
+        <>
+          <label htmlFor={`${id}-r`}>{t("rel.ai.repo")}</label>
+          <select id={`${id}-r`} value={repo} onChange={(e) => setRepo(e.target.value)} aria-describedby={`${id}-rh`}>
+            <option value="">{t("rel.ai.noRepo")}</option>
+            {repos.map((r) => <option key={`${r.installation_id}|${r.repo}`} value={`${r.installation_id}|${r.repo}`}>{r.repo}</option>)}
+          </select>
+          <small id={`${id}-rh`}>{t("rel.ai.repoHelp")}</small>
+        </>
+      )}
+      <small>{t("rel.ai.help")}</small>
+      <div className="actions">
+        <button type="button" className="btn" onClick={write} disabled={busy}>{busy ? t("assist.writing") : t("rel.ai.write")}</button>
+        <button type="button" className="linkish" onClick={() => setOpen(false)}>{t("assist.close")}</button>
+      </div>
+      {err && <p className="error" role="alert">{err}</p>}
+      {draft && (
+        <AiBox title={t("rel.ai.draft")}>
+          {draft.title && <p><b>{draft.title}</b></p>}
+          <p className="fb-body">{draft.notes}</p>
+          {draft.commitsError && <p className="check warn">{t("rel.ai.commitsError")}</p>}
+          {draft.commits > 0 && <p className="sub">{t("rel.ai.commits", { n: draft.commits })}</p>}
+          <div className="actions">
+            <button type="button" className="btn primary" onClick={() => onUse(draft)}>{t("assist.use")}</button>
+          </div>
+        </AiBox>
+      )}
+    </div>
   );
 }

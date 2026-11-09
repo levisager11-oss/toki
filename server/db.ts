@@ -1,6 +1,6 @@
 // The database with full rights (the service role), for server code only. Row level security
 // does not apply here, so every caller checks who may do what itself.
-import { SUPABASE_URL } from "./config.js";
+import { SUPABASE_KEY, SUPABASE_URL } from "./config.js";
 
 export class DbError extends Error {
   constructor(message: string, readonly status: number, readonly code?: string) {
@@ -11,8 +11,18 @@ export class DbError extends Error {
 export function serviceDb(key: string, fetchImpl: typeof fetch = fetch) {
   // New secret keys go in the apikey header only; the older service_role key is a JWT and also
   // goes in Authorization.
-  const auth: Record<string, string> = key.startsWith("sb_") ? { apikey: key } : { apikey: key, authorization: `Bearer ${key}` };
+  return restDb(key.startsWith("sb_") ? { apikey: key } : { apikey: key, authorization: `Bearer ${key}` }, fetchImpl);
+}
 
+/**
+ * The database as the logged-in account (its "Authorization: Bearer …" header), so row level
+ * security decides what it reads: e.g. a private bug report or a chat only for those who may see it.
+ */
+export function userDb(authorization: string, fetchImpl: typeof fetch = fetch) {
+  return restDb({ apikey: SUPABASE_KEY, authorization }, fetchImpl);
+}
+
+function restDb(auth: Record<string, string>, fetchImpl: typeof fetch) {
   async function call<T>(path: string, init: RequestInit & { prefer?: string } = {}): Promise<T> {
     const headers: Record<string, string> = { ...auth, "content-type": "application/json" };
     if (init.prefer) headers.prefer = init.prefer;
@@ -34,4 +44,4 @@ export function serviceDb(key: string, fetchImpl: typeof fetch = fetch) {
   };
 }
 
-export type Db = ReturnType<typeof serviceDb>;
+export type Db = ReturnType<typeof restDb>;

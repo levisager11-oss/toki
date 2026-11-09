@@ -46,6 +46,44 @@ knows the list prices), they are filled in, but check them. Toki counts costs wi
 monthly cap ($20) and the quota per developer ($5), turn the AI on, save, and **Test the
 connection** (it costs a tiny amount and shows up in the list of calls).
 
+## 5. Free AI (on Toki)
+
+Next to the "strong AI" above (prices, quotas, the monthly cap; used to write code), Toki has a
+**Free AI**: an OpenAI-compatible endpoint where tokens cost nothing (e.g. a school's endpoint). It
+uses the same key as the OpenAI-compatible endpoint (`AI_API_KEY`). Fill in its address and model
+in the *Free AI* card on the AI page, turn it on, save and test it.
+
+It does the small helpers (`api/assist.ts`, prompts in `server/assist/prompts.ts`):
+
+- **Translate** posts, replies, chat messages and game descriptions between English and German
+  (on request; each translation is saved for 30 days, so it's made once).
+- **Similar feedback:** before a bug report or idea is posted, it points to posts about the same thing.
+- **You might like:** game suggestions on the home page, from what a player liked and played
+  (saved for a day per account).
+- For developers: **release note drafts** (from a few words, the ticked feedback and the commits
+  on GitHub since the last update), **game descriptions** in both languages, and a **summary of
+  the feedback inbox**. For admins: a **summary of a developer application** (with what its links show).
+- **Toki Connect's easy steps** (if ticked): it reads the code and asks the developer; only the
+  step that writes the change uses the strong AI. If the free AI fails, the strong AI takes over.
+
+- **Ask AI (game helper):** a button on every game's page opens a small chat under the game for
+  players who are stuck or have a question about Toki. It answers from the game's description and
+  controls, the developer's tips, a short player's guide it learned once from the game's GitHub
+  repository, and a guide to Toki (`server/assist/help.ts`). Developers set it up at the bottom of
+  their game's form ("AI helper for players"): tips, and "Learn from GitHub" (one call, saved in
+  `game_help`; "Learn again" after an update).
+
+There are no prices, so instead every account may use each helper only so often an hour
+(`ai_free_take` in `supabase/migrations/20261112090000_free_ai.sql`, e.g. 120 translations, 10
+suggestions). Calls are counted per day and helper (one row each) and shown on the AI page.
+
+"Fix with AI" on a bug report (developers and admins) starts a Toki Connect run that fixes the bug
+and opens a pull request. It uses the strong AI and its limits.
+
+Buttons only show when the AI behind them is on (`ai_status()`): without the strong AI, Toki
+Connect's runs and "Fix with AI" are hidden, and the Toki Connect page only connects GitHub (which
+the free helpers use for update drafts and the game helper).
+
 ## Using Vercel's settings instead
 
 Every key can also be set as an environment variable in Vercel; those win over what is stored on
