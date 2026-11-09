@@ -12,6 +12,7 @@ import { useAiStatus } from "../lib/assist";
 import { TranslateToggle, useTranslate } from "../components/AiBits";
 import { useTitle } from "../lib/useTitle";
 import { Linkify } from "../components/Linkify";
+import { useDraft } from "../lib/useDraft";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -224,7 +225,7 @@ function Replies({ post, replies, setReplies, manager, onReplied }: {
   const { t, lang } = useI18n();
   const { session, profile } = useAuth();
   const location = useLocation();
-  const [body, setBody] = useState("");
+  const [body, setBody] = useDraft(`reply.${post.id}`);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [editing, setEditing] = useState<string | null>(null);

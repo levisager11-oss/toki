@@ -7,6 +7,7 @@ import {
   createPost, deviceSummary, FeedbackError, KINDS, LIMITS, similarPosts,
   type FeedbackKind, type FeedbackPost,
 } from "../lib/feedback";
+import { useDraft } from "../lib/useDraft";
 
 const device = () => deviceSummary(navigator.userAgent, window.screen?.width, window.screen?.height);
 
@@ -23,8 +24,8 @@ export function FeedbackForm({ gameId, posts, kind: initialKind = "bug", onPoste
   const { t } = useI18n();
   const id = useId();
   const [kind, setKind] = useState<FeedbackKind>(initialKind);
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
+  const [title, setTitle] = useDraft(`fb.${gameId ?? "toki"}.title`);
+  const [body, setBody] = useDraft(`fb.${gameId ?? "toki"}.body`);
   const [withDevice, setWithDevice] = useState(true);
   const [priv, setPriv] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -62,6 +63,8 @@ export function FeedbackForm({ gameId, posts, kind: initialKind = "bug", onPoste
         device: isBug && withDevice && info ? info : null,
         private: isBug && priv,
       });
+      setTitle("");
+      setBody("");
       onPosted(p);
     } catch (e) {
       setErr(t(e instanceof FeedbackError ? e.key : "error"));
@@ -148,7 +151,7 @@ export function FeedbackForm({ gameId, posts, kind: initialKind = "bug", onPoste
         <button className="btn primary" disabled={busy || checking}>
           {checking ? t("fb.form.checking") : busy ? t("fb.form.sending") : found.length ? t("fb.form.postAnyway") : t("fb.form.submit")}
         </button>
-        <button type="button" className="btn" onClick={onCancel} disabled={busy}>{t("form.cancel")}</button>
+        <button type="button" className="btn" onClick={() => { setTitle(""); setBody(""); onCancel(); }} disabled={busy}>{t("form.cancel")}</button>
       </div>
     </form>
   );

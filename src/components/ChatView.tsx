@@ -12,6 +12,7 @@ import {
 import { TranslateToggle, useTranslate } from "./AiBits";
 import { Avatar } from "./Avatar";
 import { Linkify } from "./Linkify";
+import { useDraft } from "../lib/useDraft";
 
 /**
  * The messages of one chat with a box to write. New messages arrive live (Supabase Realtime),
@@ -24,7 +25,7 @@ export function ChatView({ chatId, kind, compact }: { chatId: string; kind: Chat
   const location = useLocation();
   const [messages, setMessages] = useState<Message[] | null>(null);
   const [more, setMore] = useState(false);
-  const [text, setText] = useState("");
+  const [text, setText] = useDraft(`chat.${chatId}`);
   const [err, setErr] = useState("");
   const [sending, setSending] = useState(false);
   const [reporting, setReporting] = useState<number | null>(null);
