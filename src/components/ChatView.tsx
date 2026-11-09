@@ -84,8 +84,11 @@ export function ChatView({ chatId, kind, compact }: { chatId: string; kind: Chat
       .subscribe();
     // Back from the background (e.g. a phone that slept): the live connection may have
     // missed messages, so fetch the newest ones once and add what's missing.
+    let hiddenAt = 0;
     const onVisible = () => {
-      if (document.visibilityState !== "visible") return;
+      if (document.visibilityState !== "visible") return void (hiddenAt = Date.now());
+      // A quick look at another tab: the live connection is still there.
+      if (!hiddenAt || Date.now() - hiddenAt < 30_000) return;
       listMessages(chatId).then(
         (ms) => {
           if (!alive) return;
