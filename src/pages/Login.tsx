@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { safeNext } from "../lib/nav";
 import { supabase } from "../lib/supabase";
 import { useI18n } from "../lib/i18n";
 import { useTitle } from "../lib/useTitle";
+import { useAuth } from "../lib/auth";
 
 export function Login() {
   const { t } = useI18n();
@@ -14,9 +15,12 @@ export function Login() {
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const { session, ready } = useAuth();
   // "Forgot your password?": the same page asks for the email and sends a reset link.
   const [forgot, setForgot] = useState(params.get("forgot") === "1");
   const [sent, setSent] = useState(false);
+  // Already logged in: nothing to do here.
+  if (ready && session && !busy) return <Navigate to={safeNext(params.get("next"))} replace />;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();

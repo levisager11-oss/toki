@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useI18n } from "../lib/i18n";
 import { safeNext } from "../lib/nav";
 import { useTitle } from "../lib/useTitle";
+import { useAuth } from "../lib/auth";
 import { passwordError } from "../components/PasswordForm";
 
 export function Signup() {
@@ -18,6 +19,9 @@ export function Signup() {
   const [err, setErr] = useState("");
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
+  const { session, ready } = useAuth();
+  // Already logged in: nothing to do here.
+  if (ready && session && !busy && !done) return <Navigate to={safeNext(params.get("next"))} replace />;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
