@@ -177,7 +177,7 @@ export function GameForm() {
             {t("form.isolation")}
           </label>
           <small id="isolation-help">{t("form.isolationHelp")}</small>
-          <SaveSupport open={!orig} />
+          <SaveSupport open={!orig} gameId={orig?.id} />
 
           <label htmlFor="slug">{t("form.slug")}</label>
           <div className="prefix">

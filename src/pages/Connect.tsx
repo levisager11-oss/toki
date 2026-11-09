@@ -92,7 +92,13 @@ export function Connect() {
         </div>
       ) : (
         gh.repos && gh.repos.length > 0 && !blocked && (
-          <NewRun repos={gh.repos} games={mine.map((g) => ({ id: g.id, title: g.title }))} lang={lang} onStarted={(id) => navigate(`/connect/${id}`)} />
+          <NewRun
+            repos={gh.repos}
+            games={mine.map((g) => ({ id: g.id, title: g.title }))}
+            initialGame={new URLSearchParams(location.search).get("game") ?? ""}
+            lang={lang}
+            onStarted={(id) => navigate(`/connect/${id}`)}
+          />
         )
       )}
 
@@ -134,15 +140,22 @@ export const GitHubMark = () => (
   </svg>
 );
 
-function NewRun({ repos, games, lang, onStarted }: {
+function NewRun({ repos, games, initialGame, lang, onStarted }: {
   repos: NonNullable<GitHubInfo["repos"]>;
   games: { id: string; title: string }[];
+  /** A game to preselect (from "Add with Toki Connect" on the game's form). */
+  initialGame: string;
   lang: "en" | "de";
   onStarted: (id: string) => void;
 }) {
   const { t } = useI18n();
   const [repo, setRepo] = useState(`${repos[0].installation_id}|${repos[0].repo}`);
-  const [game, setGame] = useState("");
+  const [game, setGame] = useState(() => (games.some((g) => g.id === initialGame) ? initialGame : ""));
+  // The games may still be loading at first.
+  const known = games.some((g) => g.id === initialGame);
+  useEffect(() => {
+    if (known) setGame((g) => g || initialGame);
+  }, [known, initialGame]);
   const [features, setFeatures] = useState<Feature[]>(["saves", "scores"]);
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
