@@ -724,7 +724,8 @@ a.author:hover { text-decoration: underline; color: var(--fg); }
 .job-msg p { margin: 0; }
 .job-msg ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
 .job-files { list-style: none; padding: 0 !important; }
-.job-files code { font-size: 13px; }
+.job-files code { font-size: 13px; overflow-wrap: anywhere; }
+.connect-job .h, .connect .fb-title { overflow-wrap: anywhere; }
 .job-working { display: flex; align-items: center; gap: 10px; color: var(--muted); margin: 0; }
 .dots-anim { display: inline-flex; gap: 4px; }
 .dots-anim i { width: 8px; height: 8px; background: var(--accent); border: 1px solid var(--accent-ink); animation: dot-hop 1s steps(2) infinite; }

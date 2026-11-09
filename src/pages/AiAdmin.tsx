@@ -1,10 +1,10 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useI18n } from "../lib/i18n";
 import { ago } from "../lib/feedback";
 import { AiSetup } from "../components/AiSetup";
 import { ModelPicker } from "../components/ModelPicker";
 import {
-  developersWithQuotas, getAiSettings, monthOverview, recentUsage, saveAiSettings, setQuota, testAi, usd,
+  ApiError, connectError, developersWithQuotas, getAiSettings, monthOverview, recentUsage, saveAiSettings, setQuota, testAi, usd,
   type Overview, type Provider, type TestResult, type UsageRow,
 } from "../lib/ai";
 
@@ -18,6 +18,10 @@ export function AiAdmin() {
   const [devs, setDevs] = useState<{ id: string; username: string; quota: number | null }[]>([]);
   const [usage, setUsage] = useState<UsageRow[]>([]);
   const [error, setError] = useState(false);
+  // The month card alone shows a problem loading the spending, so the form stays usable.
+  const [overviewError, setOverviewError] = useState(false);
+  // The form as last loaded or saved: the test uses the saved settings, so it waits until changes are saved.
+  const [savedForm, setSavedForm] = useState("");
   const [saveMsg, setSaveMsg] = useState<"" | "saved" | "error">("");
   const [busy, setBusy] = useState(false);
   const [test, setTest] = useState<TestResult | "running" | null>(null);
@@ -27,8 +31,8 @@ export function AiAdmin() {
 
   useEffect(() => {
     getAiSettings()
-      .then((s) =>
-        setForm({
+      .then((s) => {
+        const f: Form = {
           enabled: s.enabled,
           provider: s.provider,
           base_url: s.base_url,
@@ -37,12 +41,19 @@ export function AiAdmin() {
           output_price: String(s.output_price || ""),
           monthly_cap: String(s.monthly_cap),
           default_quota: String(s.default_quota),
-        }),
-      )
+        };
+        setForm(f);
+        setSavedForm(JSON.stringify(f));
+      })
       .catch(() => setError(true));
   }, []);
   useEffect(() => {
-    monthOverview().then(setOverview).catch(() => setError(true));
+    monthOverview()
+      .then((o) => {
+        setOverview(o);
+        setOverviewError(false);
+      })
+      .catch(() => setOverviewError(true));
     developersWithQuotas().then(setDevs).catch(() => {});
     recentUsage().then(setUsage).catch(() => {});
   }, [reload]);
@@ -54,6 +65,7 @@ export function AiAdmin() {
   const defaultQuota = Number(form.default_quota) || 0;
   const spent = overview?.spent ?? 0;
   const pct = cap > 0 ? Math.min(100, (spent / cap) * 100) : 100;
+  const dirty = JSON.stringify(form) !== savedForm;
   const set = (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm({ ...form, [k]: k === "enabled" ? e.target.checked : e.target.value });
 
@@ -61,6 +73,7 @@ export function AiAdmin() {
     e.preventDefault();
     setBusy(true);
     setSaveMsg("");
+    const sent = JSON.stringify(form);
     try {
       await saveAiSettings({
         enabled: form.enabled,
@@ -73,6 +86,7 @@ export function AiAdmin() {
         default_quota: defaultQuota,
       });
       setSaveMsg("saved");
+      setSavedForm(sent);
     } catch {
       setSaveMsg("error");
     }
@@ -83,7 +97,7 @@ export function AiAdmin() {
     try {
       setTest(await testAi());
     } catch (e) {
-      setTest({ ok: false, message: e instanceof Error ? e.message : "" });
+      setTest({ ok: false, error: e instanceof Error ? e.message : "", message: e instanceof ApiError ? e.detail : "" });
     }
     setReload((n) => n + 1);
   };
@@ -104,6 +118,7 @@ export function AiAdmin() {
 
       <section className="ai-card" aria-labelledby="ai-month-h">
         <h2 id="ai-month-h">{t("ai.month")}</h2>
+        {overviewError && <p className="error" role="alert">{t("error")}</p>}
         <p className="ai-big">{t("ai.spent", { spent: usd(spent), cap: usd(cap) })}</p>
         <div className="meter" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)} aria-label={t("ai.month")}>
           <i className={pct >= 80 ? "warn" : ""} style={{ width: `${pct}%` }} />
@@ -149,7 +164,8 @@ export function AiAdmin() {
         <label htmlFor="ai-model">{t("ai.model")}</label>
         <input id="ai-model" maxLength={100} value={form.model} onChange={(e) => { set("model")(e); setPricesFrom(""); }} autoComplete="off" spellCheck={false} />
         <ModelPicker
-          key={form.provider}
+          // A new list for another address, so models and prices from the old one can't be picked.
+          key={`${form.provider}|${form.base_url.trim()}`}
           provider={form.provider}
           baseUrl={form.base_url}
           selected={form.model}
@@ -186,15 +202,19 @@ export function AiAdmin() {
         {saveMsg === "error" && <p className="error" role="alert">{t("ai.saveError")}</p>}
         <div className="actions fb-form-actions">
           <button className="btn primary" disabled={busy}>{t("ai.save")}</button>
-          <button type="button" className="btn" onClick={runTest} disabled={test === "running"}>{test === "running" ? t("ai.testing") : t("ai.test")}</button>
+          <button type="button" className="btn" onClick={runTest} disabled={test === "running" || dirty} aria-describedby={dirty ? "ai-test-hint" : undefined}>
+            {test === "running" ? t("ai.testing") : t("ai.test")}
+          </button>
         </div>
+        {dirty && <small id="ai-test-hint">{t("ai.testSaveFirst")}</small>}
         {test && test !== "running" && (
           <div className={`check ${test.ok ? "good" : "warn"}`} role="status">
             <p>
               {test.ok
                 ? t("ai.testOk", { text: test.text ?? "", input: test.inputTokens ?? 0, output: test.outputTokens ?? 0, cost: usd(test.cost ?? 0) })
-                : t("ai.testFailed", { message: test.message || test.error || "" })}
+                : t("ai.testFailed", { message: t(`connect.err.${connectError(test.error)}`) })}
             </p>
+            {!test.ok && test.message && <span className="model-error-detail">{test.message}</span>}
             {test.ok && test.estimated && <p className="sub">{t("ai.testEstimated")}</p>}
           </div>
         )}
@@ -237,7 +257,7 @@ export function AiAdmin() {
             {usage.map((u) => (
               <li key={u.id}>
                 <span>{u.user ? `@${u.user.username}` : t("ai.deleted")} · {t(`ai.feature.${u.feature}`)} · {ago(u.created_at, lang)}</span>
-                <span className="sub">{u.input_tokens + u.output_tokens} tokens · {t(`ai.callStatus.${u.status}`)}</span>
+                <span className="sub">{t("ai.tokens", { n: u.input_tokens + u.output_tokens })} · {t(`ai.callStatus.${u.status}`)}</span>
                 <b className="num">{usd(u.cost)}</b>
               </li>
             ))}
@@ -250,13 +270,17 @@ export function AiAdmin() {
 
 /** A developer's quota: empty means the default. Saved when leaving the field. */
 function QuotaInput({ userId, quota, placeholder, label }: { userId: string; quota: number | null; placeholder: string; label: string }) {
+  const { t } = useI18n();
   const [value, setValue] = useState(quota === null ? "" : String(quota));
   const [state, setState] = useState<"" | "saved" | "error">("");
+  // What's in the database now (the list isn't loaded again after a save).
+  const stored = useRef(quota);
   const commit = async () => {
     const next = value.trim() === "" ? null : Math.max(0, Number(value));
-    if (next === quota || (next !== null && Number.isNaN(next))) return;
+    if (next === stored.current || (next !== null && Number.isNaN(next))) return;
     try {
       await setQuota(userId, next);
+      stored.current = next;
       setState("saved");
     } catch {
       setState("error");
@@ -266,8 +290,8 @@ function QuotaInput({ userId, quota, placeholder, label }: { userId: string; quo
     <span className="quota-input">
       <input type="number" min="0" max="1000" step="0.01" inputMode="decimal" value={value} placeholder={placeholder} aria-label={label}
         onChange={(e) => { setValue(e.target.value); setState(""); }} onBlur={commit} onKeyDown={(e) => e.key === "Enter" && (e.currentTarget as HTMLInputElement).blur()} />
-      {state === "saved" && <span className="ok" aria-label="✓">✓</span>}
-      {state === "error" && <span className="error" role="alert">!</span>}
+      {state === "saved" && <span className="ok" role="status"><span aria-hidden="true">✓</span><span className="sr-only">{t("ai.saved")}</span></span>}
+      {state === "error" && <span className="error" role="alert"><span aria-hidden="true">!</span><span className="sr-only">{t("error")}</span></span>}
     </span>
   );
 }

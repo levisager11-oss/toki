@@ -74,7 +74,36 @@ describe("applying for a developer account", () => {
     const a = await apply(player);
     await expect(t.as(player, "update developer_applications set status = 'approved' where id = $1", [a.id])).rejects.toThrow(/permission denied/);
     expect(await t.as(stranger, "delete from developer_applications where id = $1 returning id", [a.id])).toHaveLength(0);
-    expect(await t.as(player, "delete from developer_applications where id = $1 returning id", [a.id])).toHaveLength(1);
+    await t.as(player, "delete from developer_applications where id = $1", [a.id]);
+    const [row] = await t.as<App>(player, "select * from developer_applications where id = $1", [a.id]);
+    expect(row.status).toBe("withdrawn");
+    // ...so a new application is possible
+    expect((await apply(player)).status).toBe("pending");
+  });
+
+  it("counts withdrawn applications towards the limit", async () => {
+    for (let i = 0; i < 3; i++) {
+      const a = await apply(player);
+      await t.as(player, "delete from developer_applications where id = $1", [a.id]);
+    }
+    await expect(apply(player)).rejects.toThrow(/rate_limited/);
+  });
+
+  it("still deletes applications with the account", async () => {
+    await apply(player);
+    await t.admin("delete from auth.users where id = $1", [player.id]);
+    expect(await t.admin("select id from developer_applications where user_id = $1", [player.id])).toHaveLength(0);
+  });
+});
+
+describe("invites", () => {
+  it("can't be used again after the account that used it is deleted", async () => {
+    await t.admin("insert into invites (code, role) values ('TOKI-AAAAAA-BBBBBB', 'creator')");
+    const u = await t.user();
+    expect((await t.as<{ redeem_invite: string }>(u, "select redeem_invite('TOKI-AAAAAA-BBBBBB')"))[0].redeem_invite).toBe("creator");
+    await t.admin("delete from auth.users where id = $1", [u.id]);
+    expect((await t.as<{ check_invite: boolean }>(null, "select check_invite('TOKI-AAAAAA-BBBBBB')"))[0].check_invite).toBe(false);
+    await expect(t.as(player, "select redeem_invite('TOKI-AAAAAA-BBBBBB')")).rejects.toThrow(/invalid_invite/);
   });
 });
 

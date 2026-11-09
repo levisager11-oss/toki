@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
-import { answerJob, cancelJob, connectError, getJob, jobCost, runJob, usd, type ConnectJob as Job, type JobMessage, type Question } from "../lib/ai";
+import { ApiError, answerJob, cancelJob, connectError, getJob, jobCost, runJob, usd, type ConnectError, type ConnectJob as Job, type JobMessage, type Question } from "../lib/ai";
 import { GitHubMark, JobBadge } from "./Connect";
 
 /** One Toki Connect run: progress, the AI's questions, and the pull request (/connect/:id). */
@@ -9,7 +9,12 @@ export function ConnectJob() {
   const { id = "" } = useParams();
   const { t } = useI18n();
   const [job, setJob] = useState<Job | null | undefined>(undefined);
-  const [paused, setPaused] = useState(false);
+  // Why the last step failed (the run waits for "Continue"), or "" while running.
+  const [paused, setPausedCode] = useState<ConnectError | false>(false);
+  const setPaused = (on: false) => setPausedCode(on);
+  const [cancelling, setCancelling] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [cancelError, setCancelError] = useState(false);
   const [tick, setTick] = useState(0);
   const [cost, setCost] = useState(0);
 
@@ -29,14 +34,14 @@ export function ConnectJob() {
         // Nothing changed: another tab or step is working on it. Look again in a moment.
         if (j.status === "working" && j.updated_at === before) setTimeout(() => alive && setTick((n) => n + 1), 4000);
       })
-      .catch(() => alive && setPaused(true));
+      .catch((e) => alive && setPausedCode(connectError(e instanceof ApiError ? e.message : "error")));
     return () => {
       alive = false;
     };
   }, [job?.id, job?.status, job?.updated_at, paused, tick]);
 
   useEffect(() => {
-    if (job) jobCost(job.id).then(setCost);
+    if (job) jobCost(job.id).then(setCost).catch(() => {});
   }, [job?.id, job?.status, job?.updated_at]);
 
   if (job === undefined) return <p className="msg" aria-busy="true">{t("loading")}</p>;
@@ -69,7 +74,7 @@ export function ConnectJob() {
       {job.status === "working" && (
         paused ? (
           <div className="check">
-            <p>{t("connect.paused")}</p>
+            <p>{t("connect.paused")} {paused !== "error" && t(`connect.err.${paused}`)}</p>
             <button type="button" className="btn" onClick={() => setPaused(false)}>{t("connect.continue")}</button>
           </div>
         ) : (
@@ -96,7 +101,24 @@ export function ConnectJob() {
 
       {(job.status === "working" || job.status === "question") && (
         <div className="actions">
-          <button type="button" className="btn ghost-danger" onClick={() => cancelJob(job.id).then(setJob)}>{t("connect.cancel")}</button>
+          <button
+            type="button"
+            className="btn ghost-danger"
+            disabled={cancelling}
+            onClick={() => {
+              if (!confirmCancel) return setConfirmCancel(true);
+              setCancelling(true);
+              setCancelError(false);
+              cancelJob(job.id)
+                .then(setJob)
+                .catch(() => setCancelError(true))
+                .finally(() => { setCancelling(false); setConfirmCancel(false); });
+            }}
+          >
+            {confirmCancel ? t("connect.cancelSure") : t("connect.cancel")}
+          </button>
+          {confirmCancel && !cancelling && <button type="button" className="linkish" onClick={() => setConfirmCancel(false)}>{t("connect.keepRunning")}</button>}
+          {cancelError && <p className="error" role="alert">{t("error")}</p>}
         </div>
       )}
     </section>

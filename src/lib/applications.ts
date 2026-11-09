@@ -38,7 +38,8 @@ export class ApplyError extends Error {
 export async function myApplication(): Promise<Application | null> {
   const { data, error } = await supabase.from("developer_applications").select("*").order("created_at", { ascending: false }).limit(1).maybeSingle();
   if (error) throw new ApplyError("error");
-  return data as Application | null;
+  // A withdrawn application is kept (it counts towards the limit), but it's as if there were none.
+  return data && (data as { status: string }).status !== "withdrawn" ? (data as Application) : null;
 }
 
 export async function apply(about: string, links: string): Promise<Application> {
