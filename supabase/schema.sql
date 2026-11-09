@@ -488,3 +488,57 @@ revoke execute on function public.claim_likes(uuid) from public, anon;
 revoke execute on function public.my_likes() from public, anon;
 grant execute on function public.claim_likes(uuid) to authenticated;
 grant execute on function public.my_likes() to authenticated;
+
+-- Earlier versions and conflict copies are kept for 3 days, then deleted to save storage.
+-- They are removed when new versions are kept, and once an hour for everyone else.
+create or replace function public.trim_save_history(p_user uuid, p_game uuid) returns void
+language sql security definer set search_path = '' as $$
+  delete from public.game_save_history h
+  where h.user_id = p_user and h.game_id = p_game
+    and (h.saved_at < now() - interval '3 days'
+      or h.id not in (
+        select id from (
+          select id, row_number() over (partition by kind order by id desc) as n
+          from public.game_save_history where user_id = p_user and game_id = p_game
+        ) r where (kind = 'earlier' and n <= 10) or (kind = 'conflict' and n <= 5)
+      ))
+$$;
+revoke execute on function public.trim_save_history(uuid, uuid) from public, anon, authenticated;
+
+create index game_save_history_saved_at_idx on public.game_save_history(saved_at);
+
+create extension if not exists pg_cron;
+select cron.schedule('delete-old-save-history', '17 * * * *',
+  $$delete from public.game_save_history where saved_at < now() - interval '3 days'$$);
+
+-- Players only see and restore versions from the last 3 days, even before the hourly cleanup ran.
+alter policy "own save history: read" on public.game_save_history
+  using (user_id = (select auth.uid()) and saved_at >= now() - interval '3 days');
+
+create or replace function public.restore_game_save(p_id bigint) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_user uuid := auth.uid();
+  v_game uuid;
+  v_data jsonb;
+  v_cur jsonb;
+  v_cur_device text;
+begin
+  select game_id, data into v_game, v_data from public.game_save_history
+    where id = p_id and user_id = v_user and saved_at >= now() - interval '3 days';
+  if v_game is null then
+    raise exception 'not_found';
+  end if;
+  perform pg_advisory_xact_lock(hashtextextended(v_user::text || v_game::text, 0));
+  select data, device into v_cur, v_cur_device from public.game_saves where user_id = v_user and game_id = v_game;
+  v_data := jsonb_set(v_data, '{t}', to_jsonb(greatest(floor(extract(epoch from clock_timestamp()) * 1000), coalesce(public.save_t(v_cur), 0) + 1)));
+  if v_cur is not null then
+    insert into public.game_save_history (user_id, game_id, data, kind, device) values (v_user, v_game, v_cur, 'earlier', v_cur_device);
+    perform public.trim_save_history(v_user, v_game);
+  end if;
+  insert into public.game_saves (user_id, game_id, data, device, updated_at) values (v_user, v_game, v_data, null, now())
+    on conflict (user_id, game_id) do update set data = excluded.data, device = null, updated_at = now();
+  return v_data;
+end $$;
+revoke execute on function public.restore_game_save(bigint) from public, anon;
+grant execute on function public.restore_game_save(bigint) to authenticated;
