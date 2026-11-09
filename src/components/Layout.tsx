@@ -5,7 +5,7 @@ import { useI18n } from "../lib/i18n";
 import { canCreate } from "../lib/types";
 import { matchIsolation, pageIsolated } from "../lib/isolation";
 import { useBottomBarFix } from "../lib/useBottomBarFix";
-import { BellIcon, BubbleIcon, HeartTabIcon, HomeIcon, KeyIcon, ListIcon, LogoMark, PlusIcon, SearchIcon, UserIcon } from "./icons";
+import { BellIcon, BubbleIcon, HeartTabIcon, HomeIcon, KeyIcon, ListIcon, LogoMark, LogoutIcon, PlusIcon, SearchIcon, UserIcon } from "./icons";
 import { useBadges } from "../lib/useBadges";
 import { Avatar } from "./Avatar";
 
@@ -83,21 +83,34 @@ export function Layout() {
             <h4>{t("nav.create")}</h4>
             <NavLink to="/my-games">{t("nav.myGames")}</NavLink>
             <NavLink to="/add">{t("nav.addGame")}</NavLink>
-            <NavLink to="/feedback/inbox">{t("nav.feedback")}</NavLink>
+            <NavLink to="/feedback/inbox">{t("fb.inbox.title")}</NavLink>
             {profile.role === "admin" && <NavLink to="/invites">{t("nav.invites")}</NavLink>}
           </nav>
         )}
         <div className="side-foot">
-          <NavLink to="/updates" className="linkish">{t("nav.updates")}</NavLink>
-          <NavLink to="/feedback" end className="linkish">{t("nav.tokiFeedback")}</NavLink>
+          <nav className="navgroup" aria-label="Toki">
+            <h4>Toki</h4>
+            <NavLink to="/updates">{t("rel.whatsNew")}</NavLink>
+            <NavLink to="/feedback" end>{t("nav.feedback")}</NavLink>
+          </nav>
           {profile ? (
-            <>
-              <NavLink to={`/u/${profile.username}`} className="who"><Avatar person={profile} size={20} />@{profile.username}</NavLink>
-              <NavLink to="/account" className="linkish">{t("nav.account")}</NavLink>
-              <button type="button" className="linkish" onClick={() => signOut().then(() => navigate("/"))}>{t("nav.logout")}</button>
-            </>
+            <div className="me">
+              <NavLink to="/account" className="me-link">
+                <Avatar person={profile} size={32} />
+                <span className="me-txt">
+                  <b>@{profile.username}</b>
+                  <span>{t(`role.${profile.role}`)}</span>
+                </span>
+              </NavLink>
+              <button type="button" className="me-out" aria-label={t("nav.logout")} title={t("nav.logout")} onClick={() => signOut().then(() => navigate("/"))}>
+                <LogoutIcon />
+              </button>
+            </div>
           ) : (
-            <NavLink to="/login" className="linkish">{t("nav.login")}</NavLink>
+            <div className="me-guest">
+              <NavLink to="/login" className="btn">{t("nav.login")}</NavLink>
+              <Link to="/signup" className="linkish">{t("login.signup")}</Link>
+            </div>
           )}
         </div>
       </aside>

@@ -30,3 +30,23 @@ describe("renamed games", () => {
     expect((await t.admin<{ old_slugs: string[] }>("select old_slugs from games where slug = 'fresh-one'"))[0].old_slugs).toEqual([]);
   });
 });
+
+describe("banner picture", () => {
+  it("lets the game's maker set a banner, but not other creators", async () => {
+    const maker = await t.user("creator");
+    const other = await t.user("creator");
+    const g = await t.game(maker);
+    const url = "https://example.com/banner.png";
+    expect(await t.as(other, "update games set banner_url = $2 where id = $1 returning id", [g.id, url])).toHaveLength(0);
+    const [row] = await t.as<{ banner_url: string }>(maker, "update games set banner_url = $2 where id = $1 returning banner_url", [g.id, url]);
+    expect(row.banner_url).toBe(url);
+    expect(await t.as(null, "select banner_url from games where id = $1", [g.id])).toEqual([{ banner_url: url }]);
+  });
+
+  it("only takes https links", async () => {
+    const maker = await t.user("creator");
+    const g = await t.game(maker);
+    await expect(t.as(maker, "update games set banner_url = 'http://example.com/b.png' where id = $1", [g.id])).rejects.toThrow(/check/);
+    await expect(t.as(maker, "update games set banner_url = $2 where id = $1", [g.id, `https://x.dev/${"a".repeat(500)}`])).rejects.toThrow(/check/);
+  });
+});
