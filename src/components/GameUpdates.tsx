@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
@@ -14,6 +14,20 @@ export function GameUpdates({ game }: { game: Game }) {
   const [latest, setLatest] = useState<Release | null | undefined>(undefined);
   const page = `/game/${game.slug}/updates`;
   const manager = !!profile && (profile.role === "admin" || profile.id === game.created_by);
+  // Long notes are cut to a few lines, with "Show more" to read them here.
+  const box = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [cut, setCut] = useState(false);
+
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el || open) return;
+    const check = () => setCut(el.scrollHeight > el.clientHeight + 1);
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [latest, open]);
 
   useEffect(() => {
     let alive = true;
@@ -45,7 +59,14 @@ export function GameUpdates({ game }: { game: Game }) {
         <time dateTime={latest.published_at}>{ago(latest.published_at, lang)}</time>
       </header>
       {latest.title && <h3>{latest.title}</h3>}
-      <Notes notes={latest.notes} className="clamp" />
+      <div ref={box} id="rel-teaser-notes" className={`rel-clamp ${open ? "" : "closed"} ${cut && !open ? "cut" : ""}`}>
+        <Notes notes={latest.notes} />
+      </div>
+      {(cut || open) && (
+        <button type="button" className="linkish rel-more" aria-expanded={open} aria-controls="rel-teaser-notes" onClick={() => setOpen(!open)}>
+          {open ? t("rel.less") : t("rel.more")}
+        </button>
+      )}
       <div className="actions">
         <Link to={`${page}#r-${latest.id}`} className="btn">{t("rel.all")}</Link>
         {latest.fixed.length > 0 && <span className="sub">✓ {t("rel.fixedCount", { n: latest.fixed.length })}</span>}

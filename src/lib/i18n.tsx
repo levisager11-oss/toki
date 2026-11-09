@@ -309,6 +309,8 @@ const en = {
   "rel.fixedIn": "Fixed in {v}",
   "rel.doneIn": "Done in {v}",
   "rel.err.versionTaken": "This version already has an update.",
+  "rel.more": "Show more",
+  "rel.less": "Show less",
 };
 
 type Key = keyof typeof en;
@@ -622,6 +624,8 @@ const de: Record<Key, string> = {
   "rel.fixedIn": "Behoben in {v}",
   "rel.doneIn": "Umgesetzt in {v}",
   "rel.err.versionTaken": "Für diese Version gibt es schon ein Update.",
+  "rel.more": "Mehr anzeigen",
+  "rel.less": "Weniger anzeigen",
 };
 
 export type Lang = "en" | "de";

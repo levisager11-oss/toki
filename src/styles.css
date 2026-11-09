@@ -482,7 +482,10 @@ a.fb-fixed:hover { text-decoration: underline; text-underline-offset: 3px; }
 .rel-notes p { margin: 0; white-space: pre-line; }
 .rel-notes ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 3px; }
 .rel-notes li::marker { color: var(--muted); }
-.rel-notes.clamp { max-height: 10.5em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 65%, transparent); mask-image: linear-gradient(#000 65%, transparent); }
+.rel-clamp.closed { max-height: 10.5em; overflow: hidden; }
+/* fade only when something is actually cut off */
+.rel-clamp.cut { -webkit-mask-image: linear-gradient(#000 65%, transparent); mask-image: linear-gradient(#000 65%, transparent); }
+.rel-more { align-self: flex-start; font-size: 14px; margin-top: -4px; }
 .rel-fixed { border-top: 1px solid var(--line); padding-top: 10px; }
 .rel-fixed h3 { margin: 0 0 6px; font-size: 11px; font-weight: 400; }
 .rel-fixed ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
