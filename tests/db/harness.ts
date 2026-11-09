@@ -59,6 +59,8 @@ export interface TestDb {
   db: PGlite;
   /** Runs SQL as a logged-in account, or as a visitor (null). Returns the rows. */
   as<T = Record<string, unknown>>(who: Who, sql: string, params?: unknown[]): Promise<T[]>;
+  /** Runs SQL as the server (the service role, which skips row level security). */
+  service<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;
   /** Runs SQL with full rights, like the SQL editor. */
   admin<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;
   /** Creates an account with a profile. */
@@ -86,9 +88,19 @@ export async function testDb(): Promise<TestDb> {
     }
   };
 
+  const service = async <T>(sql: string, params: unknown[] = []) => {
+    await db.exec("set role service_role");
+    try {
+      return (await db.query<T>(sql, params)).rows;
+    } finally {
+      await db.exec("reset role");
+    }
+  };
+
   return {
     db,
     as,
+    service,
     admin,
     async user(role = "player") {
       const id = crypto.randomUUID();

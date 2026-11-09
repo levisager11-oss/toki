@@ -29,6 +29,7 @@ export function MyGames() {
         <div className="actions">
           {isAdmin && <Link to="/applications" className="btn">{t("nav.applications")}</Link>}
           <Link to="/feedback/inbox" className="btn">{t("fb.inbox.title")}</Link>
+          <Link to="/connect" className="btn">{t("nav.connect")}</Link>
           <Link to="/add" className="btn primary"><span aria-hidden="true">+</span>{t("my.add")}</Link>
         </div>
       </div>

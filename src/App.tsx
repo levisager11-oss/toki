@@ -25,6 +25,10 @@ const Notifications = lazy(() => import("./pages/Notifications").then((m) => ({ 
 const Reports = lazy(() => import("./pages/Reports").then((m) => ({ default: m.Reports })));
 const Apply = lazy(() => import("./pages/Apply").then((m) => ({ default: m.Apply })));
 const Applications = lazy(() => import("./pages/Applications").then((m) => ({ default: m.Applications })));
+const AiAdmin = lazy(() => import("./pages/AiAdmin").then((m) => ({ default: m.AiAdmin })));
+const Connect = lazy(() => import("./pages/Connect").then((m) => ({ default: m.Connect })));
+const ConnectJob = lazy(() => import("./pages/ConnectJob").then((m) => ({ default: m.ConnectJob })));
+const ConnectGitHub = lazy(() => import("./pages/ConnectGitHub").then((m) => ({ default: m.ConnectGitHub })));
 const Invites = lazy(() => import("./pages/Invites").then((m) => ({ default: m.Invites })));
 
 const Later = ({ children }: { children: ReactNode }) => <Suspense fallback={null}>{children}</Suspense>;
@@ -57,6 +61,10 @@ export function App() {
           <Route path="reports" element={<RequireMember admin><Later><Reports /></Later></RequireMember>} />
           <Route path="apply" element={<RequireMember player><Later><Apply /></Later></RequireMember>} />
           <Route path="applications" element={<RequireMember admin><Later><Applications /></Later></RequireMember>} />
+          <Route path="admin/ai" element={<RequireMember admin><Later><AiAdmin /></Later></RequireMember>} />
+          <Route path="connect" element={<RequireMember><Later><Connect /></Later></RequireMember>} />
+          <Route path="connect/github" element={<RequireMember><Later><ConnectGitHub /></Later></RequireMember>} />
+          <Route path="connect/:id" element={<RequireMember><Later><ConnectJob /></Later></RequireMember>} />
           <Route path="invites" element={<RequireMember admin><Later><Invites /></Later></RequireMember>} />
           <Route path="*" element={<NotFound />} />
         </Route>
