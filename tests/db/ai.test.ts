@@ -169,6 +169,13 @@ describe("Toki Connect", () => {
     await expect(t.as(dev, "select state from connect_jobs where id = $1", [id])).rejects.toThrow(/permission denied/);
   });
 
+  it("shows the developer what went wrong, up to 500 characters", async () => {
+    const id = await job(dev);
+    await t.service("update connect_jobs set status = 'failed', error = 'ai_provider_error', error_detail = '504: gateway timeout' where id = $1", [id]);
+    expect(await t.as(dev, "select error, error_detail from connect_jobs where id = $1", [id])).toEqual([{ error: "ai_provider_error", error_detail: "504: gateway timeout" }]);
+    await expect(t.service("update connect_jobs set error_detail = $2 where id = $1", [id, "x".repeat(501)])).rejects.toThrow(/check/);
+  });
+
   it("lets only the server start or change runs", async () => {
     await expect(t.as(dev, "insert into connect_jobs (user_id, installation_id, repo, features) values ($1, 7, 'me/game', '{saves}')", [dev.id])).rejects.toThrow(/permission denied/);
     const id = await job(dev);

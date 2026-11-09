@@ -7,7 +7,7 @@ import { githubConfigured } from "../server/env.js";
 import { github } from "../server/github.js";
 import { body, context, isUuid, json, type Ctx } from "../server/http.js";
 
-const PUBLIC = "id,repo,features,notes,status,messages,pr_url,error,game_id,created_at,updated_at";
+const PUBLIC = "id,repo,features,notes,status,messages,pr_url,error,error_detail,game_id,created_at,updated_at";
 // A step holds the run this long at most; a crashed step frees it again after that.
 const LEASE_MS = 290_000;
 
@@ -126,6 +126,7 @@ async function run(ctx: Ctx, b: Record<string, unknown>, origin: string) {
     state: result.state,
     pr_url: result.pr_url ?? job.pr_url,
     error: result.error ?? null,
+    error_detail: result.error_detail ?? null,
     lease_until: null,
     updated_at: new Date().toISOString(),
   });

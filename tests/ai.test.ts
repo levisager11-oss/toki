@@ -11,6 +11,44 @@ const CFG = { provider: "openai_compatible" as const, baseUrl: "https://ai.examp
 const reply = (body: unknown, status = 200) => vi.fn(async () => new Response(JSON.stringify(body), { status })) as unknown as typeof fetch & ReturnType<typeof vi.fn>;
 
 describe("OpenAI-compatible provider", () => {
+  const sse = (chunks: unknown[]) => chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join("") + "data: [DONE]\n\n";
+
+  it("asks for a streamed answer and puts the pieces together", async () => {
+    const f = vi.fn(async () =>
+      new Response(
+        sse([
+          { choices: [{ delta: { role: "assistant", content: "" } }] },
+          { choices: [{ delta: { content: '{"action":' } }] },
+          { choices: [{ delta: { content: '"read"}' } }] },
+          { choices: [], usage: { prompt_tokens: 40, completion_tokens: 6 } },
+        ]),
+        { status: 200, headers: { "content-type": "text/event-stream" } },
+      ),
+    ) as unknown as typeof fetch & ReturnType<typeof vi.fn>;
+    const c = await complete({ ...CFG, model: "stream-1" }, { messages: [{ role: "user", content: "hi" }], maxTokens: 16 }, f);
+    expect(c).toEqual({ text: '{"action":"read"}', inputTokens: 40, outputTokens: 6, estimated: false });
+    expect(JSON.parse(String((f.mock.calls[0] as [string, RequestInit])[1].body))).toMatchObject({ stream: true, stream_options: { include_usage: true } });
+  });
+
+  it("reports an error sent inside the stream", async () => {
+    const f = vi.fn(async () => new Response(sse([{ error: { message: "context too long" } }]), { status: 200 })) as unknown as typeof fetch;
+    await expect(complete({ ...CFG, model: "stream-2" }, { messages: [{ role: "user", content: "hi" }], maxTokens: 16 }, f)).rejects.toMatchObject({
+      code: "provider_error",
+      message: expect.stringContaining("context too long"),
+    });
+  });
+
+  it("asks again without stream_options when the endpoint doesn't know them", async () => {
+    const f = vi.fn(async (_u: string, init: RequestInit) =>
+      "stream_options" in JSON.parse(String(init.body))
+        ? new Response(JSON.stringify({ error: { message: "Unrecognized request argument: stream_options" } }), { status: 400 })
+        : new Response(sse([{ choices: [{ delta: { content: "OK" } }] }]), { status: 200 }),
+    ) as unknown as typeof fetch & ReturnType<typeof vi.fn>;
+    const c = await complete({ ...CFG, model: "stream-3" }, { messages: [{ role: "user", content: "hi" }], maxTokens: 16 }, f);
+    expect(c).toMatchObject({ text: "OK", estimated: true });
+    expect(f).toHaveBeenCalledTimes(2);
+  });
+
   it("asks again with min_p 0 when the server refuses its own default min_p, and remembers that", async () => {
     const cfg = { ...CFG, baseUrl: "https://vllm.example/api", model: "ask-base-nx" };
     const f = vi.fn(async (_url: string, init: RequestInit) =>

@@ -59,13 +59,45 @@ export async function complete(
 }
 
 interface OpenAiAnswer {
-  choices?: { message?: { content?: string | null } }[];
-  usage?: { prompt_tokens?: number; completion_tokens?: number };
-  error?: { message?: string };
+  choices?: { message?: { content?: string | null }; delta?: { content?: string | null } }[];
+  usage?: { prompt_tokens?: number; completion_tokens?: number } | null;
+  error?: { message?: string } | string;
 }
 
-// Endpoints and models that need min_p set to 0 (see below), while this server instance runs.
-const NEEDS_ZERO_MIN_P = new Set<string>();
+/** The answer's text, token counts and error, from a JSON answer or a streamed one (server-sent events). */
+export function readOpenAiAnswer(raw: string): { text: string; usage: OpenAiAnswer["usage"]; error: string } {
+  const errorText = (e: OpenAiAnswer["error"]) => (typeof e === "string" ? e : e?.message ?? "");
+  if (!/^\s*(data|event|:)/.test(raw)) {
+    let body: OpenAiAnswer = {};
+    try {
+      body = raw ? JSON.parse(raw) : {};
+    } catch {
+      return { text: "", usage: null, error: raw.slice(0, 300) };
+    }
+    return { text: body.choices?.[0]?.message?.content ?? "", usage: body.usage, error: errorText(body.error) };
+  }
+  let text = "";
+  let usage: OpenAiAnswer["usage"] = null;
+  let error = "";
+  for (const line of raw.split(/\r?\n/)) {
+    const m = /^data:\s?(.*)$/.exec(line);
+    if (!m || m[1] === "[DONE]") continue;
+    let chunk: OpenAiAnswer;
+    try {
+      chunk = JSON.parse(m[1]);
+    } catch {
+      continue;
+    }
+    text += chunk.choices?.[0]?.delta?.content ?? chunk.choices?.[0]?.message?.content ?? "";
+    if (chunk.usage) usage = chunk.usage;
+    if (chunk.error) error = errorText(chunk.error) || "error in the streamed answer";
+  }
+  return { text, usage, error };
+}
+
+// What some endpoints need, learned from their errors, per endpoint and model while this server
+// instance runs: min_p set to 0 (see below), or no stream_options.
+const QUIRKS = new Map<string, { zeroMinP?: boolean; noStreamOptions?: boolean }>();
 
 async function openaiCompatible(
   config: ProviderConfig,
@@ -73,8 +105,10 @@ async function openaiCompatible(
   fetchImpl: (url: string, init: RequestInit) => Promise<Response>,
 ): Promise<Completion> {
   const key = `${config.baseUrl} ${config.model}`;
-  const send = async (zeroMinP: boolean) => {
+  const quirks = QUIRKS.get(key) ?? {};
+  const send = async () => {
     let res: Response;
+    let raw: string;
     try {
       res = await fetchImpl(`${config.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
         method: "POST",
@@ -84,40 +118,43 @@ async function openaiCompatible(
           messages: req.messages,
           max_tokens: req.maxTokens,
           temperature: req.temperature ?? 0.2,
-          ...(zeroMinP ? { min_p: 0 } : {}),
+          // Streamed, so text keeps arriving while the model writes: proxies in front of some
+          // endpoints cut connections that stay quiet for 30 seconds or so.
+          stream: true,
+          ...(quirks.noStreamOptions ? {} : { stream_options: { include_usage: true } }),
+          ...(quirks.zeroMinP ? { min_p: 0 } : {}),
         }),
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
+      raw = await res.text();
     } catch (e) {
       if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) throw new AiError("timeout");
       throw unreachable(e);
     }
-    const raw = await res.text();
-    let body: OpenAiAnswer = {};
-    try {
-      body = raw ? JSON.parse(raw) : {};
-    } catch {
-      /* not JSON: reported below */
-    }
-    return { res, raw, body, error: `${res.status}: ${(body.error?.message ?? raw).slice(0, 300)}` };
+    const answer = readOpenAiAnswer(raw);
+    // Never pass the key on, in case an endpoint repeats it in an error.
+    return { res, answer, error: `${res.status}: ${(answer.error || raw).split(config.apiKey).join("***").slice(0, 300)}` };
   };
 
-  let { res, body, error } = await send(NEEDS_ZERO_MIN_P.has(key));
+  let { res, answer, error } = await send();
   // Some servers (vLLM) fill in a default min_p from the model's settings and then refuse it, e.g.
   // with speculative decoding. They only use that default when the request doesn't say: so ask
-  // again with min_p 0, and remember it for this endpoint and model.
-  if (res.status === 400 && /min_p/i.test(error) && !NEEDS_ZERO_MIN_P.has(key)) {
-    NEEDS_ZERO_MIN_P.add(key);
-    ({ res, body, error } = await send(true));
+  // again with min_p 0. Older servers may not know stream_options. Both are remembered.
+  for (let i = 0; i < 2 && res.status === 400; i++) {
+    if (/min_p/i.test(error) && !quirks.zeroMinP) quirks.zeroMinP = true;
+    else if (/stream_options/i.test(error) && !quirks.noStreamOptions) quirks.noStreamOptions = true;
+    else break;
+    QUIRKS.set(key, quirks);
+    ({ res, answer, error } = await send());
   }
-  if (!res.ok) throw new AiError("provider_error", error);
-  const text = body.choices?.[0]?.message?.content ?? "";
+  if (!res.ok || (answer.error && !answer.text.trim())) throw new AiError("provider_error", error);
+  const { text, usage } = answer;
   if (!text.trim()) throw new AiError("empty_answer");
-  const known = typeof body.usage?.prompt_tokens === "number" && typeof body.usage?.completion_tokens === "number";
+  const known = typeof usage?.prompt_tokens === "number" && typeof usage?.completion_tokens === "number";
   return {
     text,
-    inputTokens: known ? body.usage!.prompt_tokens! : estimateTokens(req.messages.map((m) => m.content).join("\n")),
-    outputTokens: known ? body.usage!.completion_tokens! : estimateTokens(text),
+    inputTokens: known ? usage!.prompt_tokens! : estimateTokens(req.messages.map((m) => m.content).join("\n")),
+    outputTokens: known ? usage!.completion_tokens! : estimateTokens(text),
     estimated: !known,
   };
 }
