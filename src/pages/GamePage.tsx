@@ -177,13 +177,13 @@ export function GamePage() {
             <button type="button" className="btn primary" onClick={fullscreen}><FullscreenIcon />{t("game.fullscreen")}</button>
           </div>
         </div>
-        {saves.conflict && (
+        {(saves.lost || saves.conflict) && (
           <div className="check warn save-conflict" role="alert">
-            <p>{t("saves.conflict")}</p>
-            <button type="button" className="btn" onClick={() => setFrameRun((n) => n + 1)}>{t("saves.loadNewer")}</button>
+            <p>{t(saves.lost ? (userId ? "saves.lostAccount" : "saves.lostDevice") : "saves.conflict")}</p>
+            <button type="button" className="btn" onClick={() => setFrameRun((n) => n + 1)}>{t(saves.lost ? "saves.loadSaved" : "saves.loadNewer")}</button>
           </div>
         )}
-        {saves.status === "account" && !saves.conflict && <p className="hint saved">✓ {t("saves.account")}</p>}
+        {saves.status === "account" && !saves.conflict && !saves.lost && <p className="hint saved">✓ {t("saves.account")}</p>}
         {saves.status === "device" && (
           <p className="hint saved">
             {t("saves.device")} <Link to={`/signup?next=/game/${game.slug}`}>{t("saves.signup")}</Link>
