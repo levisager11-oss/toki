@@ -183,19 +183,22 @@ begin
 end $$;
 
 -- Returns the game's like count after the change.
+-- Logged-in players like as their account (visitor = their user id), so a like counts once
+-- per account across all their devices.
 create function public.set_like(p_game uuid, p_visitor uuid, p_like boolean) returns integer
 language plpgsql security definer set search_path = '' as $$
 declare
   v_likes integer;
+  v_who uuid := coalesce(auth.uid(), p_visitor);
 begin
   if p_like then
-    insert into public.game_likes (game_id, visitor) values (p_game, p_visitor) on conflict do nothing;
+    insert into public.game_likes (game_id, visitor) values (p_game, v_who) on conflict do nothing;
     if found then
       insert into public.game_stats (game_id, likes) values (p_game, 1)
       on conflict (game_id) do update set likes = public.game_stats.likes + 1;
     end if;
   else
-    delete from public.game_likes where game_id = p_game and visitor = p_visitor;
+    delete from public.game_likes where game_id = p_game and visitor = v_who;
     if found then
       update public.game_stats set likes = greatest(likes - 1, 0) where game_id = p_game;
     end if;
@@ -444,3 +447,44 @@ grant execute on function public.restore_game_save(bigint) to authenticated;
 -- overwrite newer progress directly.
 drop policy "own saves: add" on public.game_saves;
 drop policy "own saves: change" on public.game_saves;
+
+
+-- Likes follow the account. After logging in, a browser hands its earlier likes to the account
+-- (a game liked on two devices then counts once), and every device loads the account's likes.
+-- Returns how many likes were moved or merged.
+create function public.claim_likes(p_visitor uuid) returns integer
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_me uuid := auth.uid();
+  v_dups integer;
+  v_moved integer;
+begin
+  if v_me is null or p_visitor = v_me then
+    return 0;
+  end if;
+  with dup as (
+    delete from public.game_likes b
+    where b.visitor = p_visitor
+      and exists (select 1 from public.game_likes a where a.game_id = b.game_id and a.visitor = v_me)
+    returning b.game_id
+  )
+  update public.game_stats s set likes = greatest(s.likes - 1, 0) from dup where s.game_id = dup.game_id;
+  get diagnostics v_dups = row_count;
+  update public.game_likes set visitor = v_me where visitor = p_visitor;
+  get diagnostics v_moved = row_count;
+  return v_dups + v_moved;
+end $$;
+
+-- Games the logged-in player likes, newest first.
+create function public.my_likes() returns table (game_id uuid, slug text)
+language sql stable security definer set search_path = '' as $$
+  select l.game_id, g.slug
+  from public.game_likes l join public.games g on g.id = l.game_id
+  where l.visitor = auth.uid()
+  order by l.created_at desc
+$$;
+
+revoke execute on function public.claim_likes(uuid) from public, anon;
+revoke execute on function public.my_likes() from public, anon;
+grant execute on function public.claim_likes(uuid) to authenticated;
+grant execute on function public.my_likes() to authenticated;

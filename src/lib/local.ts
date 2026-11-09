@@ -1,14 +1,15 @@
-// Favorites, recently played and the visitor id live in this browser only (no account needed).
-// A favorite also counts as a public like.
+// Favorites, recently played and the visitor id live in this browser (no account needed).
+// A favorite also counts as a public like. When logged in, favorites follow the account.
 import { useCallback, useEffect, useState } from "react";
-import { setLike } from "./games";
-import { patchGame } from "./useGames";
+import { claimLikes, myLikes, setLike } from "./games";
+import { cachedGames, invalidateGames, patchGame } from "./useGames";
 import type { Game } from "./types";
 
 const FAV_KEY = "toki.favorites";
 const RECENT_KEY = "toki.recent";
 const SYNCED_KEY = "toki.likesSynced"; // favorites the server already counts as likes
 const VISITOR_KEY = "toki.visitor";
+const ACCOUNT_KEY = "toki.likesAccount"; // the account whose favorites are in this browser
 const EVENT = "toki:local";
 
 function read(key: string): string[] {
@@ -89,6 +90,67 @@ export function syncLikes(games: Game[]) {
   const synced = new Set(read(SYNCED_KEY));
   for (const g of games) {
     if (favs.has(g.slug) !== synced.has(g.slug)) sendLike(g, favs.has(g.slug));
+  }
+}
+
+let accountSync: string | null = null;
+
+/**
+ * Makes this browser's favorites the account's likes, so they are the same on every device.
+ * Changes made here that never reached the server (offline) are kept and sent.
+ * userId null = logged out: the account's favorites leave this browser.
+ */
+export async function syncAccountLikes(userId: string | null) {
+  let owner: string | null = null;
+  try {
+    owner = localStorage.getItem(ACCOUNT_KEY);
+  } catch {
+    /* storage blocked */
+  }
+  if (!userId) {
+    if (owner) {
+      setOwner(null);
+      write(FAV_KEY, []);
+      write(SYNCED_KEY, []);
+    }
+    return;
+  }
+  if (accountSync === userId) return;
+  accountSync = userId;
+  try {
+    if (owner && owner !== userId) {
+      // Another account's favorites: don't hand them to this one.
+      write(FAV_KEY, []);
+      write(SYNCED_KEY, []);
+    }
+    const moved = await claimLikes(visitorId());
+    if (moved === null) return;
+    const server = await myLikes();
+    if (!server) return;
+    const favs = read(FAV_KEY);
+    const synced = new Set(read(SYNCED_KEY));
+    const favSet = new Set(favs);
+    const added = favs.filter((s) => !synced.has(s));
+    const removed = new Set([...synced].filter((s) => !favSet.has(s)));
+    write(SYNCED_KEY, server);
+    write(FAV_KEY, [...added, ...server.filter((s) => !added.includes(s))].filter((s) => !removed.has(s)));
+    setOwner(userId);
+    if (moved > 0) invalidateGames(); // like counts changed (likes from two devices merged)
+    else {
+      const games = cachedGames();
+      if (games) syncLikes(games);
+    }
+  } finally {
+    accountSync = null;
+  }
+}
+
+function setOwner(userId: string | null) {
+  try {
+    if (userId) localStorage.setItem(ACCOUNT_KEY, userId);
+    else localStorage.removeItem(ACCOUNT_KEY);
+  } catch {
+    /* storage blocked */
   }
 }
 
