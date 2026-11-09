@@ -37,6 +37,8 @@ create function storage.foldername(name text) returns text[] language sql immuta
   select (string_to_array(name, '/'))[1:greatest(cardinality(string_to_array(name, '/')) - 1, 0)]
 $$;
 
+create publication supabase_realtime;
+
 create schema cron;
 create function cron.schedule(job text, sched text, command text) returns bigint language sql as $$ select 1::bigint $$;
 `;
