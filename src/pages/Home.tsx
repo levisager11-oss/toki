@@ -38,9 +38,20 @@ export function Home() {
   const { t } = useI18n();
   const { games, error } = useGames();
   const recentSlugs = useRecent();
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const q = (params.get("q") ?? "").trim();
-  const [cat, setCat] = useState<Category | "all">("all");
+  // In the address, so going back to the list keeps the chosen category.
+  const cat = (params.get("cat") as Category | null) ?? "all";
+  const setCat = (c: Category | "all") =>
+    setParams(
+      (p) => {
+        const next = new URLSearchParams(p);
+        if (c === "all") next.delete("cat");
+        else next.set("cat", c);
+        return next;
+      },
+      { replace: true, preventScrollReset: true },
+    );
   const [sort, setSortState] = useState<Sort>(savedSort);
   const setSort = (v: Sort) => {
     setSortState(v);
@@ -120,7 +131,7 @@ export function Home() {
         ) : (
           <div className="msg">
             <p>{t("home.noMatch")}</p>
-            <Link to="/" className="btn" onClick={() => setCat("all")}>{t("home.showAll")}</Link>
+            <Link to="/" className="btn">{t("home.showAll")}</Link>
           </div>
         )}
       </section>
