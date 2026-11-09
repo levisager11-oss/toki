@@ -64,6 +64,17 @@ describe("OpenAI-compatible provider", () => {
     expect(f).toHaveBeenCalledTimes(3);
   });
 
+  it("also asks again when the min_p refusal comes as a 500 (LiteLLM, streamed)", async () => {
+    const cfg = { ...CFG, baseUrl: "https://litellm.example/api", model: "ask-base-nx" };
+    const f = vi.fn(async (_url: string, init: RequestInit) =>
+      "min_p" in JSON.parse(String(init.body))
+        ? new Response(sse([{ choices: [{ delta: { content: "OK" } }] }]), { status: 200 })
+        : new Response(JSON.stringify({ error: { message: "litellm.APIConnectionError: OpenAIException - The min_p and logit_bias sampling parameters are not yet supported with speculative decoding." } }), { status: 500 }),
+    ) as unknown as typeof fetch & ReturnType<typeof vi.fn>;
+    expect((await complete(cfg, { messages: [{ role: "user", content: "hi" }], maxTokens: 16 }, f)).text).toBe("OK");
+    expect(f).toHaveBeenCalledTimes(2);
+  });
+
   it("doesn't send min_p to other endpoints, and doesn't retry other errors", async () => {
     const f = reply({ error: { message: "bad model" } }, 400);
     await expect(complete(CFG, { messages: [{ role: "user", content: "hi" }], maxTokens: 16 }, f)).rejects.toMatchObject({ code: "provider_error" });

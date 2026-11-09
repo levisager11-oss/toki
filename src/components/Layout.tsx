@@ -9,6 +9,7 @@ import { APPLICATIONS_CHANGED, openApplicationCount } from "../lib/applications"
 import { BellIcon, BubbleIcon, HeartTabIcon, HomeIcon, KeyIcon, ListIcon, LogoMark, LogoutIcon, PlusIcon, SearchIcon, UserIcon } from "./icons";
 import { useBadges } from "../lib/useBadges";
 import { Avatar } from "./Avatar";
+import { ErrorBoundary } from "./ErrorBoundary";
 
 // The admin pages, all reached through "Admin" in the sidebar.
 const ADMIN_PAGE = /^\/(admin|applications|invites|reports)(\/|$)/;
@@ -164,7 +165,10 @@ export function Layout() {
 
         </header>
         <main className="content">
-          <Outlet />
+          {/* A new boundary per page, so going to another page clears an error. */}
+          <ErrorBoundary key={location.pathname}>
+            <Outlet />
+          </ErrorBoundary>
           <footer className="foot mobile-only">
             <Link to="/updates">{t("nav.updates")}</Link>
             <Link to="/feedback">{t("nav.tokiFeedback")}</Link>
