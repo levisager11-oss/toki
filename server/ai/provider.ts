@@ -58,35 +58,59 @@ export async function complete(
   }
 }
 
+interface OpenAiAnswer {
+  choices?: { message?: { content?: string | null } }[];
+  usage?: { prompt_tokens?: number; completion_tokens?: number };
+  error?: { message?: string };
+}
+
+// Endpoints and models that need min_p set to 0 (see below), while this server instance runs.
+const NEEDS_ZERO_MIN_P = new Set<string>();
+
 async function openaiCompatible(
   config: ProviderConfig,
   req: { messages: ChatMessage[]; maxTokens: number; temperature?: number },
   fetchImpl: (url: string, init: RequestInit) => Promise<Response>,
 ): Promise<Completion> {
-  let res: Response;
-  try {
-    res = await fetchImpl(`${config.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${config.apiKey}` },
-      body: JSON.stringify({ model: config.model, messages: req.messages, max_tokens: req.maxTokens, temperature: req.temperature ?? 0.2 }),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
-  } catch (e) {
-    if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) throw new AiError("timeout");
-    throw unreachable(e);
+  const key = `${config.baseUrl} ${config.model}`;
+  const send = async (zeroMinP: boolean) => {
+    let res: Response;
+    try {
+      res = await fetchImpl(`${config.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${config.apiKey}` },
+        body: JSON.stringify({
+          model: config.model,
+          messages: req.messages,
+          max_tokens: req.maxTokens,
+          temperature: req.temperature ?? 0.2,
+          ...(zeroMinP ? { min_p: 0 } : {}),
+        }),
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
+    } catch (e) {
+      if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) throw new AiError("timeout");
+      throw unreachable(e);
+    }
+    const raw = await res.text();
+    let body: OpenAiAnswer = {};
+    try {
+      body = raw ? JSON.parse(raw) : {};
+    } catch {
+      /* not JSON: reported below */
+    }
+    return { res, raw, body, error: `${res.status}: ${(body.error?.message ?? raw).slice(0, 300)}` };
+  };
+
+  let { res, body, error } = await send(NEEDS_ZERO_MIN_P.has(key));
+  // Some servers (vLLM) fill in a default min_p from the model's settings and then refuse it, e.g.
+  // with speculative decoding. They only use that default when the request doesn't say: so ask
+  // again with min_p 0, and remember it for this endpoint and model.
+  if (res.status === 400 && /min_p/i.test(error) && !NEEDS_ZERO_MIN_P.has(key)) {
+    NEEDS_ZERO_MIN_P.add(key);
+    ({ res, body, error } = await send(true));
   }
-  const raw = await res.text();
-  let body: {
-    choices?: { message?: { content?: string | null } }[];
-    usage?: { prompt_tokens?: number; completion_tokens?: number };
-    error?: { message?: string };
-  } = {};
-  try {
-    body = raw ? JSON.parse(raw) : {};
-  } catch {
-    /* not JSON: reported below */
-  }
-  if (!res.ok) throw new AiError("provider_error", `${res.status}: ${(body.error?.message ?? raw).slice(0, 200)}`);
+  if (!res.ok) throw new AiError("provider_error", error);
   const text = body.choices?.[0]?.message?.content ?? "";
   if (!text.trim()) throw new AiError("empty_answer");
   const known = typeof body.usage?.prompt_tokens === "number" && typeof body.usage?.completion_tokens === "number";
