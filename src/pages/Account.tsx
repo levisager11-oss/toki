@@ -5,6 +5,7 @@ import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
 import { canCreate } from "../lib/types";
 import { SaveHistory } from "../components/SaveHistory";
+import { MyFeedback } from "../components/MyFeedback";
 
 export function Account() {
   const { t } = useI18n();
@@ -36,6 +37,7 @@ export function Account() {
         <div className="actions">
           <Link to="/my-games" className="btn">{t("nav.myGames")}</Link>
           <Link to="/add" className="btn">{t("nav.addGame")}</Link>
+          <Link to="/feedback/inbox" className="btn">{t("fb.inbox.title")}</Link>
         </div>
       ) : (
         <form className="form" onSubmit={redeem}>
@@ -48,6 +50,7 @@ export function Account() {
       )}
 
       <SaveHistory />
+      <MyFeedback />
 
       <div className="actions" style={{ marginTop: 32 }}>
         <button type="button" className="btn" onClick={() => signOut().then(() => navigate("/"))}>{t("nav.logout")}</button>

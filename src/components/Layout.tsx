@@ -7,6 +7,9 @@ import { matchIsolation, pageIsolated } from "../lib/isolation";
 import { useBottomBarFix } from "../lib/useBottomBarFix";
 import { HeartTabIcon, HomeIcon, KeyIcon, ListIcon, LogoMark, PlusIcon, SearchIcon, UserIcon } from "./icons";
 
+// A game's own page, not e.g. its feedback board.
+const GAME_PAGE = /^\/game\/[^/]+\/?$/;
+
 export function Layout() {
   const { t, lang, setLang } = useI18n();
   const { profile, signOut } = useAuth();
@@ -26,7 +29,7 @@ export function Layout() {
   }, [location.pathname]);
   useEffect(() => {
     // Only game pages can be isolated (the game page checks its own game).
-    if (pageIsolated() && !location.pathname.startsWith("/game/")) matchIsolation(false);
+    if (pageIsolated() && !GAME_PAGE.test(location.pathname)) matchIsolation(false);
   }, [location.pathname]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -68,10 +71,13 @@ export function Layout() {
             <h4>{t("nav.create")}</h4>
             <NavLink to="/my-games">{t("nav.myGames")}</NavLink>
             <NavLink to="/add">{t("nav.addGame")}</NavLink>
+            <NavLink to="/feedback/inbox">{t("nav.feedback")}</NavLink>
             {profile.role === "admin" && <NavLink to="/invites">{t("nav.invites")}</NavLink>}
           </nav>
         )}
         <div className="side-foot">
+          <NavLink to="/updates" className="linkish">{t("nav.updates")}</NavLink>
+          <NavLink to="/feedback" end className="linkish">{t("nav.tokiFeedback")}</NavLink>
           {profile ? (
             <>
               <NavLink to="/account" className="who">@{profile.username}</NavLink>
@@ -100,6 +106,10 @@ export function Layout() {
         </header>
         <main className="content">
           <Outlet />
+          <footer className="foot mobile-only">
+            <Link to="/updates">{t("nav.updates")}</Link>
+            <Link to="/feedback">{t("nav.tokiFeedback")}</Link>
+          </footer>
         </main>
       </div>
 

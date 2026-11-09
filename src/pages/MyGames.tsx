@@ -26,7 +26,10 @@ export function MyGames() {
     <section>
       <div className="sechead">
         <h1 className="h">{isAdmin ? t("my.allTitle") : t("my.title")}</h1>
-        <Link to="/add" className="btn primary"><span aria-hidden="true">+</span>{t("my.add")}</Link>
+        <div className="actions">
+          <Link to="/feedback/inbox" className="btn">{t("fb.inbox.title")}</Link>
+          <Link to="/add" className="btn primary"><span aria-hidden="true">+</span>{t("my.add")}</Link>
+        </div>
       </div>
       {list.length === 0 ? (
         <p className="msg">{t("my.empty")}</p>
