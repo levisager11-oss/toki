@@ -8,6 +8,7 @@ import { useBottomBarFix } from "../lib/useBottomBarFix";
 import { APPLICATIONS_CHANGED, openApplicationCount } from "../lib/applications";
 import { BellIcon, BubbleIcon, HeartTabIcon, HomeIcon, KeyIcon, ListIcon, LogoMark, LogoutIcon, PlusIcon, SearchIcon, UserIcon } from "./icons";
 import { useBadges } from "../lib/useBadges";
+import { setTitleCount } from "../lib/useTitle";
 import { Avatar } from "./Avatar";
 import { useAiStatus } from "../lib/assist";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -22,6 +23,8 @@ export function Layout() {
   const { t, lang, setLang } = useI18n();
   const { profile, signOut } = useAuth();
   const badges = useBadges();
+  const unread = profile ? badges.notifications + badges.chats : 0;
+  useEffect(() => setTitleCount(unread), [unread]);
   const ai = useAiStatus();
   const [params] = useSearchParams();
   const [q, setQ] = useState(params.get("q") ?? "");

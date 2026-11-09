@@ -1,11 +1,36 @@
 import { useEffect } from "react";
 
+// The tab title is "(unread) <page> · Toki". Pages set the page part, the layout the unread count.
+let page: string | null = null;
+let unread = 0;
+const apply = () => {
+  const base = page ? `${page} · Toki` : "Toki";
+  document.title = unread > 0 ? `(${unread > 99 ? "99+" : unread}) ${base}` : base;
+};
+
 /** Sets the browser tab title to "<title> · Toki" while the page is open. Nothing (null/empty) shows just "Toki". */
 export function useTitle(title: string | null | undefined) {
   useEffect(() => {
-    document.title = title ? `${title} · Toki` : "Toki";
+    page = title || null;
+    apply();
     return () => {
-      document.title = "Toki";
+      page = null;
+      apply();
     };
   }, [title]);
 }
+
+/** Unread chats and notifications, shown in front of the tab title. */
+export function setTitleCount(n: number) {
+  if (n === unread) return;
+  unread = n;
+  apply();
+}
+
+/** For tests: sets both parts and returns the title. */
+export const titleFor = (pageTitle: string | null, count: number) => {
+  page = pageTitle;
+  unread = count;
+  apply();
+  return document.title;
+};
