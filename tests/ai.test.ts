@@ -560,18 +560,19 @@ describe("stored secrets", async () => {
     expect((await withSecrets(db, env())).sources.aiKey).toBeNull();
   });
 
-  it("ask GitHub for an app that only reads code and opens pull requests", () => {
+  it("ask GitHub for an app that reads code, opens pull requests and reports pushes", () => {
     const m = githubManifest("https://www.playtoki.app");
     expect(m.default_permissions).toEqual({ contents: "write", pull_requests: "write", metadata: "read" });
     expect(m.callback_urls).toEqual(["https://www.playtoki.app/connect/github"]);
     expect(m.redirect_url).toBe("https://www.playtoki.app/admin/ai");
     expect(m.request_oauth_on_install).toBe(true);
-    expect(m.hook_attributes.active).toBe(false);
+    expect(m.hook_attributes).toEqual({ url: "https://www.playtoki.app/api/github", active: true });
+    expect(m.default_events).toEqual(["push"]);
   });
 
   it("take over the new app's credentials from GitHub", async () => {
     const f = reply({ id: 42, slug: "toki-connect", client_id: "cid", client_secret: "cs", pem: "PEM", html_url: "https://github.com/apps/toki-connect" });
-    expect(await githubFromManifestCode("abc", f)).toEqual({ appId: "42", slug: "toki-connect", clientId: "cid", clientSecret: "cs", privateKey: "PEM", htmlUrl: "https://github.com/apps/toki-connect" });
+    expect(await githubFromManifestCode("abc", f)).toEqual({ appId: "42", slug: "toki-connect", clientId: "cid", clientSecret: "cs", privateKey: "PEM", webhookSecret: "", htmlUrl: "https://github.com/apps/toki-connect" });
     expect(((f as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [string])[0]).toBe("https://api.github.com/app-manifests/abc/conversions");
     await expect(githubFromManifestCode("old", reply({ message: "Not Found" }, 404))).rejects.toThrow(/404/);
   });

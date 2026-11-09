@@ -4,6 +4,9 @@
    follows logged-in players to other devices. Outside Toki it does nothing.
    High scores: call toki.score(points) when a round ends (for times: milliseconds). */
 (function () {
+  // Games hosted on Toki get this script added for them; a second copy in the game does nothing.
+  if (window.__tokiSave) return;
+  window.__tokiSave = 1;
   var top = window.parent;
   var inToki = top !== window;
   var origin = (location.ancestorOrigins && location.ancestorOrigins[0]) ||
