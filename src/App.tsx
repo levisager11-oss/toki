@@ -22,6 +22,8 @@ const Friends = lazy(() => import("./pages/Friends").then((m) => ({ default: m.F
 const Chat = lazy(() => import("./pages/Chat").then((m) => ({ default: m.Chat })));
 const Notifications = lazy(() => import("./pages/Notifications").then((m) => ({ default: m.Notifications })));
 const Reports = lazy(() => import("./pages/Reports").then((m) => ({ default: m.Reports })));
+const Apply = lazy(() => import("./pages/Apply").then((m) => ({ default: m.Apply })));
+const Applications = lazy(() => import("./pages/Applications").then((m) => ({ default: m.Applications })));
 const Invites = lazy(() => import("./pages/Invites").then((m) => ({ default: m.Invites })));
 
 const Later = ({ children }: { children: ReactNode }) => <Suspense fallback={null}>{children}</Suspense>;
@@ -51,6 +53,8 @@ export function App() {
         <Route path="chat/:id" element={<RequireMember player><Later><Chat /></Later></RequireMember>} />
         <Route path="notifications" element={<RequireMember player><Later><Notifications /></Later></RequireMember>} />
         <Route path="reports" element={<RequireMember admin><Later><Reports /></Later></RequireMember>} />
+        <Route path="apply" element={<RequireMember player><Later><Apply /></Later></RequireMember>} />
+        <Route path="applications" element={<RequireMember admin><Later><Applications /></Later></RequireMember>} />
         <Route path="invites" element={<RequireMember admin><Later><Invites /></Later></RequireMember>} />
         <Route path="*" element={<NotFound />} />
       </Route>
