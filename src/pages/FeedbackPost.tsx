@@ -232,6 +232,8 @@ function Replies({ post, replies, setReplies, manager, onReplied }: {
   const [err, setErr] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  // Deleting a reply takes two taps: the first asks "Sure?".
+  const [deletingReply, setDeletingReply] = useState<string | null>(null);
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -302,7 +304,15 @@ function Replies({ post, replies, setReplies, manager, onReplied }: {
               {(mine || manager) && editing !== r.id && (
                 <div className="fb-reply-actions">
                   {mine && <button type="button" className="linkish" onClick={() => { setEditing(r.id); setDraft(r.body); }}>{t("fb.post.edit")}</button>}
-                  <button type="button" className="linkish" disabled={busy} onClick={() => remove(r.id)}>{t("fb.reply.delete")}</button>
+                  <button
+                    type="button"
+                    className={`linkish ${deletingReply === r.id ? "danger-text" : ""}`}
+                    disabled={busy}
+                    onClick={() => (deletingReply === r.id ? (setDeletingReply(null), remove(r.id)) : setDeletingReply(r.id))}
+                    onBlur={() => setDeletingReply((cur) => (cur === r.id ? null : cur))}
+                  >
+                    {deletingReply === r.id ? t("chat.deleteSure") : t("fb.reply.delete")}
+                  </button>
                 </div>
               )}
             </li>
