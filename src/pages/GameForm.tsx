@@ -34,6 +34,9 @@ export function GameForm() {
   const [engine, setEngine] = useState("");
   const [cover, setCover] = useState<string>("");
   const [image, setImage] = useState<string | null>(null);
+  const [banner, setBanner] = useState<string | null>(null);
+  // Shape of the uploaded banner (width / height), to warn when it isn't wide.
+  const [bannerRatio, setBannerRatio] = useState<number | null>(null);
   const [featured, setFeatured] = useState(false);
   const [isolation, setIsolation] = useState(false);
   const [shots, setShots] = useState<string[]>([]);
@@ -57,6 +60,7 @@ export function GameForm() {
       setEngine(g.engine ?? "");
       setCover(coverFor(g.slug, g.cover));
       setImage(g.thumbnail_url);
+      setBanner(g.banner_url ?? null);
       setFeatured(g.featured);
       setIsolation(g.needs_isolation === true);
       setShots(g.screenshots ?? []);
@@ -97,6 +101,13 @@ export function GameForm() {
     const link = await uploadImage(file);
     if (link) setImage(link);
   };
+  const uploadBanner = async (file: File) => {
+    const link = await uploadImage(file);
+    if (link) {
+      setBannerRatio(null);
+      setBanner(link);
+    }
+  };
   const addShot = async (file: File) => {
     const link = await uploadImage(file);
     if (link) setShots((s) => [...s, link].slice(0, MAX_SHOTS));
@@ -118,6 +129,7 @@ export function GameForm() {
       engine: engine.trim() || null,
       cover: previewCover,
       thumbnail_url: image,
+      banner_url: banner,
       screenshots: shots,
       featured, // the database un-features the previous game
       needs_isolation: isolation,
@@ -214,6 +226,24 @@ export function GameForm() {
               <input id="image" type="file" accept={IMAGE_TYPES} onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
             </label>
             {image && <button type="button" className="btn" onClick={() => setImage(null)}>{t("form.removeImage")}</button>}
+          </div>
+
+          <span className="label-text" id="banner-label">{t("form.banner")}</span>
+          <small id="banner-help">{t("form.bannerHelp")}</small>
+          {banner && (
+            <>
+              <div className="banner-preview">
+                <img src={banner} alt="" onLoad={(e) => setBannerRatio(e.currentTarget.naturalWidth / e.currentTarget.naturalHeight)} />
+              </div>
+              {bannerRatio !== null && Math.abs(bannerRatio - 2) > 0.2 && <p className="check warn">{t("form.bannerShape")}</p>}
+            </>
+          )}
+          <div className="actions">
+            <label className="btn file">
+              {t("form.uploadBanner")}
+              <input id="banner" type="file" accept={IMAGE_TYPES} aria-describedby="banner-help" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) uploadBanner(f); }} />
+            </label>
+            {banner && <button type="button" className="btn" onClick={() => setBanner(null)}>{t("form.removeBanner")}</button>}
           </div>
 
           <span className="label-text" id="shots-label">{t("form.screenshots")}</span>

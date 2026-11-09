@@ -51,3 +51,6 @@ export const ChatIcon = () => (
 export const LockIcon = () => (
   <svg viewBox="0 0 16 16" aria-hidden="true" width="11" height="11"><path d="M4 7V5a4 4 0 0 1 8 0v2M3 7h10v7H3z" fill="none" stroke="currentColor" strokeWidth="1.6" /></svg>
 );
+export const LogoutIcon = () => (
+  <svg viewBox="0 0 16 16" aria-hidden="true" width="16" height="16"><path d="M6 2H2.5v12H6M10.5 4.5 14 8l-3.5 3.5M14 8H6" fill="none" stroke="currentColor" strokeWidth="1.6" /></svg>
+);

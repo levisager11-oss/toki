@@ -20,6 +20,8 @@ export interface Game {
   engine: string | null;
   play_url: string;
   thumbnail_url: string | null;
+  /** Wide picture (2:1) for the featured banner on the home page. */
+  banner_url?: string | null;
   cover: string | null;
   featured: boolean;
   created_by: string | null;
