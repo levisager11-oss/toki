@@ -9,7 +9,7 @@ import { injectMeta, PREVIEW_BOT, type PageMeta } from "./server/meta.js";
 
 export const config = { matcher: ["/", "/game/:slug*"] };
 
-const SITE_DESCRIPTION = "Browser games made by friends. Play free, no account needed.";
+const SITE_DESCRIPTION = "Free browser games. Play instantly, no account needed.";
 
 async function gameMeta(slug: string, origin: string): Promise<PageMeta | null> {
   const q = `slug=eq.${encodeURIComponent(slug)}&select=slug,title,description,thumbnail_url,cover`;
