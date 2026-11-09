@@ -534,3 +534,32 @@ a.fb-fixed:hover { text-decoration: underline; text-underline-offset: 3px; }
 .me-out:hover { color: var(--danger); background: var(--surface); }
 .me-guest { display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 0 8px; font-size: 14px; }
 .me-guest .linkish { text-align: center; }
+
+/* game review */
+.navgroup a .badge { margin-left: 8px; font-family: var(--f-px); font-size: 10px; background: var(--accent); color: var(--accent-ink); border: 1px solid var(--accent-ink); padding: 0 5px; vertical-align: 1px; }
+.review-notice p { margin: 0; }
+.review-notice .sub { margin-top: 4px; }
+.my-title { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.my-title .title { min-width: 0; }
+.review-note { font-style: italic; }
+.form-foot .check { margin: 12px 0 0; }
+.rv-list { display: flex; flex-direction: column; gap: 14px; }
+.rv { background: var(--surface); border: 1px solid var(--line); padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+.rv-head { display: flex; gap: 14px; align-items: flex-start; }
+.rv-head .cover { width: 120px; flex: none; border: 1px solid var(--line); }
+.rv-info { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; }
+.rv-links { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 0; font-size: 14px; }
+.rv-links dt { font-family: var(--f-px); font-size: 10px; color: var(--muted); text-transform: uppercase; padding-top: 3px; }
+.rv-links dd { margin: 0; overflow-wrap: anywhere; }
+.rv-decide { border-top: 1px solid var(--line); padding-top: 4px; }
+.rv-decide .btn.primary { margin-top: 0; }
+.rv-trusted { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 18px; display: flex; flex-direction: column; gap: 8px; }
+.rv-trusted h2 { margin: 0; font-size: 18px; font-weight: 800; }
+.rv-trusted ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.rv-trusted li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+@media (max-width: 860px) {
+  .rv { padding: 14px; }
+  .rv-head .cover { width: 88px; }
+  .rv .actions .btn { flex: 1; padding-block: 11px; }
+  .rv .actions .linkish { width: 100%; text-align: center; padding: 6px 0; }
+}

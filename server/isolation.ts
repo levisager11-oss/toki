@@ -21,11 +21,16 @@ export async function needsIsolation(slug: string, fetchImpl: typeof fetch = fet
   const hit = cache.get(slug);
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.on;
   try {
-    const q = `slug=eq.${encodeURIComponent(slug)}&select=needs_isolation`;
-    const res = await fetchImpl(`${SUPABASE_URL}/rest/v1/games?${q}`, { headers: { apikey: SUPABASE_KEY }, signal: AbortSignal.timeout(1500) });
+    // Asked through a function, so it also works for games under review (only their developer
+    // and admins can see those, and this request has no login).
+    const res = await fetchImpl(`${SUPABASE_URL}/rest/v1/rpc/game_needs_isolation`, {
+      method: "POST",
+      headers: { apikey: SUPABASE_KEY, "content-type": "application/json" },
+      body: JSON.stringify({ p_slug: slug }),
+      signal: AbortSignal.timeout(1500),
+    });
     if (!res.ok) return false;
-    const [g] = (await res.json()) as { needs_isolation?: boolean }[];
-    const on = g?.needs_isolation === true;
+    const on = (await res.json()) === true;
     cache.set(slug, { on, at: Date.now() });
     return on;
   } catch {

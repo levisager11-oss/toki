@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
-import { canCreate } from "../lib/types";
+import { isTrusted } from "../lib/types";
 import { SaveHistory } from "../components/SaveHistory";
 import { MyFeedback } from "../components/MyFeedback";
 
@@ -33,13 +33,12 @@ export function Account() {
       <p className="lead">{t(`account.role.${profile.role}`)}</p>
       <p>{t("account.saves")}</p>
 
-      {canCreate(profile) ? (
-        <div className="actions">
-          <Link to="/my-games" className="btn">{t("nav.myGames")}</Link>
-          <Link to="/add" className="btn">{t("nav.addGame")}</Link>
-          <Link to="/feedback/inbox" className="btn">{t("fb.inbox.title")}</Link>
-        </div>
-      ) : (
+      <div className="actions">
+        <Link to="/my-games" className="btn">{t("nav.myGames")}</Link>
+        <Link to="/add" className="btn">{t("nav.addGame")}</Link>
+        <Link to="/feedback/inbox" className="btn">{t("fb.inbox.title")}</Link>
+      </div>
+      {!isTrusted(profile) && (
         <form className="form" onSubmit={redeem}>
           <label htmlFor="code">{t("account.inviteTitle")}</label>
           <small>{t("account.inviteHelp")}</small>

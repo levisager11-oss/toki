@@ -103,9 +103,9 @@ describe("isolation", () => {
   });
   const reply = (body: unknown, ok = true) => (async () => ({ ok, json: async () => body })) as unknown as typeof fetch;
   it("is on only when the game says so", async () => {
-    expect(await needsIsolation("iso-on", reply([{ needs_isolation: true }]))).toBe(true);
-    expect(await needsIsolation("iso-off", reply([{ needs_isolation: false }]))).toBe(false);
-    expect(await needsIsolation("iso-missing", reply([]))).toBe(false);
+    expect(await needsIsolation("iso-on", reply(true))).toBe(true);
+    expect(await needsIsolation("iso-off", reply(false))).toBe(false);
+    expect(await needsIsolation("iso-missing", reply(null))).toBe(false);
   });
   it("is off when the database can't be asked, so games still load", async () => {
     expect(await needsIsolation("iso-error", reply(null, false))).toBe(false);

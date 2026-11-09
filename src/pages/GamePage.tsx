@@ -4,7 +4,7 @@ import { useI18n } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
 import { useMediaQuery } from "../lib/useMediaQuery";
 import { markPlayed, visitorId } from "../lib/local";
-import { plays, recordPlay } from "../lib/games";
+import { isLive, plays, recordPlay } from "../lib/games";
 import { useGames } from "../lib/useGames";
 import { useSaveBridge } from "../lib/saves";
 import { matchIsolation } from "../lib/isolation";
@@ -12,6 +12,7 @@ import { GameGrid, Plays } from "../components/GameCard";
 import { FavButton } from "../components/FavButton";
 import { GameFeedback } from "../components/GameFeedback";
 import { GameUpdates } from "../components/GameUpdates";
+import { ReviewNotice } from "../components/GameStatus";
 import { CloseIcon, FullscreenIcon, ShareIcon } from "../components/icons";
 
 const LANDSCAPE_PHONE = "(orientation: landscape) and (pointer: coarse) and (max-height: 600px)";
@@ -140,7 +141,7 @@ export function GamePage() {
   const canEdit = profile && (profile.role === "admin" || profile.id === game.created_by);
   // Same category first, then the most played.
   const more = games
-    .filter((g) => g.id !== game.id)
+    .filter((g) => g.id !== game.id && isLive(g))
     .sort((a, b) => Number(b.category === game.category) - Number(a.category === game.category) || plays(b) - plays(a))
     .slice(0, 8);
 
@@ -179,6 +180,7 @@ export function GamePage() {
             <button type="button" className="btn primary" onClick={fullscreen}><FullscreenIcon />{t("game.fullscreen")}</button>
           </div>
         </div>
+        {canEdit && <ReviewNotice game={game} />}
         {(saves.lost || saves.conflict) && (
           <div className="check warn save-conflict" role="alert">
             <p>{t(saves.lost ? (userId ? "saves.lostAccount" : "saves.lostDevice") : "saves.conflict")}</p>
@@ -227,8 +229,12 @@ export function GamePage() {
         </section>
       )}
 
-      <GameUpdates game={game} />
-      <GameFeedback game={game} />
+      {isLive(game) && (
+        <>
+          <GameUpdates game={game} />
+          <GameFeedback game={game} />
+        </>
+      )}
 
       {more.length > 0 && (
         <section>

@@ -1,11 +1,11 @@
 import { useI18n } from "../lib/i18n";
 import { useFavorites } from "../lib/local";
-import { useGames } from "../lib/useGames";
+import { useLiveGames } from "../lib/useGames";
 import { GameGrid, GridSkeleton } from "../components/GameCard";
 
 export function Favorites() {
   const { t } = useI18n();
-  const { games, error } = useGames();
+  const { games, error } = useLiveGames();
   const { favs } = useFavorites();
   if (error) return <p className="msg">{t("error")}</p>;
   if (!games) return <section><div className="sechead"><h1 className="h">{t("favs.title")}</h1></div><GridSkeleton count={4} /></section>;

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
 import { useRecent } from "../lib/local";
-import { useGames } from "../lib/useGames";
+import { useLiveGames } from "../lib/useGames";
 import { matches, plays } from "../lib/games";
 import { Cover } from "../components/Cover";
 import { GameGrid, GridSkeleton, Plays, RecentItem } from "../components/GameCard";
@@ -14,7 +14,7 @@ const MAX_SLIDES = 4;
 
 export function Home() {
   const { t } = useI18n();
-  const { games, error } = useGames();
+  const { games, error } = useLiveGames();
   const recentSlugs = useRecent();
   const [params] = useSearchParams();
   const q = (params.get("q") ?? "").trim();
