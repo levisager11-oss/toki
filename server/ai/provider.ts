@@ -139,8 +139,9 @@ async function openaiCompatible(
   let { res, answer, error } = await send();
   // Some servers (vLLM) fill in a default min_p from the model's settings and then refuse it, e.g.
   // with speculative decoding. They only use that default when the request doesn't say: so ask
-  // again with min_p 0. Older servers may not know stream_options. Both are remembered.
-  for (let i = 0; i < 2 && res.status === 400; i++) {
+  // again with min_p 0. Older servers may not know stream_options. Both are remembered. (Behind
+  // LiteLLM, the same refusal can come as a 500 when the answer is streamed.)
+  for (let i = 0; i < 2 && (!res.ok || !!answer.error); i++) {
     if (/min_p/i.test(error) && !quirks.zeroMinP) quirks.zeroMinP = true;
     else if (/stream_options/i.test(error) && !quirks.noStreamOptions) quirks.noStreamOptions = true;
     else break;
