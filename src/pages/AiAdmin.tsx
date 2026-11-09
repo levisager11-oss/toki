@@ -239,6 +239,7 @@ export function AiAdmin() {
                 <span>{u.user ? `@${u.user.username}` : t("ai.deleted")} · {t(`ai.feature.${u.feature}`)} · {ago(u.created_at, lang)}</span>
                 <span className="sub">{u.input_tokens + u.output_tokens} tokens · {t(`ai.callStatus.${u.status}`)}</span>
                 <b className="num">{usd(u.cost)}</b>
+                {u.error && <small className="model-error-detail ai-log-error">{u.error}</small>}
               </li>
             ))}
           </ul>
