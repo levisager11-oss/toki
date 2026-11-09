@@ -879,3 +879,7 @@ main.content:focus { outline: none; }
 
 /* no internet connection */
 .offline-bar { margin: 0; padding: 8px 16px; background: var(--accent); color: var(--accent-ink); font-size: 14px; font-weight: 500; border-bottom: 1px solid var(--accent-ink); }
+
+/* chat: where the unread messages start */
+.new-line { display: flex; align-items: center; gap: 8px; margin: 12px 0 4px; color: var(--danger); font-size: 12px; font-weight: 700; }
+.new-line::before, .new-line::after { content: ""; flex: 1; border-top: 1px solid var(--danger); }

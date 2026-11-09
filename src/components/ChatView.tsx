@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
@@ -19,11 +19,20 @@ import { useDraft } from "../lib/useDraft";
  * only while this is on screen. Deleted messages disappear on the next visit: listening for
  * deletes would send every deleted message (also the daily cleanup) to everyone online.
  */
-export function ChatView({ chatId, kind, compact }: { chatId: string; kind: ChatKind; compact?: boolean }) {
+export function ChatView({ chatId, kind, compact, unread }: {
+  chatId: string;
+  kind: ChatKind;
+  compact?: boolean;
+  /** Unread messages when the chat was opened (undefined while not known yet). */
+  unread?: number;
+}) {
   const { t, lang } = useI18n();
   const { session, profile } = useAuth();
   const location = useLocation();
   const [messages, setMessages] = useState<Message[] | null>(null);
+  // The first message that was unread when the chat opened: a "New messages" line goes above it.
+  // Decided once, so it stays put after the chat is marked as read.
+  const [firstNew, setFirstNew] = useState<number | null | undefined>(undefined);
   const [more, setMore] = useState(false);
   const [text, setText] = useDraft(`chat.${chatId}`);
   const [err, setErr] = useState("");
@@ -120,6 +129,12 @@ export function ChatView({ chatId, kind, compact }: { chatId: string; kind: Chat
     el.style.height = `${Math.min(el.scrollHeight + 2, 140)}px`;
   }, [text]);
 
+  useEffect(() => {
+    if (firstNew !== undefined || !messages || unread === undefined) return;
+    const theirs = messages.filter((m) => m.author_id !== me);
+    setFirstNew(unread > 0 && unread <= theirs.length ? theirs[theirs.length - unread].id : null);
+  }, [messages, unread, firstNew, me]);
+
   useLayoutEffect(() => {
     const el = list.current;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
@@ -211,12 +226,14 @@ export function ChatView({ chatId, kind, compact }: { chatId: string; kind: Chat
         {messages?.length === 0 && <p className="msg empty">{t(kind === "public" || kind === "game" ? "chat.emptyRoom" : "chat.empty")}</p>}
         {messages?.map((m, i) => {
           const prev = messages[i - 1];
-          const grouped = prev && prev.author_id === m.author_id && new Date(m.created_at).getTime() - new Date(prev.created_at).getTime() < 5 * 60_000;
+          const grouped = m.id !== firstNew && prev && prev.author_id === m.author_id && new Date(m.created_at).getTime() - new Date(prev.created_at).getTime() < 5 * 60_000;
           const mine = m.author_id === me;
           const who = m.author ?? people.current.get(m.author_id);
           return (
             // Focusable, so on phones a tap shows the message's Delete and Report links.
-            <div key={m.id} className={`msg-row ${mine ? "mine" : ""} ${grouped ? "grouped" : ""}`} tabIndex={-1}>
+            <Fragment key={m.id}>
+            {m.id === firstNew && i > 0 && <div className="new-line" role="separator"><span>{t("chat.newMessages")}</span></div>}
+            <div className={`msg-row ${mine ? "mine" : ""} ${grouped ? "grouped" : ""}`} tabIndex={-1}>
               {!grouped && (
                 <div className="msg-head">
                   <Link to={`/u/${who?.username ?? ""}`} className="person"><Avatar person={who} size={24} /><b>@{who?.username ?? "…"}</b></Link>
@@ -248,6 +265,7 @@ export function ChatView({ chatId, kind, compact }: { chatId: string; kind: Chat
                 </form>
               )}
             </div>
+            </Fragment>
           );
         })}
       </div>

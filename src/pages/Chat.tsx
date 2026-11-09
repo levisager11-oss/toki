@@ -112,7 +112,7 @@ export function Chat() {
           <>
             <ChatHeader chat={chat} summary={summary} title={title({ ...chat, other_username: summary?.other_username })}
               onRenamed={(name) => setChat({ ...chat, title: name })} onLeft={() => { refreshBadges(); navigate("/chat"); }} />
-            <ChatView key={chat.id} chatId={chat.id} kind={chat.kind} />
+            <ChatView key={chat.id} chatId={chat.id} kind={chat.kind} unread={list ? summary?.unread ?? 0 : undefined} />
           </>
         )}
       </div>
