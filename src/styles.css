@@ -34,7 +34,7 @@ h1, h2 { text-wrap: balance; }
 .app { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 100vh; }
 
 /* sidebar */
-.side { border-right: 1px solid var(--line); background: var(--surface); padding: 22px 14px; display: flex; flex-direction: column; gap: 26px; position: sticky; top: 0; height: 100vh; }
+.side { border-right: 1px solid var(--line); background: var(--surface); padding: 22px 14px; display: flex; flex-direction: column; gap: 22px; position: sticky; top: 0; height: 100vh; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 .logo { font-family: var(--f-px); font-size: 24px; display: flex; align-items: center; gap: 10px; padding-left: 8px; text-decoration: none; }
 .navgroup { display: flex; flex-direction: column; gap: 2px; }
 .navgroup h4 { font-family: var(--f-px); font-weight: 400; font-size: 11px; color: var(--muted); margin: 0 0 6px 8px; text-transform: uppercase; letter-spacing: .04em; }
@@ -777,3 +777,11 @@ a.author:hover { text-decoration: underline; color: var(--fg); }
 @media (pointer: coarse) {
   .model-list button { padding: 11px 12px; }
 }
+
+/* admin overview */
+.admin-links { list-style: none; padding: 0; margin: 20px 0 0; display: grid; gap: 10px; }
+.admin-links a { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border: 1px solid var(--line); background: var(--surface); text-decoration: none; color: var(--fg); }
+.admin-links a:hover { border-color: var(--fg); }
+.admin-links b { display: flex; align-items: center; gap: 8px; }
+.admin-links span:not(.count-pill) { color: var(--muted); font-size: 14px; }
+.model-error-detail { display: block; margin-top: 4px; color: var(--muted); font-family: ui-monospace, monospace; font-size: 12px; overflow-wrap: anywhere; }

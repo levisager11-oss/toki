@@ -9,11 +9,16 @@ async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     headers: { ...(init.body ? { "content-type": "application/json" } : {}), authorization: `Bearer ${data.session?.access_token ?? ""}` },
   });
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(typeof body?.error === "string" ? body.error : "error");
+  if (!res.ok) throw new ApiError(typeof body?.error === "string" ? body.error : "error", typeof body?.message === "string" ? body.message : "");
   return body as T;
 }
 
-export class ApiError extends Error {}
+export class ApiError extends Error {
+  /** The server's explanation, when it gave one (e.g. what the AI endpoint answered). */
+  constructor(code: string, readonly detail = "") {
+    super(code);
+  }
+}
 
 /** "$1.23", or more digits for amounts below a cent. */
 export function usd(n: number): string {

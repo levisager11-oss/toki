@@ -11,17 +11,20 @@ export function ModelPicker({ provider, baseUrl, selected, onPick }: { provider:
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [detail, setDetail] = useState("");
   const found = useMemo(() => (models ? searchModels(models, query) : []), [models, query]);
 
   const load = async () => {
     setBusy(true);
     setErr("");
+    setDetail("");
     try {
       const list = await findModels(provider, baseUrl);
       setModels(list);
       if (!list.length) setErr(t("ai.models.none"));
     } catch (e) {
       const code = e instanceof ApiError ? e.message : "";
+      setDetail(e instanceof ApiError ? e.detail : "");
       setErr(t(code === "bad_url" ? "ai.models.needUrl" : code === "ai_not_configured" ? "ai.models.needKey" : "ai.models.failed"));
     }
     setBusy(false);
@@ -57,7 +60,12 @@ export function ModelPicker({ provider, baseUrl, selected, onPick }: { provider:
           {found.length > SHOWN && <p className="sub">{t("ai.models.more", { n: found.length - SHOWN })}</p>}
         </>
       )}
-      {err && <p className="error" role="alert">{err}</p>}
+      {err && (
+        <p className="error" role="alert">
+          {err}
+          {detail && <small className="model-error-detail">{detail}</small>}
+        </p>
+      )}
     </div>
   );
 }

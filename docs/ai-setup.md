@@ -76,3 +76,13 @@ up as `ai_refused`.
 
 One Connect call may answer with up to 32,000 tokens (enough for whole files). Only what the model
 really writes is paid for; the budget only holds back the most a call could cost until it's done.
+
+## Endpoints with a broken certificate chain
+
+Some servers send their HTTPS certificate without the right intermediate certificate. Browsers
+quietly fetch the missing one, so the site works there, but Node.js (and so Toki's server) refuses
+the connection ("unable to verify the first certificate"). `server/tls.ts` does what browsers do:
+on exactly that error it downloads the missing intermediate from the address written in the
+server's certificate, checks every signature up to a trusted root, and repeats the request. The
+connection stays fully verified. The admin page shows the endpoint's error under "Find models", so
+problems like this are visible.
