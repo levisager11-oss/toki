@@ -28,6 +28,7 @@ const Apply = lazy(loadPage(() => import("./pages/Apply").then((m) => ({ default
 const Applications = lazy(loadPage(() => import("./pages/Applications").then((m) => ({ default: m.Applications }))));
 const Admin = lazy(loadPage(() => import("./pages/Admin").then((m) => ({ default: m.Admin }))));
 const AiAdmin = lazy(loadPage(() => import("./pages/AiAdmin").then((m) => ({ default: m.AiAdmin }))));
+const HostingAdmin = lazy(loadPage(() => import("./pages/HostingAdmin").then((m) => ({ default: m.HostingAdmin }))));
 const Connect = lazy(loadPage(() => import("./pages/Connect").then((m) => ({ default: m.Connect }))));
 const ConnectJob = lazy(loadPage(() => import("./pages/ConnectJob").then((m) => ({ default: m.ConnectJob }))));
 const ConnectGitHub = lazy(loadPage(() => import("./pages/ConnectGitHub").then((m) => ({ default: m.ConnectGitHub }))));
@@ -67,6 +68,7 @@ export function App() {
           <Route path="applications" element={<RequireMember admin><Later><Applications /></Later></RequireMember>} />
           <Route path="admin" element={<RequireMember admin><Later><Admin /></Later></RequireMember>} />
           <Route path="admin/ai" element={<RequireMember admin><Later><AiAdmin /></Later></RequireMember>} />
+          <Route path="admin/hosting" element={<RequireMember admin><Later><HostingAdmin /></Later></RequireMember>} />
           <Route path="connect" element={<RequireMember><Later><Connect /></Later></RequireMember>} />
           <Route path="connect/github" element={<RequireMember><Later><ConnectGitHub /></Later></RequireMember>} />
           <Route path="connect/:id" element={<RequireMember><Later><ConnectJob /></Later></RequireMember>} />

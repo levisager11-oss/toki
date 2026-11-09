@@ -11,7 +11,8 @@ export interface ServerEnv {
   freeAiKey: string;
   /** Supabase secret key (sb_secret_…) or the older service_role key: skips row level security. */
   serviceKey: string;
-  github: { appId: string; slug: string; privateKey: string; clientId: string; clientSecret: string };
+  /** webhookSecret: checks GitHub's push events (games that follow a repository); optional. */
+  github: { appId: string; slug: string; privateKey: string; clientId: string; clientSecret: string; webhookSecret?: string };
 }
 
 export function serverEnv(): ServerEnv {
@@ -28,6 +29,7 @@ export function serverEnv(): ServerEnv {
       privateKey: (e.GITHUB_APP_PRIVATE_KEY ?? "").replace(/\\n/g, "\n"),
       clientId: e.GITHUB_APP_CLIENT_ID ?? "",
       clientSecret: e.GITHUB_APP_CLIENT_SECRET ?? "",
+      webhookSecret: e.GITHUB_WEBHOOK_SECRET ?? "",
     },
   };
 }

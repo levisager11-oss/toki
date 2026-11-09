@@ -33,7 +33,7 @@ export function decrypt(stored: string, serviceKey: string): string | null {
   }
 }
 
-export type SecretName = "ai_api_key" | "anthropic_api_key" | "free_ai_api_key" | "github_app";
+export type SecretName = "ai_api_key" | "anthropic_api_key" | "free_ai_api_key" | "github_app" | "cloudflare_r2";
 
 export async function saveSecret(db: Db, env: ServerEnv, name: SecretName, plain: string, by: string): Promise<void> {
   await db.insert(
@@ -105,7 +105,7 @@ export async function githubFromManifestCode(code: string, fetchImpl: typeof fet
     signal: AbortSignal.timeout(30_000),
   });
   const body = (await res.json().catch(() => ({}))) as {
-    id?: number; slug?: string; client_id?: string; client_secret?: string; pem?: string; html_url?: string; message?: string;
+    id?: number; slug?: string; client_id?: string; client_secret?: string; pem?: string; html_url?: string; webhook_secret?: string | null; message?: string;
   };
   if (!res.ok || !body.id || !body.slug || !body.client_id || !body.client_secret || !body.pem) {
     throw new Error(`GitHub ${res.status}: ${body.message ?? "no app credentials"}`);
@@ -116,6 +116,7 @@ export async function githubFromManifestCode(code: string, fetchImpl: typeof fet
     clientId: body.client_id,
     clientSecret: body.client_secret,
     privateKey: body.pem,
+    webhookSecret: body.webhook_secret ?? "",
     htmlUrl: body.html_url ?? `https://github.com/apps/${body.slug}`,
   };
 }

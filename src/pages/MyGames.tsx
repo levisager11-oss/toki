@@ -8,12 +8,15 @@ import { Cover } from "../components/Cover";
 import { useAiStatus } from "../lib/assist";
 import { HeartIcon, PlayIcon } from "../components/icons";
 import { useTitle } from "../lib/useTitle";
+import { UploadKeys } from "../components/UploadKeys";
+import { useHosting } from "../lib/hosting";
 
 export function MyGames() {
   const { t } = useI18n();
   const { profile } = useAuth();
   const { games, error } = useGames();
   const ai = useAiStatus();
+  const hosting = useHosting();
   const [daily, setDaily] = useState<Record<string, number[]>>({});
   useTitle(profile?.role === "admin" ? t("my.allTitle") : t("my.title"));
 
@@ -67,6 +70,7 @@ export function MyGames() {
           ))}
         </ul>
       )}
+      {hosting?.enabled && <UploadKeys />}
     </section>
   );
 }

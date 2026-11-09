@@ -32,11 +32,11 @@ async function publicUrl(url: string, resolve: Lookup): Promise<boolean> {
   }
 }
 
-async function fetchPublic(url: string, fetchImpl: typeof fetch, resolve: Lookup): Promise<Response | null> {
+async function fetchPublic(url: string, fetchImpl: typeof fetch, resolve: Lookup, accept = "text/html"): Promise<Response | null> {
   const signal = AbortSignal.timeout(8000);
   for (let hops = 0; hops <= 5; hops++) {
     if (!(await publicUrl(url, resolve))) return null;
-    const res = await fetchImpl(url, { redirect: "manual", headers: { "user-agent": "TokiAssist/1.0", accept: "text/html" }, signal });
+    const res = await fetchImpl(url, { redirect: "manual", headers: { "user-agent": "TokiAssist/1.0", accept }, signal });
     const next = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
     if (!next) return res;
     await res.body?.cancel();
@@ -45,19 +45,33 @@ async function fetchPublic(url: string, fetchImpl: typeof fetch, resolve: Lookup
   return null;
 }
 
-async function readCapped(res: Response): Promise<string> {
+async function readCapped(res: Response, max = MAX_BYTES): Promise<string> {
   if (!res.body) return "";
   const reader = res.body.getReader();
   const chunks: Uint8Array[] = [];
   let size = 0;
-  while (size < MAX_BYTES) {
+  while (size < max) {
     const { done, value } = await reader.read();
     if (done) break;
     chunks.push(value);
     size += value.length;
   }
   await reader.cancel().catch(() => {});
-  return new TextDecoder().decode(Buffer.concat(chunks).subarray(0, MAX_BYTES));
+  return new TextDecoder().decode(Buffer.concat(chunks).subarray(0, max));
+}
+
+/** A public page's text (HTML or JSON), at most `max` bytes; null when it can't be read. */
+export async function fetchText(url: string, opts: { accept?: string; max?: number } = {}, fetchImpl: typeof fetch = fetch, resolve: Lookup = dnsLookup): Promise<{ url: string; text: string } | null> {
+  try {
+    const res = await fetchPublic(url, fetchImpl, resolve, opts.accept);
+    if (!res || !res.ok) {
+      await res?.body?.cancel().catch(() => {});
+      return null;
+    }
+    return { url: res.url || url, text: await readCapped(res, opts.max ?? MAX_BYTES) };
+  } catch {
+    return null;
+  }
 }
 
 const decode = (s: string) =>

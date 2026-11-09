@@ -10,6 +10,7 @@ const PAGES = [
   { to: "/reports", key: "reports" },
   { to: "/invites", key: "invites" },
   { to: "/admin/ai", key: "ai" },
+  { to: "/admin/hosting", key: "hosting" },
 ] as const;
 
 /** Admins: an overview of the admin pages (/admin). */

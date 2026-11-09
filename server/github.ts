@@ -103,6 +103,37 @@ export function github(cfg: ServerEnv["github"], fetchImpl: typeof fetch = fetch
       const token = await installationToken(installationId);
       const enc = (p: string) => p.split("/").map(encodeURIComponent).join("/");
       return {
+        async branches(): Promise<string[]> {
+          const r = await call<{ name: string }[]>(`/repos/${repo}/branches?per_page=100`, token);
+          return r.map((b) => b.name);
+        },
+        /** The newest commit of a branch: its id and the first line of its message. */
+        async head(branch: string): Promise<{ sha: string; message: string }> {
+          const r = await call<{ sha: string; commit: { message: string } }>(`/repos/${repo}/commits/${encodeURIComponent(branch)}`, token);
+          return { sha: r.sha, message: r.commit.message.split("\n")[0].trim().slice(0, 200) };
+        },
+        /** The repository's files at a commit, as a .tar.gz (at most maxBytes). */
+        async tarball(ref: string, maxBytes: number): Promise<Uint8Array> {
+          const res = await fetchImpl(`${API}/repos/${repo}/tarball/${encodeURIComponent(ref)}`, {
+            headers: { ...HEADERS, authorization: `Bearer ${token}` },
+            signal: AbortSignal.timeout(120_000),
+          });
+          if (!res.ok || !res.body) throw new GitHubError(`GitHub ${res.status}: tarball`, res.status);
+          const reader = res.body.getReader();
+          const chunks: Uint8Array[] = [];
+          let size = 0;
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            size += value.length;
+            if (size > maxBytes) {
+              await reader.cancel().catch(() => {});
+              throw new GitHubError("repo_too_big", 413);
+            }
+            chunks.push(value);
+          }
+          return Buffer.concat(chunks);
+        },
         async defaultBranch(): Promise<string> {
           return (await call<{ default_branch: string }>(`/repos/${repo}`, token)).default_branch;
         },

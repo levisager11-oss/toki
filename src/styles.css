@@ -883,3 +883,31 @@ main.content:focus { outline: none; }
 /* chat: where the unread messages start */
 .new-line { display: flex; align-items: center; gap: 8px; margin: 12px 0 4px; color: var(--danger); font-size: 12px; font-weight: 700; }
 .new-line::before, .new-line::after { content: ""; flex: 1; border-top: 1px solid var(--danger); }
+
+/* games hosted on Toki: upload box, GitHub, link import, upload keys */
+.host-box { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.host-box label { margin-top: 4px; }
+.drop { border: 2px dashed var(--line); background: var(--surface); padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.drop.over { border-color: var(--accent); background: var(--bg); }
+.drop p { margin: 0; font-size: 14px; }
+.host-progress { height: 8px; border: 1px solid var(--fg); background: var(--surface); }
+.host-progress i { display: block; height: 100%; background: var(--accent); transition: width .2s; }
+.host-versions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 14px; }
+.host-versions p { margin: 0; }
+.host-more { margin: 0; font-size: 13px; }
+.host-box .check p { margin: 0 0 4px; }
+.host-box .sub, .key-list .sub { color: var(--muted); font-size: 13px; }
+.import-box { margin: 0 0 6px; }
+.import-row { display: flex; gap: 8px; margin-top: 8px; }
+.import-row input { flex: 1; min-width: 0; }
+.upload-keys { margin-top: 24px; }
+.key-list { list-style: none; padding: 0; margin: 10px 0; display: flex; flex-direction: column; gap: 6px; }
+.key-list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; border: 1px solid var(--line); padding: 8px 10px; background: var(--surface); }
+.key-list li .linkish { margin-left: auto; }
+.key-fresh pre { overflow-x: auto; background: var(--bg); border: 1px solid var(--line); padding: 8px; font-size: 13px; user-select: all; }
+.steps { font-size: 14px; padding-left: 20px; margin: 8px 0; }
+.steps li { margin: 4px 0; }
+@media (max-width: 600px) {
+  .import-row { flex-direction: column; }
+}
+.upload-keys input { padding: 9px 10px; font-size: 15px; }

@@ -1,0 +1,9 @@
+# Toki
+
+> Toki (https://www.playtoki.app) is a website for free browser games, in English and German. Developers add their web games; players play them in the browser, with saves, high scores, feedback and updates.
+
+## For AI agents
+
+- [Publishing a game on Toki](https://www.playtoki.app/agents.md): web builds, toki.json, the upload script, GitHub Actions and the upload API.
+- [Upload script](https://www.playtoki.app/toki-upload.mjs): `TOKI_KEY=toki_… node toki-upload.mjs <folder>` (Node.js 18+).
+- [Save script](https://www.playtoki.app/toki-save.js): saves and `toki.score(points)` for games that run elsewhere (hosted games get it automatically).

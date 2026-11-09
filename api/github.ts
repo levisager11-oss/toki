@@ -1,7 +1,13 @@
 // Developers: connect Toki's GitHub App to their account, and list the repositories it can use.
-import { githubConfigured } from "../server/env.js";
+// GitHub: push events of the app (games that follow a repository update by themselves).
+import { waitUntil } from "@vercel/functions";
+import { serviceDb } from "../server/db.js";
+import { githubConfigured, serverEnv } from "../server/env.js";
+import { deployCommit, gamesForPush, validSignature, type PushEvent } from "../server/gitDeploy.js";
 import { github, GitHubError } from "../server/github.js";
+import { hostingDeps, r2Config } from "../server/hosting.js";
 import { body, context, json } from "../server/http.js";
+import { withSecrets } from "../server/secrets.js";
 
 export async function GET(request: Request) {
   const ctx = await context(request, ["admin", "creator"]);
@@ -30,7 +36,35 @@ export async function GET(request: Request) {
   return json({ configured: true, installUrl, installations: installs.filter((i) => !gone.includes(i.installation_id)), repos });
 }
 
+/** A push to a repository: games that follow its branch get the new version (in the background). */
+async function webhook(request: Request, event: string): Promise<Response> {
+  const raw = await request.text();
+  const base = serverEnv();
+  if (!base.serviceKey) return json({ error: "not_configured" }, 503);
+  const db = serviceDb(base.serviceKey);
+  const { env } = await withSecrets(db, base);
+  if (!validSignature(env.github.webhookSecret ?? "", raw, request.headers.get("x-hub-signature-256"))) return json({ error: "bad_signature" }, 401);
+  if (event !== "push") return json({ ok: true, ignored: event });
+  let ev: PushEvent;
+  try {
+    ev = JSON.parse(raw) as PushEvent;
+  } catch {
+    return json({ error: "bad_request" }, 400);
+  }
+  const hit = await gamesForPush(db, ev);
+  if (!hit) return json({ ok: true, games: 0 });
+  const { config } = await r2Config(db, base.serviceKey);
+  if (!config) return json({ ok: true, games: 0, hosting: "off" });
+  const gh = github(env.github);
+  const deps = hostingDeps(db, config);
+  // GitHub waits only 10 seconds for an answer: answer now, deploy after.
+  waitUntil(Promise.all(hit.rows.map((row) => deployCommit(deps, gh, row, hit.commit))));
+  return json({ ok: true, games: hit.rows.length }, 202);
+}
+
 export async function POST(request: Request) {
+  const event = request.headers.get("x-github-event");
+  if (event) return webhook(request, event);
   const ctx = await context(request, ["admin", "creator"]);
   if (ctx instanceof Response) return ctx;
   if (!githubConfigured(ctx.env.github)) return json({ error: "not_configured" }, 503);

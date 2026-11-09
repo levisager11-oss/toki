@@ -39,6 +39,8 @@ export interface Game {
   score_format?: "points" | "time";
   /** The game only runs with cross-origin isolation (e.g. Godot 4 with threads). Off for most games. */
   needs_isolation?: boolean;
+  /** The game's address name when Toki hosts it (<site>.playtoki.app). Only the server sets it. */
+  hosted_site?: string | null;
   author?: { username: string } | null;
   stats?: { plays: number; likes: number } | null;
 }

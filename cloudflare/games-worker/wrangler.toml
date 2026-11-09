@@ -1,0 +1,18 @@
+# Toki's games Worker. Deploy with `npx wrangler deploy` from this folder (see docs/hosting-setup.md).
+name = "toki-games"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+
+# Every <game>.playtoki.app address runs through this Worker.
+# Needs a DNS record "*" (proxied, orange cloud), see the setup guide.
+routes = [{ pattern = "*.playtoki.app/*", zone_name = "playtoki.app" }]
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "toki-games"
+
+[vars]
+DOMAIN = "playtoki.app"
+SAVE_SCRIPT = "https://www.playtoki.app/toki-save.js"
+# Names that are never games (keep in sync with RESERVED_SITES in src/lib/hostingRules.ts).
+RESERVED = "www,api,app,admin,mail,email,smtp,imap,pop,ftp,ns1,ns2,games,game,play,status,docs,doc,blog,cdn,assets,static,auth,login,toki,dev,staging,preview,test,help,support,shop,store,news,m,dashboard,connect,upload,files,r2,worker"
