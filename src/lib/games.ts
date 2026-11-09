@@ -81,3 +81,22 @@ export function slugify(title: string): string {
     .slice(0, 40)
     .replace(/-+$/, "");
 }
+
+// ---------- sorting the game list ----------
+export const SORTS = ["new", "popular", "liked", "updated"] as const;
+export type Sort = (typeof SORTS)[number];
+
+/**
+ * The game list in the chosen order. The list from the server is newest first.
+ * "Recently updated" goes by the last posted update; games without one count from when they were added.
+ */
+export function sortGames(games: Game[], sort: Sort, updates: Map<string, string> = new Map()): Game[] {
+  if (sort === "popular") return [...games].sort((a, b) => plays(b) - plays(a));
+  if (sort === "liked") return [...games].sort((a, b) => likes(b) - likes(a) || plays(b) - plays(a));
+  if (sort === "updated") {
+    const at = (g: Game) => Date.parse(updates.get(g.id) ?? g.created_at) || 0;
+    return [...games].sort((a, b) => at(b) - at(a));
+  }
+  return games;
+}
+

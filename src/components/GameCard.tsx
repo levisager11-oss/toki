@@ -5,7 +5,7 @@ import { compact, plays } from "../lib/games";
 import { Cover } from "./Cover";
 import { FavButton } from "./FavButton";
 import { PlayIcon } from "./icons";
-import { useRecentlyUpdated } from "../lib/releases";
+import { recentlyUpdated, useLatestUpdates } from "../lib/releases";
 
 const by = (g: Game) => (g.author ? `@${g.author.username}` : "Toki");
 
@@ -29,7 +29,7 @@ export function Plays({ game }: { game: Game }) {
 
 export function GameCard({ game }: { game: Game }) {
   const { t } = useI18n();
-  const updated = useRecentlyUpdated().has(game.id);
+  const updated = recentlyUpdated(useLatestUpdates().get(game.id));
   return (
     <article className="card">
       <Link to={`/game/${game.slug}`} className="thumb" tabIndex={-1} aria-hidden="true">

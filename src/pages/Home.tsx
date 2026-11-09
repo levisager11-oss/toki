@@ -3,12 +3,13 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
 import { clearRecent, useRecent } from "../lib/local";
 import { useGames } from "../lib/useGames";
-import { likes, matches, plays } from "../lib/games";
+import { matches, plays, SORTS, sortGames, type Sort } from "../lib/games";
 import { Cover } from "../components/Cover";
 import { GameCard, GameGrid, GridSkeleton, Plays, RecentItem } from "../components/GameCard";
 import { useAuth } from "../lib/auth";
 import { suggestions, useFreeAi, type Suggestion } from "../lib/assist";
 import { PlayIcon } from "../components/icons";
+import { useLatestUpdates } from "../lib/releases";
 import { Avatar } from "../components/Avatar";
 import { isOnline, myFriends, type FriendRow } from "../lib/social";
 import type { Category, Game } from "../lib/types";
@@ -16,17 +17,6 @@ import type { Category, Game } from "../lib/types";
 const ROTATE_MS = 8000;
 const MAX_SLIDES = 4;
 const SORT_KEY = "toki.sort";
-const SORTS = ["new", "popular", "liked", "updated"] as const;
-type Sort = (typeof SORTS)[number];
-
-/** The game list in the chosen order. The list from the server is newest first. */
-function sortGames(games: Game[], sort: Sort): Game[] {
-  if (sort === "popular") return [...games].sort((a, b) => plays(b) - plays(a));
-  if (sort === "liked") return [...games].sort((a, b) => likes(b) - likes(a) || plays(b) - plays(a));
-  if (sort === "updated") return [...games].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
-  return games;
-}
-
 function savedSort(): Sort {
   try {
     const s = localStorage.getItem(SORT_KEY);
@@ -55,6 +45,7 @@ export function Home() {
       { replace: true, preventScrollReset: true },
     );
   const [sort, setSortState] = useState<Sort>(savedSort);
+  const updates = useLatestUpdates();
   const setSort = (v: Sort) => {
     setSortState(v);
     try {
@@ -76,8 +67,8 @@ export function Home() {
   );
   const cats = useMemo(() => [...new Set((games ?? []).map((g) => g.category))].sort(), [games]);
   const shown = useMemo(
-    () => sortGames((games ?? []).filter((g) => (cat === "all" || g.category === cat) && matches(g, q, t(`cat.${g.category}`))), sort),
-    [games, cat, q, t, sort],
+    () => sortGames((games ?? []).filter((g) => (cat === "all" || g.category === cat) && matches(g, q, t(`cat.${g.category}`))), sort, updates),
+    [games, cat, q, t, sort, updates],
   );
 
   if (error) return <p className="msg">{t("error")}</p>;

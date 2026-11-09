@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { format } from "../src/lib/i18n";
-import { compact, matches, slugify } from "../src/lib/games";
+import { compact, matches, slugify, sortGames } from "../src/lib/games";
+import { recentlyUpdated } from "../src/lib/releases";
 import type { Game } from "../src/lib/types";
 import { isNew } from "../src/components/GameCard";
 import { isUnseen } from "../src/lib/whatsNew";
@@ -73,5 +74,30 @@ describe("isUnseen", () => {
     expect(isUnseen("2026-11-09T12:00:00Z", "2026-11-09T12:00:00Z")).toBe(false);
     expect(isUnseen("2026-11-09T12:00:00Z", null)).toBe(false);
     expect(isUnseen(null, "2026-11-09T12:00:00Z")).toBe(false);
+  });
+});
+
+describe("sortGames", () => {
+  const a = game({ id: "a", title: "A", created_at: "2026-11-01T00:00:00Z", stats: { plays: 5, likes: 1 } });
+  const b = game({ id: "b", title: "B", created_at: "2026-10-01T00:00:00Z", stats: { plays: 9, likes: 1 } });
+  const c = game({ id: "c", title: "C", created_at: "2026-09-01T00:00:00Z", stats: { plays: 1, likes: 4 } });
+  const titles = (list: Game[]) => list.map((g) => g.title).join("");
+  it("keeps the newest first", () => expect(titles(sortGames([a, b, c], "new"))).toBe("ABC"));
+  it("sorts by plays and likes", () => {
+    expect(titles(sortGames([a, b, c], "popular"))).toBe("BAC");
+    expect(titles(sortGames([a, b, c], "liked"))).toBe("CBA");
+  });
+  it("sorts by the last posted update, else by when the game was added", () => {
+    const updates = new Map([["c", "2026-11-05T00:00:00Z"]]);
+    expect(titles(sortGames([a, b, c], "updated", updates))).toBe("CAB");
+  });
+});
+
+describe("recentlyUpdated", () => {
+  const now = Date.parse("2026-11-09T12:00:00Z");
+  it("is true for updates in the last 7 days", () => {
+    expect(recentlyUpdated("2026-11-05T12:00:00Z", now)).toBe(true);
+    expect(recentlyUpdated("2026-10-30T12:00:00Z", now)).toBe(false);
+    expect(recentlyUpdated(undefined, now)).toBe(false);
   });
 });
