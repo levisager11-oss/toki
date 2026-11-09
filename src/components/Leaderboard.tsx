@@ -6,6 +6,7 @@ import { canManage } from "../lib/feedback";
 import { formatScore, leaderboard, removeScore, submitScore, validScore, type ScoreRow } from "../lib/social";
 import type { Game } from "../lib/types";
 import { Avatar } from "./Avatar";
+import { ShareButton } from "./ShareButton";
 
 export type ScoreEvent = { score: number; best?: number; isNew?: boolean; guest?: boolean };
 
@@ -110,7 +111,12 @@ export function Leaderboard({ game, version, last }: { game: Game; version: numb
         <p className={`check ${last.isNew ? "good" : ""}`} role="status">
           {last.guest ? (
             <>{t("score.guest", { score: fmt(last.score) })} <Link to={`/login?next=${encodeURIComponent(location.pathname)}`}>{t("nav.login")}</Link></>
-          ) : last.isNew ? t("score.newBest", { score: fmt(last.score) }) : t("score.notBest", { score: fmt(last.score), best: fmt(last.best ?? last.score) })}
+          ) : last.isNew ? (
+            <>
+              {t("score.newBest", { score: fmt(last.score) })}{" "}
+              <ShareButton className="linkish" path={`/game/${game.slug}#scores`} title={game.title} text={t("score.shareText", { score: fmt(last.score), title: game.title })} />
+            </>
+          ) : t("score.notBest", { score: fmt(last.score), best: fmt(last.best ?? last.score) })}
         </p>
       )}
       {top.length === 0 ? <p className="msg">{t("score.none")}</p> : (

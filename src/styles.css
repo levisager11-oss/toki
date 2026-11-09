@@ -43,6 +43,7 @@ h1, h2 { text-wrap: balance; }
 .navgroup a.active { color: var(--fg); border-left-color: var(--fg); background: var(--bg); }
 .side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 4px; padding-left: 8px; font-size: 14px; }
 .linkish { background: none; border: 0; padding: 0; color: var(--muted); cursor: pointer; text-align: left; text-decoration: underline; text-underline-offset: 3px; }
+.check .linkish svg { vertical-align: -3px; margin-right: 4px; }
 .linkish:hover { color: var(--fg); }
 
 /* top bar */
