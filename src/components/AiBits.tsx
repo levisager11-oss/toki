@@ -23,8 +23,8 @@ export function SummaryButton({ label, load }: { label: string; load: () => Prom
   };
   return (
     <div className="ai-inline">
-      <button type="button" className="btn ai-start" onClick={run} disabled={busy}>
-        <span aria-hidden="true">✦ </span>{busy ? t("assist.summarizing") : label}
+      <button type="button" className="linkish ai-link" onClick={run} disabled={busy}>
+        {busy ? t("assist.summarizing") : label}
       </button>
       {err && <p className="error" role="alert">{err}</p>}
       {text !== null && (
@@ -127,7 +127,7 @@ export function AiBox({ title, children, onClose }: { title: string; children: R
   return (
     <section className="ai-box" aria-label={title}>
       <div className="ai-box-head">
-        <b><span aria-hidden="true">✦ </span>{title}</b>
+        <b>{title}</b>
         {onClose && <button type="button" className="linkish" onClick={onClose}>{t("assist.close")}</button>}
       </div>
       {children}

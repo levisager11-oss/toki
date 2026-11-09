@@ -64,7 +64,7 @@ export function GameHelper({ game, onClose }: { game: { id: string; title: strin
   return (
     <section className="ai-box helper" aria-labelledby="helper-h">
       <div className="ai-box-head">
-        <b id="helper-h"><span aria-hidden="true">✦ </span>{t("helper.title", { title: game.title })}</b>
+        <b id="helper-h">{t("helper.title", { title: game.title })}</b>
         <span className="actions">
           {turns.length > 0 && <button type="button" className="linkish" onClick={() => setTurns([])}>{t("helper.new")}</button>}
           <button type="button" className="linkish" onClick={onClose}>{t("assist.close")}</button>

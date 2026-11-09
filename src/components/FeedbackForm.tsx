@@ -134,7 +134,7 @@ export function FeedbackForm({ gameId, posts, kind: initialKind = "bug", onPoste
 
       {found.length > 0 && (
         <div className="fb-similar ai-similar" role="status">
-          <span><span aria-hidden="true">✦ </span>{t("fb.form.aiSimilar")}</span>
+          <span>{t("fb.form.aiSimilar")}</span>
           <ul>
             {found.map((p) => (
               <li key={p.id}><Link to={`/feedback/${p.id}`}>{p.title}</Link> <span className="sub">· {t("fb.votes", { n: p.vote_count })}</span></li>

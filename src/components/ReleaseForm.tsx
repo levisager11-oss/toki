@@ -164,7 +164,7 @@ function ReleaseDraft({ gameId, fixes, onUse }: { gameId: string | null; fixes: 
 
   if (!open)
     return (
-      <button type="button" className="btn ai-start" onClick={() => setOpen(true)}><span aria-hidden="true">✦ </span>{t("rel.ai.open")}</button>
+      <button type="button" className="linkish ai-link" onClick={() => setOpen(true)}>{t("rel.ai.open")}</button>
     );
   return (
     <div className="ai-panel">

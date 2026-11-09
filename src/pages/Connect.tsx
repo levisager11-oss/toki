@@ -239,7 +239,7 @@ function NewRun({ repos, games, initialGame, fix, lang, onStarted }: {
       <h2 id="new-run-h">{fix ? t("connect.fixTitle") : t("connect.new")}</h2>
       {fix && (
         <div className="check">
-          <p><span aria-hidden="true">✦ </span>{t("connect.fixLead")} <Link to={`/feedback/${fix.id}`}><b>{fix.title}</b></Link></p>
+          <p>{t("connect.fixLead")} <Link to={`/feedback/${fix.id}`}><b>{fix.title}</b></Link></p>
           <small>{t("connect.fixHelp")}</small>
         </div>
       )}
