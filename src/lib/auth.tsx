@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import { stopAccountSaves } from "./saves";
+import { syncAccountLikes } from "./local";
 import type { Profile } from "./types";
 
 interface AuthState {
@@ -35,6 +36,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const userId = session?.user.id;
+  useEffect(() => {
+    if (ready) syncAccountLikes(userId ?? null);
+  }, [ready, userId]);
+
   useEffect(() => {
     if (!userId) {
       setProfile(null);

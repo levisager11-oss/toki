@@ -9,6 +9,8 @@ let pending: Promise<Game[]> | null = null;
 const listeners = new Set<() => void>();
 const notify = () => listeners.forEach((l) => l());
 
+export const cachedGames = () => cache;
+
 export function invalidateGames() {
   cache = null;
   pending = null;

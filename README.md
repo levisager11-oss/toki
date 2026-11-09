@@ -2,7 +2,7 @@
 
 A small website for free browser games, in English and German.
 
-- **Play:** anyone can play, without an account. Favorites and recently played are saved in the visitor's browser.
+- **Play:** anyone can play, without an account. Favorites and recently played are saved in the visitor's browser. For logged-in players, favorites (likes) belong to the account: a like counts once per account and shows on every device (`claim_likes` / `my_likes` in `supabase/schema.sql`).
 - **Plays and likes:** a visit counts as a play after 10 seconds on a game's page (once per browser per game per day). Tapping the heart saves a game to Favorites and adds a public like. Members see plays per day on *My games*.
 - **Add games:** only invited members can add games. A game is added **by link**: paste the address where the game runs (for example a Vercel or GitHub Pages site). When the game is updated there, Toki shows the new version automatically.
 - **Invites:** admins create invite codes on the *Invites* page. Each code works once.

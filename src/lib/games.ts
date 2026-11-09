@@ -25,6 +25,18 @@ export async function setLike(gameId: string, visitor: string, like: boolean): P
   return error ? null : (data as number);
 }
 
+/** Hands this browser's likes to the logged-in account. Returns how many changed, or null on error. */
+export async function claimLikes(visitor: string): Promise<number | null> {
+  const { data, error } = await supabase.rpc("claim_likes", { p_visitor: visitor });
+  return error ? null : (data as number);
+}
+
+/** Slugs of the games the logged-in account likes (newest first), or null on error. */
+export async function myLikes(): Promise<string[] | null> {
+  const { data, error } = await supabase.rpc("my_likes");
+  return error ? null : (data as { slug: string }[]).map((r) => r.slug);
+}
+
 /** Plays per day for the last 14 days (oldest first), keyed by game id. */
 export async function myGameStats(): Promise<Record<string, number[]>> {
   const { data, error } = await supabase.rpc("my_game_stats");
