@@ -29,6 +29,8 @@ export function usd(n: number): string {
 // ---------- admins ----------
 
 export type Provider = "openai_compatible" | "anthropic";
+export const THINKING = ["default", "off", "low", "medium", "high", "xhigh", "max"] as const;
+export type Thinking = (typeof THINKING)[number];
 
 export interface AiSettings {
   enabled: boolean;
@@ -39,10 +41,17 @@ export interface AiSettings {
   output_price: number;
   monthly_cap: number;
   default_quota: number;
+  /** how much the strong AI may think (Anthropic: effort) */
+  thinking: Thinking;
+  /** Toki Connect with Claude Managed Agents (Anthropic only), and its cap per run in US dollars */
+  agent_enabled: boolean;
+  agent_budget: number;
   /** the free AI (an OpenAI-compatible endpoint, no prices or quotas) */
   free_enabled: boolean;
   free_base_url: string;
   free_model: string;
+  /** how much the free AI may think before answering */
+  free_thinking: Thinking;
   /** Toki Connect lets the free AI do the easy steps */
   connect_free_steps: boolean;
   updated_at: string;
@@ -53,12 +62,12 @@ export async function getAiSettings(): Promise<AiSettings> {
   if (error) throw error;
   const s = data as Record<string, unknown>;
   // numeric columns come back as text
-  for (const k of ["input_price", "output_price", "monthly_cap", "default_quota"]) s[k] = Number(s[k]);
+  for (const k of ["input_price", "output_price", "monthly_cap", "default_quota", "agent_budget"]) s[k] = Number(s[k]);
   return s as unknown as AiSettings;
 }
 
 export type SettingsChange = Partial<
-  Pick<AiSettings, "enabled" | "provider" | "base_url" | "model" | "input_price" | "output_price" | "monthly_cap" | "default_quota" | "free_enabled" | "free_base_url" | "free_model" | "connect_free_steps">
+  Pick<AiSettings, "enabled" | "provider" | "base_url" | "model" | "input_price" | "output_price" | "monthly_cap" | "default_quota" | "thinking" | "agent_enabled" | "agent_budget" | "free_enabled" | "free_base_url" | "free_model" | "free_thinking" | "connect_free_steps">
 >;
 
 export interface FreeUsage {
@@ -277,13 +286,15 @@ export interface Question {
 }
 
 export type JobMessage =
-  | { from: "toki"; kind: "progress"; step: "read" | "more"; count: number; at: string }
+  | { from: "toki"; kind: "progress"; step: "read" | "more" | "agent"; count: number; at: string }
   | { from: "ai"; kind: "question"; text: string; questions: Question[]; at: string }
   | { from: "developer"; kind: "answer"; answers: { id: string; question: string; answer: string }[]; at: string }
   | { from: "ai"; kind: "done"; text: string; files: string[]; at: string }
   | { from: "ai"; kind: "impossible"; text: string; at: string };
 
 export interface ConnectJob {
+  /** "agent": Claude Managed Agents works in its own copy of the repository */
+  engine: "steps" | "agent";
   id: string;
   repo: string;
   features: Feature[];
@@ -301,7 +312,7 @@ export interface ConnectJob {
   updated_at: string;
 }
 
-const JOB = "id, repo, features, notes, status, messages, pr_url, error, error_detail, game_id, feedback_id, created_at, updated_at";
+const JOB = "id, repo, features, notes, status, messages, pr_url, error, error_detail, game_id, feedback_id, engine, created_at, updated_at";
 
 export async function myJobs(): Promise<ConnectJob[]> {
   const { data, error } = await supabase.from("connect_jobs").select(JOB).order("created_at", { ascending: false }).limit(20);
@@ -342,7 +353,7 @@ export const cancelJob = (id: string) => connect({ action: "cancel", id });
 
 const KNOWN_ERRORS = [
   "ai_disabled", "not_allowed", "cap_reached", "quota_reached", "ai_not_configured", "ai_provider_error", "ai_timeout", "ai_refused", "ai_empty_answer",
-  "ai_bad_answer", "ai_bad_edits", "github_not_found", "github_error", "github_not_configured", "too_many_steps", "impossible", "cancelled", "busy",
+  "ai_bad_answer", "ai_bad_edits", "agent_budget", "github_not_found", "github_error", "github_not_configured", "too_many_steps", "impossible", "cancelled", "busy",
 ] as const;
 export type ConnectError = (typeof KNOWN_ERRORS)[number] | "error";
 

@@ -84,6 +84,30 @@ Buttons only show when the AI behind them is on (`ai_status()`): without the str
 Connect's runs and "Fix with AI" are hidden, and the Toki Connect page only connects GitHub (which
 the free helpers use for update drafts and the game helper).
 
+## 6. Toki Connect with Claude Managed Agents (optional, Anthropic only)
+
+With the strong AI on Anthropic, the AI page offers "Toki Connect with Claude Managed Agents"
+(off by default). Then a Connect run (adding saves/high scores, or "Fix with AI") doesn't send
+files to the AI step by step: a Claude agent works in its own copy of the repository on
+Anthropic's servers, finds what it needs itself, and can try things. With any other provider, or
+with it off, Connect works step by step as before.
+
+- **Read-only:** the agent gets a GitHub token that can only read that one repository, and the
+  token never enters its sandbox. When done, it writes its changes into one JSON file; Toki checks
+  them (paths, sizes, no `.github/`) and opens the pull request itself.
+- **It talks to Toki through two tools:** `ask_developer` (the run pauses for the developer's
+  answers, as before) and `finish`.
+- **Cheap by design:** short instructions (read only what's needed, smallest change, no installs
+  or long test runs), no web access, the thinking level from the strong AI's settings, and a hard
+  cap per run ("Most per run", $1 by default) that Anthropic enforces. The whole cap is reserved
+  from the developer's quota and Toki's monthly cap while the run works; afterwards only its real
+  cost counts (`ai_settle_amount`).
+- The agent and its environment are created once by the server and stored in `ai_settings`
+  (`agent_id`, `environment_id`); a change of model or thinking level updates the agent to a new
+  version. Each run's session can be watched in the Anthropic Console (Managed Agents → Sessions).
+- Code: `server/connect/managed.ts` (the run's steps), `server/connect/managedClient.ts` (the SDK
+  calls); rules: `supabase/migrations/20261112130000_connect_agent.sql`.
+
 ## Using Vercel's settings instead
 
 Every key can also be set as an environment variable in Vercel; those win over what is stored on

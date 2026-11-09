@@ -123,6 +123,29 @@ describe("OpenAI-compatible provider", () => {
 
   it("guesses tokens on the generous side", () => expect(estimateTokens("abcdef")).toBe(2));
 
+  it("sends the thinking level, and Qwen's switches when thinking is off", async () => {
+    const f = reply({ choices: [{ message: { content: "OK" } }] });
+    await complete({ ...CFG, model: "think-low", thinking: "low" }, { messages: [{ role: "user", content: "hi" }], maxTokens: 0 }, f);
+    expect(JSON.parse(String((f.mock.calls[0] as [string, RequestInit])[1].body))).toMatchObject({ reasoning_effort: "low" });
+    await complete({ ...CFG, model: "think-off", thinking: "off" }, { messages: [{ role: "system", content: "Be brief." }, { role: "user", content: "hi" }], maxTokens: 0 }, f);
+    const off = JSON.parse(String((f.mock.calls[1] as [string, RequestInit])[1].body));
+    expect(off).toMatchObject({ reasoning_effort: "none", chat_template_kwargs: { enable_thinking: false } });
+    expect(off.messages[0].content).toBe("Be brief.\n/no_think");
+    await complete({ ...CFG, model: "think-default" }, { messages: [{ role: "user", content: "hi" }], maxTokens: 0 }, f);
+    expect(JSON.parse(String((f.mock.calls[2] as [string, RequestInit])[1].body))).not.toHaveProperty("reasoning_effort");
+  });
+
+  it("asks again without thinking settings the endpoint doesn't know", async () => {
+    const f = vi.fn(async (_u: string, init: RequestInit) => {
+      const b = JSON.parse(String(init.body));
+      if (b.reasoning_effort) return new Response(JSON.stringify({ error: { message: "Unrecognized request argument: reasoning_effort" } }), { status: 400 });
+      if (b.chat_template_kwargs) return new Response(JSON.stringify({ error: { message: "unknown field chat_template_kwargs" } }), { status: 400 });
+      return new Response(JSON.stringify({ choices: [{ message: { content: "OK" } }] }), { status: 200 });
+    }) as unknown as typeof fetch & ReturnType<typeof vi.fn>;
+    expect((await complete({ ...CFG, model: "think-strict", thinking: "off" }, { messages: [{ role: "user", content: "hi" }], maxTokens: 0 }, f)).text).toBe("OK");
+    expect(f).toHaveBeenCalledTimes(3);
+  });
+
   it("sends no token limit when asked for none (the free AI)", async () => {
     const f = reply({ choices: [{ message: { content: "OK" } }] });
     await complete({ ...CFG, model: "free-1" }, { messages: [{ role: "user", content: "hi" }], maxTokens: 0 }, f);
@@ -618,17 +641,33 @@ describe("Anthropic provider", () => {
     return { url: String(url instanceof Request ? url.url : url), body: init.body ? JSON.parse(String(init.body)) : null, headers: new Headers(init.headers) };
   };
 
-  it("sends the system text separately, streams, and counts all input tokens", async () => {
+  it("sends the system text separately, streams, and counts input tokens by what they cost", async () => {
     const f = sse("OK");
     const c = await complete(cfg, { messages: [{ role: "system", content: "Be brief." }, { role: "user", content: "hi" }], maxTokens: 64 }, f);
-    expect(c).toEqual({ text: "OK", inputTokens: 15, outputTokens: 5, estimated: false });
+    // 12 input tokens, and 3 read from the cache at a tenth of the price
+    expect(c).toEqual({ text: "OK", inputTokens: 13, outputTokens: 5, estimated: false });
     const { url, body, headers } = sent(f);
     expect(url).toContain("https://api.anthropic.com/v1/messages");
     expect(headers.get("authorization") ?? headers.get("x-api-key")).toContain("sk-ant-test");
-    expect(body).toMatchObject({ model: "claude-opus-5-5", max_tokens: 64, system: "Be brief.", stream: true, messages: [{ role: "user", content: "hi" }] });
+    expect(body).toMatchObject({ model: "claude-opus-5-5", max_tokens: 64, system: [{ type: "text", text: "Be brief." }], stream: true, messages: [{ role: "user", content: [{ type: "text", text: "hi" }] }] });
+    expect(body.system[0].cache_control).toBeUndefined();
     // This model gets the server-side fallback.
     expect(body.fallbacks).toBe("default");
     expect(headers.get("anthropic-beta")).toContain("server-side-fallback-2026-07-01");
+  });
+
+  it("caches the parts that stay the same between calls", async () => {
+    const f = sse("OK");
+    await complete(cfg, {
+      messages: [{ role: "system", content: "Rules", cache: true }, { role: "user", content: "Files", cache: true }, { role: "user", content: "Answers" }],
+      maxTokens: 64,
+    }, f);
+    const { body } = sent(f);
+    expect(body.system).toEqual([{ type: "text", text: "Rules", cache_control: { type: "ephemeral" } }]);
+    expect(body.messages).toEqual([
+      { role: "user", content: [{ type: "text", text: "Files", cache_control: { type: "ephemeral" } }] },
+      { role: "user", content: [{ type: "text", text: "Answers" }] },
+    ]);
   });
 
   it("leaves the fallback out for other models and uses a custom address", async () => {
@@ -638,6 +677,30 @@ describe("Anthropic provider", () => {
     expect(url).toContain("https://proxy.example/v1/messages");
     expect(body.fallbacks).toBeUndefined();
     expect(headers.get("anthropic-beta")).toBeNull();
+  });
+
+  it("sends the thinking level as effort, with \"off\" as the least", async () => {
+    const f = sse("OK");
+    await complete({ ...cfg, thinking: "xhigh" }, { messages: [{ role: "user", content: "hi" }], maxTokens: 64 }, f);
+    expect(sent(f).body.output_config).toEqual({ effort: "xhigh" });
+    const g = sse("OK");
+    await complete({ ...cfg, thinking: "off" }, { messages: [{ role: "user", content: "hi" }], maxTokens: 64 }, g);
+    expect(sent(g).body.output_config).toEqual({ effort: "low" });
+    const h = sse("OK");
+    await complete(cfg, { messages: [{ role: "user", content: "hi" }], maxTokens: 64 }, h);
+    expect(sent(h).body.output_config).toBeUndefined();
+  });
+
+  it("asks again without effort when an older model doesn't know it", async () => {
+    const ok = sse("OK");
+    const f = vi.fn(async (url: string, init: RequestInit) =>
+      JSON.parse(String(init.body)).output_config
+        ? new Response(JSON.stringify({ type: "error", error: { type: "invalid_request_error", message: "output_config.effort: not supported on this model" } }), { status: 400, headers: { "content-type": "application/json" } })
+        : ok(url, init),
+    ) as unknown as typeof fetch & ReturnType<typeof vi.fn>;
+    const c = await complete({ ...cfg, model: "claude-haiku-4-5", thinking: "high" }, { messages: [{ role: "user", content: "hi" }], maxTokens: 64 }, f);
+    expect(c.text).toBe("OK");
+    expect(f).toHaveBeenCalledTimes(2);
   });
 
   it("reports refusals and errors", async () => {

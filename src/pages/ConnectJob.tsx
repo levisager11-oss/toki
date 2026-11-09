@@ -134,7 +134,7 @@ function JobEntry({ m }: { m: JobMessage }) {
   const { t } = useI18n();
   switch (m.kind) {
     case "progress":
-      return <li className="job-progress">{t(m.step === "read" ? "connect.progress.read" : "connect.progress.more", { n: m.count })}</li>;
+      return <li className="job-progress">{t(m.step === "agent" ? "connect.progress.agent" : m.step === "read" ? "connect.progress.read" : "connect.progress.more", { n: m.count })}</li>;
     case "question":
       return (
         <li className="job-msg ai">

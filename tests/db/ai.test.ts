@@ -60,7 +60,7 @@ describe("settings", () => {
 describe("spending limits", () => {
   it("reserves the highest possible cost and returns the settings to use", async () => {
     const r = await reserve(dev, M, M / 2);
-    expect(r).toMatchObject({ provider: "openai_compatible", base_url: "https://ai.example/v1", model: "test-model" });
+    expect(r).toMatchObject({ provider: "openai_compatible", base_url: "https://ai.example/v1", model: "test-model", thinking: "default" });
     expect(Number(r.max_cost)).toBe(2);
   });
 

@@ -1,10 +1,10 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useI18n } from "../lib/i18n";
-import { freeUsage, saveAiSettings, type AiSettings, type FreeUsage } from "../lib/ai";
+import { freeUsage, saveAiSettings, THINKING, type AiSettings, type FreeUsage, type Thinking } from "../lib/ai";
 import { assistError, testFreeAi, type FreeTest } from "../lib/assist";
 import { ModelPicker } from "./ModelPicker";
 
-type Form = { free_enabled: boolean; free_base_url: string; free_model: string; connect_free_steps: boolean };
+type Form = { free_enabled: boolean; free_base_url: string; free_model: string; free_thinking: Thinking; connect_free_steps: boolean };
 
 /** Admins: the free AI (an endpoint where tokens cost nothing) and what it was used for. */
 export function FreeAiCard({ settings }: { settings: AiSettings }) {
@@ -13,6 +13,7 @@ export function FreeAiCard({ settings }: { settings: AiSettings }) {
     free_enabled: settings.free_enabled,
     free_base_url: settings.free_base_url,
     free_model: settings.free_model,
+    free_thinking: settings.free_thinking ?? "default",
     connect_free_steps: settings.connect_free_steps,
   };
   const [form, setForm] = useState<Form>(initial);
@@ -66,6 +67,11 @@ export function FreeAiCard({ settings }: { settings: AiSettings }) {
       <label htmlFor="free-model">{t("ai.model")}</label>
       <input id="free-model" maxLength={100} value={form.free_model} onChange={(e) => setForm({ ...form, free_model: e.target.value })} autoComplete="off" spellCheck={false} />
       <ModelPicker key={form.free_base_url.trim()} provider="openai_compatible" baseUrl={form.free_base_url} selected={form.free_model} onPick={(m) => setForm({ ...form, free_model: m.id })} />
+      <label htmlFor="free-thinking">{t("ai.free.thinking")}</label>
+      <select id="free-thinking" value={form.free_thinking} onChange={(e) => setForm({ ...form, free_thinking: e.target.value as Thinking })} aria-describedby="free-thinking-help">
+        {THINKING.map((v) => <option key={v} value={v}>{t(`ai.free.thinking.${v}`)}</option>)}
+      </select>
+      <small id="free-thinking-help">{t("ai.free.thinkingHelp")}</small>
       <label className="fb-check">
         <input type="checkbox" checked={form.connect_free_steps} onChange={(e) => setForm({ ...form, connect_free_steps: e.target.checked })} />
         <span>{t("ai.free.connectSteps")}</span>

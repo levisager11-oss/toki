@@ -36,6 +36,14 @@ describe("free AI settings", () => {
     expect(await t.as(player, "select ai_free_on() as on")).toEqual([{ on: false }]);
   });
 
+  it("know only a few thinking levels", async () => {
+    await t.as(admin, "update ai_settings set free_thinking = 'low', thinking = 'xhigh'");
+    await t.as(admin, "update ai_settings set free_thinking = 'max'");
+    await expect(t.as(admin, "update ai_settings set thinking = 'ultra'")).rejects.toThrow(/check/);
+    await expect(t.as(admin, "update ai_settings set free_thinking = 'ultra'")).rejects.toThrow(/check/);
+    await t.as(admin, "update ai_settings set free_thinking = 'default', thinking = 'default'");
+  });
+
   it("need no prices", async () => {
     await t.as(admin, "update ai_settings set enabled = false, input_price = 0, output_price = 0, free_enabled = true");
     expect(await t.as(null, "select ai_free_on() as on")).toEqual([{ on: true }]);
@@ -111,5 +119,24 @@ describe("bug fix runs", () => {
     await expect(t.service("insert into connect_jobs (user_id, installation_id, repo, features) values ($1, 7, 'me/game', '{fix,saves}')", [dev.id])).rejects.toThrow(/check/);
     await expect(t.service("insert into connect_jobs (user_id, installation_id, repo, features) values ($1, 7, 'me/game', '{other}')", [dev.id])).rejects.toThrow(/check/);
     await t.service("insert into connect_jobs (user_id, installation_id, repo, features) values ($1, 7, 'me/game', '{saves,scores}')", [dev.id]);
+  });
+});
+
+describe("Toki Connect with Managed Agents", () => {
+  it("is only for Anthropic, with a cap per run", async () => {
+    await t.admin("update ai_settings set provider = 'openai_compatible'");
+    await expect(t.as(admin, "update ai_settings set agent_enabled = true")).rejects.toThrow(/check/);
+    await expect(t.as(admin, "update ai_settings set agent_budget = 100")).rejects.toThrow(/check/);
+    await t.as(admin, "update ai_settings set provider = 'anthropic', agent_enabled = true, agent_budget = 2");
+    await expect(t.as(admin, "update ai_settings set agent_id = 'x'")).rejects.toThrow(/permission denied/);
+    await t.admin("update ai_settings set agent_enabled = false, provider = 'openai_compatible'");
+  });
+
+  it("settles a run in dollars, once", async () => {
+    const [r] = await t.service<{ id: number }>("insert into ai_usage (user_id, feature, input_price, output_price, cost) values ($1, 'connect', 1, 2, 1) returning id", [dev.id]);
+    expect(await t.service("select ai_settle_amount($1, 0.37, true) as c", [r.id])).toEqual([{ c: "0.370000" }]);
+    expect(await t.service("select ai_settle_amount($1, 5, true) as c", [r.id])).toEqual([{ c: null }]);
+    await expect(t.as(admin, "select ai_settle_amount(1, 0, true)")).rejects.toThrow(/permission denied/);
+    await t.admin("delete from ai_usage");
   });
 });

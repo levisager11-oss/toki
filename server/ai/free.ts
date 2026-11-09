@@ -2,7 +2,7 @@
 // "Free AI"). No token limit is sent, so the model may answer as long as it can. No prices or quotas; instead every account may make only so many calls an hour per
 // feature (ai_free_take in the database), and calls are counted per day for the admin page.
 import type { Db } from "../db.js";
-import { AiError, complete, type ChatMessage, type Completion } from "./provider.js";
+import { AiError, complete, type ChatMessage, type Completion, type Thinking } from "./provider.js";
 
 export type FreeFeature = "translate" | "similar" | "suggest" | "help" | "learn" | "release" | "describe" | "summary" | "connect" | "test";
 
@@ -10,10 +10,11 @@ export interface FreeSettings {
   free_enabled: boolean;
   free_base_url: string;
   free_model: string;
+  free_thinking: Thinking;
 }
 
 export async function freeSettings(db: Db): Promise<FreeSettings | null> {
-  const [s] = await db.select<FreeSettings>("ai_settings", "id=eq.1&select=free_enabled,free_base_url,free_model");
+  const [s] = await db.select<FreeSettings>("ai_settings", "id=eq.1&select=free_enabled,free_base_url,free_model,free_thinking");
   return s?.free_enabled && s.free_base_url && s.free_model ? s : null;
 }
 
@@ -41,7 +42,7 @@ export async function freeCompletion(call: FreeCall): Promise<Completion> {
     call.db.rpc("ai_free_record", { p_feature: call.feature, p_ok: ok, p_input_tokens: input, p_output_tokens: output }).catch(() => {});
   try {
     const c = await complete(
-      { provider: "openai_compatible", baseUrl: s.free_base_url, model: s.free_model, apiKey: call.apiKey },
+      { provider: "openai_compatible", baseUrl: s.free_base_url, model: s.free_model, apiKey: call.apiKey, thinking: s.free_thinking },
       { messages: call.messages, maxTokens: 0, temperature: call.temperature, timeoutMs: call.timeoutMs },
       call.fetchImpl,
     );
