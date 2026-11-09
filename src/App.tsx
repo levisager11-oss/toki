@@ -16,6 +16,7 @@ const Account = lazy(() => import("./pages/Account").then((m) => ({ default: m.A
 const FeedbackBoard = lazy(() => import("./pages/FeedbackBoard").then((m) => ({ default: m.FeedbackBoard })));
 const FeedbackPost = lazy(() => import("./pages/FeedbackPost").then((m) => ({ default: m.FeedbackPost })));
 const FeedbackInbox = lazy(() => import("./pages/FeedbackInbox").then((m) => ({ default: m.FeedbackInbox })));
+const Releases = lazy(() => import("./pages/Releases").then((m) => ({ default: m.Releases })));
 const Invites = lazy(() => import("./pages/Invites").then((m) => ({ default: m.Invites })));
 
 const Later = ({ children }: { children: ReactNode }) => <Suspense fallback={null}>{children}</Suspense>;
@@ -28,6 +29,8 @@ export function App() {
         <Route path="favorites" element={<Favorites />} />
         <Route path="game/:slug" element={<GamePage />} />
         <Route path="game/:slug/feedback" element={<Later><FeedbackBoard /></Later>} />
+        <Route path="game/:slug/updates" element={<Later><Releases /></Later>} />
+        <Route path="updates" element={<Later><Releases /></Later>} />
         <Route path="feedback" element={<Later><FeedbackBoard /></Later>} />
         <Route path="feedback/inbox" element={<RequireMember><Later><FeedbackInbox /></Later></RequireMember>} />
         <Route path="feedback/:id" element={<Later><FeedbackPost /></Later>} />

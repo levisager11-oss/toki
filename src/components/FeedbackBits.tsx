@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
-import { ago, type FeedbackKind, type FeedbackPost, type FeedbackStatus } from "../lib/feedback";
+import { ago, releaseUrl, type FeedbackKind, type FeedbackPost, type FeedbackStatus } from "../lib/feedback";
 import { ChatIcon, LockIcon } from "./icons";
 
 /** Bugs get their own words for each status ("Fixed" instead of "Done"). */
@@ -45,8 +45,16 @@ const UpIcon = () => (
   <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 3 14 11H2z" fill="currentColor" /></svg>
 );
 
+/** "Fixed in 1.2" (bugs) or "Done in 1.2", linking to that update's notes. */
+export function FixedIn({ post }: { post: FeedbackPost }) {
+  const { t } = useI18n();
+  if (!post.release) return null;
+  const v = { v: post.release.version };
+  return <Link to={releaseUrl(post)} className="fb-fixed">{post.kind === "bug" ? t("rel.fixedIn", v) : t("rel.doneIn", v)}</Link>;
+}
+
 /** Author, time, replies and markers, under a post's title. */
-export function PostMeta({ post, showGame }: { post: FeedbackPost; showGame?: boolean }) {
+export function PostMeta({ post, showGame, noRelease }: { post: FeedbackPost; showGame?: boolean; noRelease?: boolean }) {
   const { t, lang } = useI18n();
   return (
     <span className="fb-meta">
@@ -63,6 +71,7 @@ export function PostMeta({ post, showGame }: { post: FeedbackPost; showGame?: bo
         </span>
       )}
       {post.answered && <span className="fb-answered">✓ {t("fb.answered")}</span>}
+      {post.release && !noRelease && <FixedIn post={post} />}
     </span>
   );
 }

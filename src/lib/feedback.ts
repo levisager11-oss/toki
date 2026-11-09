@@ -39,6 +39,9 @@ export interface FeedbackPost {
   updated_at: string;
   author: { username: string; role: Role } | null;
   game: { slug: string; title: string; created_by: string | null } | null;
+  /** The update that fixed (or did) this post. */
+  fixed_in: string | null;
+  release: { id: string; version: string } | null;
 }
 
 export interface FeedbackReply {
@@ -52,7 +55,7 @@ export interface FeedbackReply {
   author: { username: string; role: Role } | null;
 }
 
-const POST = "*, author:profiles!feedback_posts_author_id_fkey(username, role), game:games(slug, title, created_by)";
+const POST = "*, author:profiles!feedback_posts_author_id_fkey(username, role), game:games(slug, title, created_by), release:game_releases!feedback_posts_fixed_in_fkey(id, version)";
 const REPLY = "*, author:profiles!feedback_replies_author_id_fkey(username, role)";
 
 /** An i18n key for what went wrong. */
@@ -201,6 +204,10 @@ export function canManage(post: Pick<FeedbackPost, "game">, me: { id: string; ro
   if (!me) return false;
   return me.role === "admin" || (!!post.game && post.game.created_by === me.id);
 }
+
+/** Where a post's update is described: the game's updates page, or Toki's. */
+export const releaseUrl = (p: Pick<FeedbackPost, "game" | "release">) =>
+  p.release ? `${p.game ? `/game/${p.game.slug}/updates` : "/updates"}#r-${p.release.id}` : "";
 
 /** Posts that wait for the developer: still being worked on and not answered yet. */
 export const needsReply = (p: FeedbackPost) => !p.answered && !isClosed(p.status) && !p.hidden;

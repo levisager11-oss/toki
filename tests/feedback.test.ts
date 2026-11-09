@@ -5,7 +5,7 @@ const post = (over: Partial<FeedbackPost> = {}): FeedbackPost => ({
   id: crypto.randomUUID(), game_id: "g1", author_id: "u1", kind: "bug", title: "Jump does nothing", body: "", device: null,
   private: false, status: "open", hidden: false, answered: false, vote_count: 0, reply_count: 0,
   created_at: "2026-11-01T10:00:00Z", edited_at: null, status_at: "2026-11-01T10:00:00Z", updated_at: "2026-11-01T10:00:00Z",
-  author: { username: "levi", role: "player" }, game: { slug: "deep-sub", title: "Deep Sub", created_by: "dev" }, ...over,
+  author: { username: "levi", role: "player" }, game: { slug: "deep-sub", title: "Deep Sub", created_by: "dev" }, fixed_in: null, release: null, ...over,
 });
 
 describe("deviceSummary", () => {

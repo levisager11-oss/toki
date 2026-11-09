@@ -7,7 +7,7 @@ import {
   addReply, ago, canManage, deletePost, deleteReply, FeedbackError, getPost, KINDS, LIMITS, listReplies, STATUSES,
   updatePost, updateReply, type FeedbackPost as Post, type FeedbackReply, type PostChange,
 } from "../lib/feedback";
-import { PostMeta, useStatusLabel, VoteButton } from "../components/FeedbackBits";
+import { FixedIn, PostMeta, useStatusLabel, VoteButton } from "../components/FeedbackBits";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -107,9 +107,10 @@ export function FeedbackPost() {
             <VoteButton post={post} voted={voted.has(post.id)} onVote={(on) => vote(post, on)} />
             <div className="fb-main">
               <h1>{post.title}</h1>
-              <PostMeta post={post} />
+              <PostMeta post={post} noRelease />
             </div>
           </header>
+          {post.release && <p className="check good fb-fixed-note"><FixedIn post={post} /></p>}
           {post.private && <p className="check">{t("fb.post.privateNote")}</p>}
           {post.hidden && <p className="check warn">{t("fb.post.hiddenNote")}</p>}
           {post.body && <p className="fb-body">{post.body}</p>}

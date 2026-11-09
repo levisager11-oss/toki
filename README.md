@@ -7,6 +7,7 @@ A small website for free browser games, in English and German.
 - **Add games:** only invited members can add games. A game is added **by link**: paste the address where the game runs (for example a Vercel or GitHub Pages site). When the game is updated there, Toki shows the new version automatically.
 - **Invites:** admins create invite codes on the *Invites* page. Each code works once.
 - **Feedback:** every game has a feedback board (`/game/<slug>/feedback`), and Toki has its own (`/feedback`). Logged-in players post bug reports, ideas and other notes, reply, and vote. A bug report can be private: then only the reporter, the game's developer and admins see it. The developer (for Toki's board: admins) sets the status (open, planned, in progress, done, declined), replies with a *Developer* badge, and can hide posts. Developers see all feedback for their games in the *Feedback inbox* (`/feedback/inbox`); players see their own posts and replies on their account page. Posting is limited to 5 posts an hour and 20 a day per account, replies to 30 an hour (developers have no reply limit).
+- **Updates (release notes):** a game's developer posts what changed in each version on the game's *Updates* page (`/game/<slug>/updates`); admins do the same for Toki (`/updates`). Notes are plain text, and lines starting with `-` become a list. When posting an update, the developer ticks the feedback it fixes: those posts are marked done and show "Fixed in 1.2" with a link to the update. The game page shows the latest update under *What's new*.
 
 ## Tech
 

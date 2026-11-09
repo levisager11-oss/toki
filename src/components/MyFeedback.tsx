@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
 import { ago, myPosts, type FeedbackPost } from "../lib/feedback";
-import { KindTag, StatusBadge } from "./FeedbackBits";
+import { FixedIn, KindTag, StatusBadge } from "./FeedbackBits";
 import { ChatIcon } from "./icons";
 
 /** On the account page: the player's own bug reports and ideas, with their status. */
@@ -35,6 +35,7 @@ export function MyFeedback() {
               <span className="my-fb-main">
                 <Link to={`/feedback/${p.id}`}>{p.title}</Link>
                 <span className="sub">{p.game?.title ?? "Toki"} · {ago(p.updated_at, lang)}</span>
+                {p.release && <FixedIn post={p} />}
               </span>
               <span className="my-fb-tags">
                 {p.reply_count > 0 && <span className="fb-replies"><ChatIcon />{p.reply_count}</span>}

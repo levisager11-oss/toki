@@ -76,6 +76,7 @@ export function Layout() {
           </nav>
         )}
         <div className="side-foot">
+          <NavLink to="/updates" className="linkish">{t("nav.updates")}</NavLink>
           <NavLink to="/feedback" end className="linkish">{t("nav.tokiFeedback")}</NavLink>
           {profile ? (
             <>
@@ -106,6 +107,7 @@ export function Layout() {
         <main className="content">
           <Outlet />
           <footer className="foot mobile-only">
+            <Link to="/updates">{t("nav.updates")}</Link>
             <Link to="/feedback">{t("nav.tokiFeedback")}</Link>
           </footer>
         </main>
