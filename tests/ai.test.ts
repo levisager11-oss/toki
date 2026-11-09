@@ -663,6 +663,30 @@ describe("Anthropic provider", () => {
     expect(headers.get("anthropic-beta")).toBeNull();
   });
 
+  it("sends the thinking level as effort, with \"off\" as the least", async () => {
+    const f = sse("OK");
+    await complete({ ...cfg, thinking: "xhigh" }, { messages: [{ role: "user", content: "hi" }], maxTokens: 64 }, f);
+    expect(sent(f).body.output_config).toEqual({ effort: "xhigh" });
+    const g = sse("OK");
+    await complete({ ...cfg, thinking: "off" }, { messages: [{ role: "user", content: "hi" }], maxTokens: 64 }, g);
+    expect(sent(g).body.output_config).toEqual({ effort: "low" });
+    const h = sse("OK");
+    await complete(cfg, { messages: [{ role: "user", content: "hi" }], maxTokens: 64 }, h);
+    expect(sent(h).body.output_config).toBeUndefined();
+  });
+
+  it("asks again without effort when an older model doesn't know it", async () => {
+    const ok = sse("OK");
+    const f = vi.fn(async (url: string, init: RequestInit) =>
+      JSON.parse(String(init.body)).output_config
+        ? new Response(JSON.stringify({ type: "error", error: { type: "invalid_request_error", message: "output_config.effort: not supported on this model" } }), { status: 400, headers: { "content-type": "application/json" } })
+        : ok(url, init),
+    ) as unknown as typeof fetch & ReturnType<typeof vi.fn>;
+    const c = await complete({ ...cfg, model: "claude-haiku-4-5", thinking: "high" }, { messages: [{ role: "user", content: "hi" }], maxTokens: 64 }, f);
+    expect(c.text).toBe("OK");
+    expect(f).toHaveBeenCalledTimes(2);
+  });
+
   it("reports refusals and errors", async () => {
     await expect(complete(cfg, { messages: [{ role: "user", content: "hi" }], maxTokens: 64 }, sse("", "refusal"))).rejects.toMatchObject({ code: "refused" });
     const bad = reply({ type: "error", error: { type: "invalid_request_error", message: "bad model" } }, 400);

@@ -1,13 +1,14 @@
 // Every AI call goes through here: reserve the highest possible cost (stops at the developer's
 // quota and Toki's monthly cap), call the AI, then settle the real cost.
 import type { Db } from "../db.js";
-import { AiError, complete, estimateTokens, type ChatMessage, type Completion, type ProviderName } from "./provider.js";
+import { AiError, complete, estimateTokens, type ChatMessage, type Completion, type ProviderName, type Thinking } from "./provider.js";
 
 interface Reservation {
   id: number;
   provider: ProviderName;
   base_url: string;
   model: string;
+  thinking?: Thinking;
   max_cost: number;
 }
 
@@ -37,7 +38,7 @@ export async function budgetedCompletion(call: BudgetedCall): Promise<Completion
   });
   let result: Completion;
   try {
-    result = await complete({ provider: r.provider, baseUrl: r.base_url, model: r.model, apiKey: call.keys[r.provider] ?? "" }, { messages: call.messages, maxTokens: call.maxTokens }, call.fetchImpl);
+    result = await complete({ provider: r.provider, baseUrl: r.base_url, model: r.model, apiKey: call.keys[r.provider] ?? "", thinking: r.thinking }, { messages: call.messages, maxTokens: call.maxTokens }, call.fetchImpl);
   } catch (e) {
     // A request the service refused with an error status wasn't worked on. Otherwise (e.g. the
     // connection broke) the service may have charged for reading it: count that, on the safe side.

@@ -1,7 +1,7 @@
 // Anthropic (Claude) as AI provider, through the official SDK.
 import Anthropic from "@anthropic-ai/sdk";
 import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
-import { AiError, TIMEOUT_MS, type ChatMessage, type Completion, type ModelInfo } from "./provider.js";
+import { AiError, TIMEOUT_MS, type ChatMessage, type Completion, type ModelInfo, type Thinking } from "./provider.js";
 
 export const ANTHROPIC_URL = "https://api.anthropic.com";
 
@@ -48,8 +48,17 @@ function asAiError(e: unknown): AiError {
   return new AiError("provider_error", "couldn't reach the Anthropic API");
 }
 
+/**
+ * The thinking level as Anthropic's effort. The newest Claude models can't turn thinking off, so
+ * "off" asks for the least ("low"); "default" leaves it to the model.
+ */
+export function effortFor(thinking: Thinking | undefined): "low" | "medium" | "high" | "xhigh" | "max" | null {
+  if (!thinking || thinking === "default") return null;
+  return thinking === "off" ? "low" : thinking;
+}
+
 export async function anthropicComplete(
-  config: Config & { model: string },
+  config: Config & { model: string; thinking?: Thinking },
   req: { messages: ChatMessage[]; maxTokens: number },
   fetchImpl?: typeof fetch,
 ): Promise<Completion> {
@@ -57,13 +66,25 @@ export async function anthropicComplete(
   const messages: MessageParam[] = req.messages
     .filter((m) => m.role !== "system")
     .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
-  const base = { model: config.model, max_tokens: req.maxTokens, messages, ...(system ? { system } : {}) };
+  const effort = effortFor(config.thinking);
+  const plain = { model: config.model, max_tokens: req.maxTokens, messages, ...(system ? { system } : {}) };
   try {
     const c = client(config, fetchImpl);
     // Streamed, because requests can be large and take a while.
-    const msg = WITH_FALLBACK.has(config.model)
-      ? await c.beta.messages.stream({ ...base, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" }).finalMessage()
-      : await c.messages.stream(base).finalMessage();
+    const send = (withEffort: boolean) => {
+      const base = { ...plain, ...(withEffort && effort ? { output_config: { effort } } : {}) };
+      return WITH_FALLBACK.has(config.model)
+        ? c.beta.messages.stream({ ...base, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" }).finalMessage()
+        : c.messages.stream(base).finalMessage();
+    };
+    let msg;
+    try {
+      msg = await send(true);
+    } catch (e) {
+      // Older models (e.g. Haiku 4.5) don't know effort: ask again without it.
+      if (!effort || !(e instanceof Anthropic.BadRequestError) || !/effort|output_config/i.test(e.message)) throw e;
+      msg = await send(false);
+    }
     if (msg.stop_reason === "refusal") throw new AiError("refused");
     // Only the answer's text blocks; thinking blocks aren't part of the answer.
     const blocks = msg.content as { type: string; text?: string }[];

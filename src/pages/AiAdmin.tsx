@@ -6,10 +6,10 @@ import { ModelPicker } from "../components/ModelPicker";
 import { FreeAiCard } from "../components/FreeAiCard";
 import {
   ApiError, connectError, developersWithQuotas, getAiSettings, monthOverview, recentUsage, saveAiSettings, setQuota, testAi, usd,
-  type AiSettings, type Overview, type Provider, type TestResult, type UsageRow,
+  THINKING, type AiSettings, type Overview, type Provider, type TestResult, type Thinking, type UsageRow,
 } from "../lib/ai";
 
-type Form = { enabled: boolean; provider: Provider; base_url: string; model: string; input_price: string; output_price: string; monthly_cap: string; default_quota: string };
+type Form = { enabled: boolean; provider: Provider; base_url: string; model: string; input_price: string; output_price: string; monthly_cap: string; default_quota: string; thinking: Thinking };
 
 /** Admins: AI settings, this month's spending against the cap, and quotas per developer (/admin/ai). */
 export function AiAdmin() {
@@ -44,6 +44,7 @@ export function AiAdmin() {
           output_price: String(s.output_price || ""),
           monthly_cap: String(s.monthly_cap),
           default_quota: String(s.default_quota),
+          thinking: s.thinking ?? "default",
         };
         setForm(f);
         setSavedForm(JSON.stringify(f));
@@ -87,6 +88,8 @@ export function AiAdmin() {
         output_price: Number(form.output_price) || 0,
         monthly_cap: cap,
         default_quota: defaultQuota,
+        // Anthropic can't turn thinking off; "off" means the least there.
+        thinking: form.provider === "anthropic" && form.thinking === "off" ? "low" : form.thinking,
       });
       setSaveMsg("saved");
       setSavedForm(sent);
@@ -192,6 +195,11 @@ export function AiAdmin() {
           </div>
         </div>
         <small>{t("ai.priceHelp")}</small>
+        <label htmlFor="ai-thinking">{t("ai.free.thinking")}</label>
+        <select id="ai-thinking" value={form.thinking} onChange={(e) => setForm({ ...form, thinking: e.target.value as Thinking })} aria-describedby="ai-thinking-help">
+          {THINKING.filter((v) => !(form.provider === "anthropic" && v === "off")).map((v) => <option key={v} value={v}>{t(`ai.free.thinking.${v}`)}</option>)}
+        </select>
+        <small id="ai-thinking-help">{t(form.provider === "anthropic" ? "ai.thinkingHelpAnthropic" : "ai.thinkingHelp")}</small>
         {pricesFrom && <p className="check" role="status">{t("ai.models.pricesFilled", { model: pricesFrom })}</p>}
         <div className="pair">
           <div>

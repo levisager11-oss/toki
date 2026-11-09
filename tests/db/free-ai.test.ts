@@ -37,9 +37,11 @@ describe("free AI settings", () => {
   });
 
   it("know only a few thinking levels", async () => {
-    await t.as(admin, "update ai_settings set free_thinking = 'low'");
-    await expect(t.as(admin, "update ai_settings set free_thinking = 'max'")).rejects.toThrow(/check/);
-    await t.as(admin, "update ai_settings set free_thinking = 'default'");
+    await t.as(admin, "update ai_settings set free_thinking = 'low', thinking = 'xhigh'");
+    await t.as(admin, "update ai_settings set free_thinking = 'max'");
+    await expect(t.as(admin, "update ai_settings set thinking = 'ultra'")).rejects.toThrow(/check/);
+    await expect(t.as(admin, "update ai_settings set free_thinking = 'ultra'")).rejects.toThrow(/check/);
+    await t.as(admin, "update ai_settings set free_thinking = 'default', thinking = 'default'");
   });
 
   it("need no prices", async () => {

@@ -18,7 +18,7 @@ export interface Completion {
 
 export type ProviderName = "openai_compatible" | "anthropic";
 
-export type Thinking = "default" | "off" | "low" | "medium" | "high";
+export type Thinking = "default" | "off" | "low" | "medium" | "high" | "xhigh" | "max";
 
 export interface ProviderConfig {
   provider: ProviderName;

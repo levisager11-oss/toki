@@ -805,7 +805,11 @@ const en = {
   "ai.free.thinking.off": "Off (fastest)",
   "ai.free.thinking.low": "Low",
   "ai.free.thinking.medium": "Medium",
-  "ai.free.thinking.high": "High (slowest)",
+  "ai.free.thinking.high": "High",
+  "ai.free.thinking.xhigh": "Extra high",
+  "ai.free.thinking.max": "Max (slowest)",
+  "ai.thinkingHelp": "How much the AI thinks before it answers. More is better for hard code changes, but slower and uses more tokens (which cost money here).",
+  "ai.thinkingHelpAnthropic": "Sent to Claude as “effort”. More thinks harder on code changes, but is slower and uses more tokens (which cost money). Claude can't turn thinking off; “Low” is the least. “Extra high” and “Max” only work on newer models.",
   "ai.free.thinkingHelp": "How much the AI thinks before it answers. Less is faster: try “Off” or “Low” if answers or “Learn from GitHub” take too long. Endpoints that don't support it ignore it.",
 };
 
@@ -1616,7 +1620,11 @@ const de: Record<Key, string> = {
   "ai.free.thinking.off": "Aus (am schnellsten)",
   "ai.free.thinking.low": "Wenig",
   "ai.free.thinking.medium": "Mittel",
-  "ai.free.thinking.high": "Viel (am langsamsten)",
+  "ai.free.thinking.high": "Viel",
+  "ai.free.thinking.xhigh": "Sehr viel",
+  "ai.free.thinking.max": "Maximal (am langsamsten)",
+  "ai.thinkingHelp": "Wie viel die KI nachdenkt, bevor sie antwortet. Mehr ist besser für schwierige Codeänderungen, aber langsamer und braucht mehr Tokens (die hier Geld kosten).",
+  "ai.thinkingHelpAnthropic": "Wird an Claude als „Effort“ gesendet. Mehr denkt bei Codeänderungen gründlicher nach, ist aber langsamer und braucht mehr Tokens (die Geld kosten). Claude kann das Nachdenken nicht ausschalten; „Wenig“ ist das Minimum. „Sehr viel“ und „Maximal“ gehen nur bei neueren Modellen.",
   "ai.free.thinkingHelp": "Wie viel die KI nachdenkt, bevor sie antwortet. Weniger ist schneller: Probier „Aus“ oder „Wenig“, wenn Antworten oder „Von GitHub lernen“ zu lange dauern. Endpunkte, die das nicht kennen, ignorieren es.",
 };
 

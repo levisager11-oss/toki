@@ -29,7 +29,7 @@ export function usd(n: number): string {
 // ---------- admins ----------
 
 export type Provider = "openai_compatible" | "anthropic";
-export const THINKING = ["default", "off", "low", "medium", "high"] as const;
+export const THINKING = ["default", "off", "low", "medium", "high", "xhigh", "max"] as const;
 export type Thinking = (typeof THINKING)[number];
 
 export interface AiSettings {
@@ -41,6 +41,8 @@ export interface AiSettings {
   output_price: number;
   monthly_cap: number;
   default_quota: number;
+  /** how much the strong AI may think (Anthropic: effort) */
+  thinking: Thinking;
   /** the free AI (an OpenAI-compatible endpoint, no prices or quotas) */
   free_enabled: boolean;
   free_base_url: string;
@@ -62,7 +64,7 @@ export async function getAiSettings(): Promise<AiSettings> {
 }
 
 export type SettingsChange = Partial<
-  Pick<AiSettings, "enabled" | "provider" | "base_url" | "model" | "input_price" | "output_price" | "monthly_cap" | "default_quota" | "free_enabled" | "free_base_url" | "free_model" | "free_thinking" | "connect_free_steps">
+  Pick<AiSettings, "enabled" | "provider" | "base_url" | "model" | "input_price" | "output_price" | "monthly_cap" | "default_quota" | "thinking" | "free_enabled" | "free_base_url" | "free_model" | "free_thinking" | "connect_free_steps">
 >;
 
 export interface FreeUsage {
