@@ -27,7 +27,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [profileRun, setProfileRun] = useState(0);
   const loadedFor = useRef<string | undefined>(undefined);
-  const navigate = useNavigate();
+  // Kept in a ref: navigate changes with every page, and the login listener should only start once.
+  const nav = useNavigate();
+  const navigate = useRef(nav);
+  navigate.current = nav;
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -39,10 +42,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!s) stopAccountSaves(); // logged out (also in another tab)
       setSession(s);
       // Opened the link from a "reset your password" email (wherever it led): choose the new password.
-      if (e === "PASSWORD_RECOVERY" && location.pathname !== "/reset-password") navigate("/reset-password", { replace: true });
+      if (e === "PASSWORD_RECOVERY" && location.pathname !== "/reset-password") navigate.current("/reset-password", { replace: true });
     });
     return () => sub.subscription.unsubscribe();
-  }, [navigate]);
+  }, []);
 
   const userId = session?.user.id;
   useEffect(() => {
