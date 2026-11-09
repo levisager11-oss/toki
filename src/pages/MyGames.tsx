@@ -7,6 +7,7 @@ import { compact, likes, myGameStats, plays } from "../lib/games";
 import { Cover } from "../components/Cover";
 import { useAiStatus } from "../lib/assist";
 import { HeartIcon, PlayIcon } from "../components/icons";
+import { useTitle } from "../lib/useTitle";
 
 export function MyGames() {
   const { t } = useI18n();
@@ -14,6 +15,7 @@ export function MyGames() {
   const { games, error } = useGames();
   const ai = useAiStatus();
   const [daily, setDaily] = useState<Record<string, number[]>>({});
+  useTitle(profile?.role === "admin" ? t("my.allTitle") : t("my.title"));
 
   useEffect(() => {
     if (profile) myGameStats().then(setDaily).catch(() => {});

@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
 import { useRecent } from "../lib/local";
 import { useGames } from "../lib/useGames";
-import { matches, plays } from "../lib/games";
+import { likes, matches, plays } from "../lib/games";
 import { Cover } from "../components/Cover";
 import { GameCard, GameGrid, GridSkeleton, Plays, RecentItem } from "../components/GameCard";
 import { useAuth } from "../lib/auth";
@@ -12,6 +12,26 @@ import { PlayIcon } from "../components/icons";
 import type { Category, Game } from "../lib/types";
 
 const ROTATE_MS = 8000;
+const SORT_KEY = "toki.sort";
+const SORTS = ["new", "popular", "liked", "updated"] as const;
+type Sort = (typeof SORTS)[number];
+
+/** The game list in the chosen order. The list from the server is newest first. */
+function sortGames(games: Game[], sort: Sort): Game[] {
+  if (sort === "popular") return [...games].sort((a, b) => plays(b) - plays(a));
+  if (sort === "liked") return [...games].sort((a, b) => likes(b) - likes(a) || plays(b) - plays(a));
+  if (sort === "updated") return [...games].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  return games;
+}
+
+function savedSort(): Sort {
+  try {
+    const s = localStorage.getItem(SORT_KEY);
+    return (SORTS as readonly string[]).includes(s ?? "") ? (s as Sort) : "new";
+  } catch {
+    return "new";
+  }
+}
 const MAX_SLIDES = 4;
 
 export function Home() {
@@ -21,6 +41,15 @@ export function Home() {
   const [params] = useSearchParams();
   const q = (params.get("q") ?? "").trim();
   const [cat, setCat] = useState<Category | "all">("all");
+  const [sort, setSortState] = useState<Sort>(savedSort);
+  const setSort = (v: Sort) => {
+    setSortState(v);
+    try {
+      localStorage.setItem(SORT_KEY, v);
+    } catch {
+      /* only a convenience */
+    }
+  };
 
   // The admin's featured game first, then the most played ones.
   const slides = useMemo(() => {
@@ -34,8 +63,8 @@ export function Home() {
   );
   const cats = useMemo(() => [...new Set((games ?? []).map((g) => g.category))].sort(), [games]);
   const shown = useMemo(
-    () => (games ?? []).filter((g) => (cat === "all" || g.category === cat) && matches(g, q, t(`cat.${g.category}`))),
-    [games, cat, q, t],
+    () => sortGames((games ?? []).filter((g) => (cat === "all" || g.category === cat) && matches(g, q, t(`cat.${g.category}`))), sort),
+    [games, cat, q, t, sort],
   );
 
   if (error) return <p className="msg">{t("error")}</p>;
@@ -69,6 +98,14 @@ export function Home() {
       <section id="all">
         <div className="sechead">
           <h2>{q ? t("home.searchResults", { q }) : t("home.all")}</h2>
+          {games.length > 1 && (
+            <label className="sort-select">
+              <span className="sr-only">{t("fb.sort.label")}</span>
+              <select value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
+                {SORTS.map((v) => <option key={v} value={v}>{t(`home.sort.${v}`)}</option>)}
+              </select>
+            </label>
+          )}
           {cats.length > 1 && (
             <div className="chips" role="group">
               <button type="button" className={cat === "all" ? "on" : ""} aria-pressed={cat === "all"} onClick={() => setCat("all")}>{t("home.allCategories")}</button>

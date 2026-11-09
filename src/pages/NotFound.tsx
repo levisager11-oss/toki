@@ -1,8 +1,10 @@
 import { Link } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
+import { useTitle } from "../lib/useTitle";
 
 export function NotFound() {
   const { t } = useI18n();
+  useTitle(t("notFound"));
   return (
     <section className="lost">
       <span className="lost-code" aria-hidden="true">404</span>

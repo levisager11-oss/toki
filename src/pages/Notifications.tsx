@@ -6,6 +6,7 @@ import { ago } from "../lib/feedback";
 import { refreshBadges, useBadges } from "../lib/useBadges";
 import { clearNotifications, listNotifications, markNotificationsRead, type Notification } from "../lib/social";
 import { Avatar } from "../components/Avatar";
+import { useTitle } from "../lib/useTitle";
 
 export function Notifications() {
   const { t, lang } = useI18n();
@@ -32,12 +33,7 @@ export function Notifications() {
     };
   }, [hasNew]);
 
-  useEffect(() => {
-    document.title = `${t("nav.notifications")} · Toki`;
-    return () => {
-      document.title = "Toki";
-    };
-  }, [t]);
+  useTitle(t("nav.notifications"));
 
   const [confirmClear, setConfirmClear] = useState(false);
   const [clearing, setClearing] = useState(false);

@@ -8,9 +8,11 @@ import { SaveHistory } from "../components/SaveHistory";
 import { DeveloperCard } from "../components/DeveloperCard";
 import { MyFeedback } from "../components/MyFeedback";
 import { EditProfile } from "../components/EditProfile";
+import { useTitle } from "../lib/useTitle";
 
 export function Account() {
   const { t } = useI18n();
+  useTitle(t("nav.account"));
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
   const [code, setCode] = useState("");

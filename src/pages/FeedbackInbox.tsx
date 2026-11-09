@@ -11,12 +11,14 @@ import {
 import { ListSkeleton, PostRow, useStatusLabel } from "../components/FeedbackBits";
 import { SummaryButton } from "../components/AiBits";
 import { summarizeInbox } from "../lib/assist";
+import { useTitle } from "../lib/useTitle";
 
 const TOKI = "toki";
 
 /** The developer's dashboard: feedback for their games (admins: all games and Toki) at /feedback/inbox. */
 export function FeedbackInbox() {
   const { t, lang } = useI18n();
+  useTitle(t("fb.inbox.title"));
   const { profile } = useAuth();
   const { games, error: gamesError } = useGames();
   const statusLabel = useStatusLabel();

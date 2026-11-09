@@ -53,12 +53,16 @@ export function findGame(games: Game[] | null | undefined, slug: string): Game |
 export const plays = (g: Game) => g.stats?.plays ?? 0;
 export const likes = (g: Game) => g.stats?.likes ?? 0;
 
-/** Lowercase search over title, author, engine and category name. */
+/** Search over title, author, engine, category name and description (both languages). Ignores case and accents; every word must match. */
 export function matches(g: Game, q: string, categoryName: string): boolean {
-  if (!q) return true;
-  const hay = [g.title, g.author?.username ?? "", g.engine ?? "", categoryName].join(" ").toLowerCase();
-  return hay.includes(q.trim().toLowerCase());
+  const words = fold(q).split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  const hay = fold([g.title, g.author?.username ?? "", g.engine ?? "", categoryName, g.description ?? "", g.description_de ?? ""].join(" "));
+  return words.every((w) => hay.includes(w));
 }
+
+/** Lowercase without accents, so "uber" finds "Über". */
+const fold = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
 
 /** Short number: 950, 1.2k, 12k, 1.3M. */
 export function compact(n: number): string {

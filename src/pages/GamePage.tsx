@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
+import { useTitle } from "../lib/useTitle";
 import { useI18n } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
 import { useMediaQuery } from "../lib/useMediaQuery";
@@ -66,14 +67,9 @@ export function GamePage() {
   }, [gameId]);
 
   useEffect(() => {
-    if (game) {
-      markPlayed(game.slug);
-      document.title = `${game.title} · Toki`;
-    }
-    return () => {
-      document.title = "Toki";
-    };
+    if (game) markPlayed(game.slug);
   }, [game]);
+  useTitle(game?.title);
 
   useEffect(() => {
     const onChange = () => {

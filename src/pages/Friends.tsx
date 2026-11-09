@@ -9,9 +9,11 @@ import {
 } from "../lib/social";
 import { useAuth } from "../lib/auth";
 import { Avatar } from "../components/Avatar";
+import { useTitle } from "../lib/useTitle";
 
 export function Friends() {
   const { t, lang } = useI18n();
+  useTitle(t("soc.friends"));
   const { profile } = useAuth();
   const { games } = useGames();
   const navigate = useNavigate();

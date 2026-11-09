@@ -34,6 +34,18 @@ describe("matches", () => {
   });
   it("matches everything for an empty search", () => expect(matches(game(), "  ", "Action")).toBe(true));
   it("works without an author", () => expect(matches(game({ author: null }), "levi", "Action")).toBe(false));
+  it("searches the description in both languages", () => {
+    expect(matches(game({ description: "Dive into the ocean" }), "ocean", "Action")).toBe(true);
+    expect(matches(game({ description_de: "Tauche ins Meer" }), "meer", "Action")).toBe(true);
+  });
+  it("needs every word, in any order", () => {
+    expect(matches(game(), "sub deep", "Action")).toBe(true);
+    expect(matches(game(), "deep racing", "Action")).toBe(false);
+  });
+  it("ignores accents", () => {
+    expect(matches(game({ title: "Über Höhlen" }), "uber hohlen", "Action")).toBe(true);
+    expect(matches(game(), "déep", "Action")).toBe(true);
+  });
 });
 
 describe("slugify", () => {

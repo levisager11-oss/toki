@@ -4,10 +4,12 @@ import { useI18n } from "../lib/i18n";
 import { ago } from "../lib/feedback";
 import { handleReport, listReports, type Report } from "../lib/social";
 import { Avatar } from "../components/Avatar";
+import { useTitle } from "../lib/useTitle";
 
 /** Admins: reported chat messages. */
 export function Reports() {
   const { t, lang } = useI18n();
+  useTitle(t("nav.reports"));
   const [open, setOpen] = useState(true);
   const [list, setList] = useState<Report[] | null>(null);
   const [days, setDays] = useState(7);

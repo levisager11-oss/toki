@@ -12,6 +12,7 @@ import {
 import { Avatar } from "../components/Avatar";
 import { ChatView } from "../components/ChatView";
 import { useBadges } from "../lib/useBadges";
+import { useTitle } from "../lib/useTitle";
 
 /** /chat: the list of chats. /chat/toki: the public room. /chat/:id: one chat. /chat/new: a new group. */
 export function Chat() {
@@ -48,12 +49,7 @@ export function Chat() {
     };
   }, [id, t]);
 
-  useEffect(() => {
-    document.title = `${t("nav.chat")} · Toki`;
-    return () => {
-      document.title = "Toki";
-    };
-  }, [t]);
+  useTitle(t("nav.chat"));
 
   const title = (c: { kind: string; title: string | null; game_id: string | null; other_username?: string | null }) =>
     c.kind === "public" ? t("chat.toki")

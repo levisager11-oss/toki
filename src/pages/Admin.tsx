@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
 import { openApplicationCount } from "../lib/applications";
+import { useTitle } from "../lib/useTitle";
 
 // The admin pages, in one place, so the sidebar needs only one link for them.
 const PAGES = [
@@ -14,6 +15,7 @@ const PAGES = [
 /** Admins: an overview of the admin pages (/admin). */
 export function Admin() {
   const { t } = useI18n();
+  useTitle(t("nav.admin"));
   const [openApps, setOpenApps] = useState(0);
   useEffect(() => {
     let alive = true;

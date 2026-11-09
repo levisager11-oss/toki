@@ -5,6 +5,7 @@ import { useI18n } from "../lib/i18n";
 import { ago } from "../lib/feedback";
 import { apply, APPLY_LIMITS, ApplyError, myApplication, withdraw, type Application } from "../lib/applications";
 import { canCreate } from "../lib/types";
+import { useTitle } from "../lib/useTitle";
 
 /** Applying for a developer account (/apply). */
 export function Apply() {
@@ -28,12 +29,7 @@ export function Apply() {
       reloadProfile();
     }
   }, [app, profile, reloadProfile]);
-  useEffect(() => {
-    document.title = `${t("apply.title")} · Toki`;
-    return () => {
-      document.title = "Toki";
-    };
-  }, [t]);
+  useTitle(t("apply.title"));
 
   if (!profile || app === undefined) return <p className="msg" aria-busy="true">{t("loading")}</p>;
 

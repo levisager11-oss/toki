@@ -14,6 +14,7 @@ import { SaveSupport } from "../components/SaveSupport";
 import { AiBox } from "../components/AiBits";
 import { HelperSetup } from "../components/HelperSetup";
 import { assistError, describeGame, useFreeAi } from "../lib/assist";
+import { useTitle } from "../lib/useTitle";
 
 const MAX_IMAGE = 2 * 1024 * 1024;
 const MAX_SHOTS = 4;
@@ -25,6 +26,7 @@ export function GameForm() {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const [orig, setOrig] = useState<Game | null>(null);
+  useTitle(editSlug ? t("form.editTitle") : t("form.addTitle"));
   const [missing, setMissing] = useState(false);
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");

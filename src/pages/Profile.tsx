@@ -13,6 +13,7 @@ import { GameGrid, GridSkeleton } from "../components/GameCard";
 import { Cover } from "../components/Cover";
 import type { Game } from "../lib/types";
 import { NotFound } from "./NotFound";
+import { useTitle } from "../lib/useTitle";
 
 /** A player's page: /u/:username */
 export function Profile() {
@@ -53,12 +54,7 @@ export function Profile() {
     };
   }, [username, ready, userId, reload]);
 
-  useEffect(() => {
-    if (p) document.title = `@${p.username} · Toki`;
-    return () => {
-      document.title = "Toki";
-    };
-  }, [p]);
+  useTitle(p ? `@${p.username}` : null);
 
   if (p === null) return <NotFound />;
   if (p === undefined || !games)

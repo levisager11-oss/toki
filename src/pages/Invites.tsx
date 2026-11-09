@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
+import { useTitle } from "../lib/useTitle";
 
 interface Invite {
   code: string;
@@ -20,6 +21,7 @@ function newCode() {
 
 export function Invites() {
   const { t } = useI18n();
+  useTitle(t("invites.title"));
   const { profile } = useAuth();
   const [list, setList] = useState<Invite[] | null>(null);
   const [note, setNote] = useState("");

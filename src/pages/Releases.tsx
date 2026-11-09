@@ -7,6 +7,7 @@ import { findGame } from "../lib/games";
 import { deleteRelease, groupReleases, listReleases, nextSmallVersion, nextVersion, type Release } from "../lib/releases";
 import { ReleaseCard } from "../components/ReleaseCard";
 import { ReleaseForm } from "../components/ReleaseForm";
+import { useTitle } from "../lib/useTitle";
 
 /** Release notes of one game (/game/:slug/updates) or of Toki itself (/updates). */
 export function Releases() {
@@ -44,12 +45,7 @@ export function Releases() {
   }, [releases, target]);
 
   const title = game ? t("rel.title.game", { title: game.title }) : t("rel.title.toki");
-  useEffect(() => {
-    document.title = `${title} · Toki`;
-    return () => {
-      document.title = "Toki";
-    };
-  }, [title]);
+  useTitle(title);
 
   const setWriting = (on: boolean) =>
     setParams((p) => {

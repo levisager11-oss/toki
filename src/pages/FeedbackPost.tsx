@@ -10,6 +10,7 @@ import {
 import { FixedIn, PostMeta, useStatusLabel, VoteButton } from "../components/FeedbackBits";
 import { useAiStatus } from "../lib/assist";
 import { TranslateToggle, useTranslate } from "../components/AiBits";
+import { useTitle } from "../lib/useTitle";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -54,12 +55,7 @@ export function FeedbackPost() {
     // Reload when logging in or out: what the account may see changes.
   }, [id, session?.user.id]);
 
-  useEffect(() => {
-    if (post) document.title = `${post.title} · Toki`;
-    return () => {
-      document.title = "Toki";
-    };
-  }, [post]);
+  useTitle(post?.title);
 
   if (post === undefined)
     return (

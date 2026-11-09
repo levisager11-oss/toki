@@ -3,9 +3,11 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useI18n } from "../lib/i18n";
 import { safeNext } from "../lib/nav";
+import { useTitle } from "../lib/useTitle";
 
 export function Signup() {
   const { t } = useI18n();
+  useTitle(t("signup.title"));
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [invite, setInvite] = useState(params.get("invite") ?? "");

@@ -8,6 +8,7 @@ import { useVotes } from "../lib/useVotes";
 import { KINDS, listPosts, PAGE, type FeedbackKind, type FeedbackPost, type Sort, type StatusFilter } from "../lib/feedback";
 import { FeedbackForm } from "../components/FeedbackForm";
 import { ListSkeleton, PostRow } from "../components/FeedbackBits";
+import { useTitle } from "../lib/useTitle";
 
 const FILTERS: StatusFilter[] = ["active", "closed", "all"];
 const asKind = (v: string | null) => (KINDS as readonly string[]).includes(v ?? "") ? (v as FeedbackKind) : undefined;
@@ -53,12 +54,7 @@ export function FeedbackBoard() {
   }, [gameId, kind, status, sort]);
 
   const title = game ? t("fb.gameTitle", { title: game.title }) : t("fb.tokiTitle");
-  useEffect(() => {
-    document.title = `${title} · Toki`;
-    return () => {
-      document.title = "Toki";
-    };
-  }, [title]);
+  useTitle(title);
 
   const set = (key: string, value: string | undefined) =>
     setParams((p) => {
