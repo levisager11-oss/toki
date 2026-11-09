@@ -178,6 +178,12 @@ export function GamePage() {
             title={game.title}
             allow={`fullscreen; autoplay; gamepad;${isolated ? " cross-origin-isolated;" : ""} clipboard-write; screen-wake-lock`}
             allowFullScreen
+            // On computers, keys go to the game right away (no click into it first), unless
+            // the visitor is already somewhere else on the page, e.g. typing in the search.
+            onLoad={(e) => {
+              const active = document.activeElement;
+              if (matchMedia("(pointer: fine)").matches && (!active || active === document.body)) e.currentTarget.focus({ preventScroll: true });
+            }}
           />
         </div>
         <div className="player-bar">
