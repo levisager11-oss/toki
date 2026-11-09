@@ -74,7 +74,14 @@ export function Home() {
             </div>
           )}
         </div>
-        {shown.length ? <GameGrid games={shown} /> : <p className="msg">{t("home.noMatch")}</p>}
+        {shown.length ? (
+          <GameGrid games={shown} />
+        ) : (
+          <div className="msg">
+            <p>{t("home.noMatch")}</p>
+            <Link to="/" className="btn" onClick={() => setCat("all")}>{t("home.showAll")}</Link>
+          </div>
+        )}
       </section>
     </>
   );

@@ -77,15 +77,19 @@ export function FeedbackPost() {
   const manager = canManage(post, me);
   const board = post.game ? `/game/${post.game.slug}/feedback` : "/feedback";
 
+  /** true when it worked */
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
     setError("");
+    let ok = true;
     try {
       await fn();
     } catch (e) {
       setError(t(e instanceof FeedbackError ? e.key : "error"));
+      ok = false;
     }
     setBusy(false);
+    return ok;
   };
   const change = (c: PostChange) => run(async () => setPost(await updatePost(post.id, c)));
   const remove = () =>
@@ -100,7 +104,7 @@ export function FeedbackPost() {
       {posted && <p className="check good" role="status">{t("fb.posted")}</p>}
 
       {editing ? (
-        <EditPost post={post} busy={busy} onCancel={() => setEditing(false)} onSave={(c) => change(c).then(() => setEditing(false))} />
+        <EditPost post={post} busy={busy} onCancel={() => setEditing(false)} onSave={(c) => change(c).then((ok) => ok && setEditing(false))} />
       ) : (
         <>
           <header className="fb-head">

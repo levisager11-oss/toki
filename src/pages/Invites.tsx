@@ -25,6 +25,7 @@ export function Invites() {
   const [note, setNote] = useState("");
   const [copied, setCopied] = useState("");
   const [err, setErr] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   const load = () =>
     supabase
@@ -32,8 +33,9 @@ export function Invites() {
       .select("code, role, note, used_at, created_at, user:profiles!invites_used_by_fkey(username)")
       .order("created_at", { ascending: false })
       .then(({ data, error }) => {
-        if (error) setErr(true);
-        else setList(data as unknown as Invite[]);
+        if (error) return setErr(true);
+        setErr(false);
+        setList(data as unknown as Invite[]);
       });
   useEffect(() => {
     load();
@@ -41,13 +43,19 @@ export function Invites() {
 
   const create = async (e: FormEvent) => {
     e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setErr(false);
     const { error } = await supabase.from("invites").insert({ code: newCode(), note: note.trim() || null, created_by: profile!.id });
+    setBusy(false);
     if (error) return setErr(true);
     setNote("");
     load();
   };
   const remove = async (code: string) => {
-    await supabase.from("invites").delete().eq("code", code);
+    setErr(false);
+    const { error } = await supabase.from("invites").delete().eq("code", code);
+    if (error) return setErr(true);
     load();
   };
   const copy = async (code: string) => {
@@ -67,9 +75,10 @@ export function Invites() {
       <p className="lead">{t("invites.subtitle")}</p>
       <form className="inline-form" onSubmit={create}>
         <input id="invite-note" maxLength={80} placeholder={t("invites.note")} aria-label={t("invites.note")} value={note} onChange={(e) => setNote(e.target.value)} />
-        <button className="btn primary">{t("invites.create")}</button>
+        <button className="btn primary" disabled={busy}>{t("invites.create")}</button>
       </form>
       {err && <p className="error" role="alert">{t("error")}</p>}
+      {!list && !err && <p className="msg" aria-busy="true">{t("loading")}</p>}
       {list && list.length === 0 && <p className="msg">{t("invites.empty")}</p>}
       {list && list.length > 0 && (
         <ul className="table invites">
@@ -80,10 +89,10 @@ export function Invites() {
                 <span className="sub">
                   {i.note ? `${i.note} · ` : ""}
                   {i.role === "admin" ? `${t("invites.admin")} · ` : ""}
-                  {i.user ? t("invites.usedBy", { name: i.user.username }) : t("invites.unused")}
+                  {i.user ? t("invites.usedBy", { name: i.user.username }) : i.used_at ? t("invites.usedDeleted") : t("invites.unused")}
                 </span>
               </div>
-              {!i.user && (
+              {!i.used_at && (
                 <div className="actions">
                   <button type="button" className="btn" onClick={() => copy(i.code)}>{copied === i.code ? t("invites.copied") : t("invites.copy")}</button>
                   <button type="button" className="btn ghost-danger" onClick={() => remove(i.code)}>{t("invites.delete")}</button>

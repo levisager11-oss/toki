@@ -21,12 +21,42 @@ export function Connect() {
   const [jobs, setJobs] = useState<ConnectJob[] | null>(null);
   const [error, setError] = useState(false);
   const [reload, setReload] = useState(0);
-  const githubDone = (location.state as { github?: string } | null)?.github === "done";
+  // Couldn't reach GitHub (not the same as "not set up")
+  const [ghError, setGhError] = useState(false);
+  // Shown once after coming back from GitHub, then forgotten so it doesn't stay after a disconnect.
+  const [githubDone, setGithubDone] = useState(() => (location.state as { github?: string } | null)?.github === "done");
+  useEffect(() => {
+    if (githubDone) navigate(location.pathname + location.search, { replace: true, state: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const [disconnecting, setDisconnecting] = useState<number | null>(null);
+  const [confirmOff, setConfirmOff] = useState<number | null>(null);
+  const [ghActionError, setGhActionError] = useState(false);
+  const disconnect = (id: number) => {
+    if (confirmOff !== id) return setConfirmOff(id);
+    setDisconnecting(id);
+    setGhActionError(false);
+    setGithubDone(false);
+    githubDisconnect(id)
+      .then(() => setReload((n) => n + 1))
+      .catch(() => setGhActionError(true))
+      .finally(() => { setDisconnecting(null); setConfirmOff(null); });
+  };
 
   useEffect(() => {
     myBudget().then(setBudget).catch(() => setError(true));
     myJobs().then(setJobs).catch(() => setError(true));
-    githubRepos().then(setGh).catch(() => setGh({ configured: false, installUrl: null }));
+    githubRepos()
+      .then((g) => {
+        setGh(g);
+        setGhError(false);
+      })
+      .catch((e) => {
+        // "not_configured" from the server means the app isn't set up; anything else is a hiccup.
+        const off = e instanceof ApiError && /not_configured/.test(e.message);
+        setGh({ configured: false, installUrl: null });
+        setGhError(!off);
+      });
   }, [reload]);
 
   useEffect(() => {
@@ -43,7 +73,8 @@ export function Connect() {
   const active = jobs.find((j) => j.status === "working" || j.status === "question");
   const overQuota = budget.quota !== null && budget.spent >= budget.quota;
   const blocked = !budget.enabled ? t("connect.off") : budget.cap_reached ? t("connect.capReached") : overQuota ? t("connect.quotaReached") : "";
-  const pct = budget.quota ? Math.min(100, (budget.spent / budget.quota) * 100) : 0;
+  // A quota of $0 means none left, so the meter is full.
+  const pct = budget.quota === null ? 0 : budget.quota === 0 ? 100 : Math.min(100, (budget.spent / budget.quota) * 100);
 
   return (
     <section className="fb-board connect">
@@ -63,7 +94,13 @@ export function Connect() {
       <section className="ai-card" aria-labelledby="gh-h">
         <h2 id="gh-h">{t("connect.github")}</h2>
         {githubDone && <p className="check good" role="status">{t("connect.githubDone")}</p>}
-        {!gh.configured || !gh.installUrl ? (
+        {ghActionError && <p className="error" role="alert">{t("error")}</p>}
+        {ghError ? (
+          <div className="msg">
+            <p className="error" role="alert">{t("connect.githubLoadError")}</p>
+            <button type="button" className="btn" onClick={() => setReload((n) => n + 1)}>{t("tryAgain")}</button>
+          </div>
+        ) : !gh.configured || !gh.installUrl ? (
           <p className="hint">{t("connect.githubOff")}</p>
         ) : !gh.installations?.length ? (
           <>
@@ -76,7 +113,9 @@ export function Connect() {
               {gh.installations.map((i) => (
                 <li key={i.installation_id}>
                   <span><GitHubMark />{t("connect.githubAccount", { name: i.account_login })}</span>
-                  <button type="button" className="linkish" onClick={() => githubDisconnect(i.installation_id).then(() => setReload((n) => n + 1))}>{t("connect.disconnect")}</button>
+                  <button type="button" className="linkish" disabled={disconnecting !== null} onClick={() => disconnect(i.installation_id)}>
+                    {confirmOff === i.installation_id ? t("connect.disconnectSure") : t("connect.disconnect")}
+                  </button>
                 </li>
               ))}
             </ul>
@@ -93,6 +132,8 @@ export function Connect() {
       ) : (
         gh.repos && gh.repos.length > 0 && !blocked && (
           <NewRun
+            // A new form when the repositories change (e.g. after a disconnect), so the choice is never a removed one.
+            key={gh.repos.map((r) => `${r.installation_id}|${r.repo}`).join(",")}
             repos={gh.repos}
             games={mine.map((g) => ({ id: g.id, title: g.title }))}
             initialGame={new URLSearchParams(location.search).get("game") ?? ""}

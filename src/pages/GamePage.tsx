@@ -145,7 +145,9 @@ export function GamePage() {
       await navigator.share({ title: game.title, url }).catch(() => {});
       return;
     }
-    await navigator.clipboard?.writeText(url).catch(() => {});
+    // Only say "copied" when it was.
+    const copied = await navigator.clipboard?.writeText(url).then(() => true, () => false);
+    if (!copied) return void window.prompt(t("game.share"), url);
     setShared(true);
     setTimeout(() => setShared(false), 2000);
   };

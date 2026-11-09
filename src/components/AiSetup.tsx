@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
 import {
-  aiStatus, clearAiKey, clearGithubApp, createGithubApp, githubAppStateMatches, githubFromManifest, setAiKey, type AiStatus, type Provider,
+  ApiError, aiStatus, clearAiKey, clearGithubApp, createGithubApp, githubAppStateMatches, githubFromManifest, setAiKey, type AiStatus, type Provider,
 } from "../lib/ai";
 import { githubManifest } from "../lib/githubManifest";
 
@@ -16,13 +16,16 @@ export function AiSetup({ provider }: { provider: Provider }) {
   const { t } = useI18n();
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const [status, setStatus] = useState<AiStatus | "no_service_key" | null>(null);
+  const [status, setStatus] = useState<AiStatus | "no_service_key" | "error" | null>(null);
   const [reload, setReload] = useState(0);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const handled = useRef(false);
 
   useEffect(() => {
-    aiStatus().then(setStatus).catch(() => setStatus("no_service_key"));
+    // Only "not_configured" means the key is missing; anything else (offline, a server hiccup) is just an error.
+    aiStatus()
+      .then(setStatus)
+      .catch((e) => setStatus(e instanceof ApiError && e.message === "not_configured" ? "no_service_key" : "error"));
   }, [reload]);
 
   // Back from GitHub after creating the app: hand the one-time code to the server.
@@ -39,7 +42,20 @@ export function AiSetup({ provider }: { provider: Provider }) {
       .finally(() => setReload((n) => n + 1));
   }, [params, navigate, t]);
 
-  const ready = status !== null && status !== "no_service_key";
+  const ready = status !== null && status !== "no_service_key" && status !== "error";
+  const again = () => { setStatus(null); setReload((n) => n + 1); };
+  // Removing a key or the app: asked once more, then done with a busy state.
+  const [confirm, setConfirm] = useState<"" | "key" | "github">("");
+  const [removing, setRemoving] = useState(false);
+  const remove = (what: "key" | "github") => {
+    if (confirm !== what) return setConfirm(what);
+    setRemoving(true);
+    setMsg(null);
+    (what === "key" ? clearAiKey(provider) : clearGithubApp())
+      .then(() => setReload((n) => n + 1))
+      .catch(() => setMsg({ ok: false, text: t("error") }))
+      .finally(() => { setRemoving(false); setConfirm(""); });
+  };
   const s = ready ? status : null;
   const anthropic = provider === "anthropic";
   const hasKey = anthropic ? !!s?.anthropicKey : !!s?.aiKey;
@@ -51,6 +67,11 @@ export function AiSetup({ provider }: { provider: Provider }) {
       {msg && <p className={`check ${msg.ok ? "good" : "warn"}`} role="status">{msg.text}</p>}
       {status === null ? (
         <p className="hint">{t("loading")}</p>
+      ) : status === "error" ? (
+        <div className="msg">
+          <p className="error" role="alert">{t("error")}</p>
+          <button type="button" className="btn" onClick={again}>{t("setup.checkAgain")}</button>
+        </div>
       ) : (
         <ol className="setup-steps">
           <li className={ready ? "done" : "todo"}>
@@ -67,7 +88,7 @@ export function AiSetup({ provider }: { provider: Provider }) {
                   <li>{t("setup.supabase.step4")}</li>
                   <li>{t("setup.supabase.step5")} <a href={VERCEL_DEPLOYS} target="_blank" rel="noopener noreferrer">{t("setup.supabase.openDeploys")} ↗</a></li>
                 </ol>
-                <button type="button" className="btn" onClick={() => { setStatus(null); setReload((n) => n + 1); }}>{t("setup.checkAgain")}</button>
+                <button type="button" className="btn" onClick={again}>{t("setup.checkAgain")}</button>
               </div>
             )}
           </li>
@@ -80,7 +101,7 @@ export function AiSetup({ provider }: { provider: Provider }) {
               <div className="setup-row">
                 <span className="sub">{t(keySource === "env" ? "setup.fromVercel" : "setup.ai.saved")}</span>
                 {keySource === "toki" && (
-                  <button type="button" className="linkish" onClick={() => clearAiKey(provider).then(() => setReload((n) => n + 1))}>{t("setup.remove")}</button>
+                  <button type="button" className="linkish" disabled={removing} onClick={() => remove("key")}>{confirm === "key" ? t("setup.removeSure") : t("setup.remove")}</button>
                 )}
               </div>
             ) : (
@@ -99,7 +120,7 @@ export function AiSetup({ provider }: { provider: Provider }) {
                   {s.githubSlug && <a href={`https://github.com/apps/${s.githubSlug}`} target="_blank" rel="noopener noreferrer">github.com/apps/{s.githubSlug} ↗</a>}
                 </span>
                 {s.githubSource === "toki" && (
-                  <button type="button" className="linkish" onClick={() => clearGithubApp().then(() => setReload((n) => n + 1))}>{t("setup.remove")}</button>
+                  <button type="button" className="linkish" disabled={removing} onClick={() => remove("github")}>{confirm === "github" ? t("setup.removeSure") : t("setup.remove")}</button>
                 )}
               </div>
             ) : (

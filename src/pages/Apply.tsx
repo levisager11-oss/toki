@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
@@ -9,7 +9,7 @@ import { canCreate } from "../lib/types";
 /** Applying for a developer account (/apply). */
 export function Apply() {
   const { t, lang } = useI18n();
-  const { profile } = useAuth();
+  const { profile, reloadProfile } = useAuth();
   const [app, setApp] = useState<Application | null | undefined>(undefined);
   const [about, setAbout] = useState("");
   const [links, setLinks] = useState("");
@@ -20,6 +20,14 @@ export function Apply() {
   useEffect(() => {
     myApplication().then(setApp).catch(() => setApp(null));
   }, []);
+  // Approved while this tab was open: the account may already be a developer, so load it again (once).
+  const reloaded = useRef(false);
+  useEffect(() => {
+    if (app?.status === "approved" && !canCreate(profile) && !reloaded.current) {
+      reloaded.current = true;
+      reloadProfile();
+    }
+  }, [app, profile, reloadProfile]);
   useEffect(() => {
     document.title = `${t("apply.title")} · Toki`;
     return () => {

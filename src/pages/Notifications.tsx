@@ -39,10 +39,20 @@ export function Notifications() {
     };
   }, [t]);
 
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const clear = async () => {
-    await clearNotifications().catch(() => {});
-    setList([]);
-    refreshBadges();
+    if (!confirmClear) return setConfirmClear(true);
+    setClearing(true);
+    try {
+      await clearNotifications();
+      setList([]);
+      refreshBadges();
+    } catch {
+      setErr(true);
+    }
+    setClearing(false);
+    setConfirmClear(false);
   };
 
   const text = (n: Notification): { line: string; to: string } => {
@@ -73,7 +83,12 @@ export function Notifications() {
     <section className="panel notifications">
       <div className="sechead">
         <h1 className="h">{t("nav.notifications")}</h1>
-        {!!list?.length && <button type="button" className="btn" onClick={clear}>{t("notif.clear")}</button>}
+        {!!list?.length && !err && (
+          <div className="actions">
+            {confirmClear && <button type="button" className="btn" onClick={() => setConfirmClear(false)}>{t("form.cancel")}</button>}
+            <button type="button" className={`btn ${confirmClear ? "danger" : ""}`} onClick={clear} disabled={clearing}>{confirmClear ? t("notif.clearSure") : t("notif.clear")}</button>
+          </div>
+        )}
       </div>
       {err ? <p className="msg">{t("error")}</p> : list === null ? <p className="msg">{t("loading")}</p> : list.length === 0 ? (
         <p className="msg">{t("notif.empty")}</p>

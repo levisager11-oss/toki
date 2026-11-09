@@ -13,27 +13,41 @@ export function Applications() {
   const [error, setError] = useState(false);
   const [done, setDone] = useState("");
   const [confirm, setConfirm] = useState<string | null>(null);
+  const [devsError, setDevsError] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [removeError, setRemoveError] = useState(false);
 
-  const loadDevs = () => developers().then(setDevs).catch(() => setDevs([]));
+  const loadDevs = () =>
+    developers()
+      .then((d) => {
+        setDevs(d);
+        setDevsError(false);
+      })
+      .catch(() => setDevsError(true));
   useEffect(() => {
     openApplications().then(setApps).catch(() => setError(true));
     loadDevs();
   }, []);
 
-  const decided = (a: Application, approved: boolean) => {
+  // approved, declined, or null: someone else already handled it (another admin, or it was withdrawn)
+  const decided = (a: Application, approved: boolean | null) => {
     setApps((list) => list?.filter((x) => x.id !== a.id) ?? null);
-    setDone(t(approved ? "apps.approved" : "apps.declined", { name: a.applicant?.username ?? "?" }));
+    const name = a.applicant?.username ?? "?";
+    setDone(approved === null ? t("apps.gone", { name }) : t(approved ? "apps.approved" : "apps.declined", { name }));
     if (approved) loadDevs();
     window.dispatchEvent(new Event(APPLICATIONS_CHANGED));
   };
   const removeDev = async (id: string) => {
+    setRemoving(true);
+    setRemoveError(false);
     try {
       await setDeveloper(id, false);
       setConfirm(null);
       loadDevs();
     } catch {
-      setError(true);
+      setRemoveError(true);
     }
+    setRemoving(false);
   };
 
   if (error) return <p className="msg">{t("error")}</p>;
@@ -53,6 +67,9 @@ export function Applications() {
       <section className="rv-trusted" aria-labelledby="devs-h">
         <h2 id="devs-h">{t("apps.developers")}</h2>
         <p className="hint">{t("apps.developersHelp")}</p>
+        {devsError && <p className="error" role="alert">{t("error")}</p>}
+        {removeError && <p className="error" role="alert">{t("error")}</p>}
+        {!devs && !devsError && <p className="hint" aria-busy="true">{t("loading")}</p>}
         {devs && devs.length === 0 && <p className="hint">{t("apps.noDevelopers")}</p>}
         {devs && devs.length > 0 && (
           <ul>
@@ -61,7 +78,7 @@ export function Applications() {
                 <b>@{d.username}</b>
                 {confirm === d.id ? (
                   <span className="actions">
-                    <button type="button" className="btn danger" onClick={() => removeDev(d.id)}>{t("apps.removeConfirm")}</button>
+                    <button type="button" className="btn danger" disabled={removing} onClick={() => removeDev(d.id)}>{t("apps.removeConfirm")}</button>
                     <button type="button" className="btn" onClick={() => setConfirm(null)}>{t("form.cancel")}</button>
                   </span>
                 ) : (
@@ -84,7 +101,7 @@ function Linked({ text }: { text: string }) {
   );
 }
 
-function ApplicationCard({ app, onDone }: { app: Application; onDone: (approved: boolean) => void }) {
+function ApplicationCard({ app, onDone }: { app: Application; onDone: (approved: boolean | null) => void }) {
   const { t, lang } = useI18n();
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -95,7 +112,9 @@ function ApplicationCard({ app, onDone }: { app: Application; onDone: (approved:
     try {
       await reviewApplication(app.id, approve, note);
       onDone(approve);
-    } catch {
+    } catch (e) {
+      // Another admin was faster, or the applicant withdrew it.
+      if (/already_reviewed|not_found/.test((e as { message?: string })?.message ?? "")) return onDone(null);
       setErr(true);
       setBusy(false);
     }

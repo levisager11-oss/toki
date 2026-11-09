@@ -51,7 +51,7 @@ h1, h2 { text-wrap: balance; }
 .search { flex: 1 1 240px; max-width: 420px; display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--line); padding: 0 10px; color: var(--muted); }
 .search input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--fg); padding: 9px 0; outline: none; }
 .search:focus-within { border-color: var(--fg); }
-.search kbd { font-family: var(--f-px); font-size: 11px; border: 1px solid var(--line); padding: 0 5px; }
+.search kbd { font-family: var(--f-ui); font-size: 12px; font-weight: 600; line-height: 18px; border: 1px solid var(--line); padding: 0 6px; }
 .spacer { flex: 1; }
 .lang { display: flex; border: 1px solid var(--line); }
 .lang button { border: 0; background: var(--surface); padding: 6px 10px; font-size: 13px; font-weight: 700; color: var(--muted); cursor: pointer; }
@@ -191,6 +191,9 @@ h1, h2 { text-wrap: balance; }
 .table .url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .invites code { font-family: var(--f-px); font-size: 14px; }
 
+/* .logo and others set their own display, so hide the phone-only parts more firmly on big screens */
+@media (min-width: 861px) { .mobile-only { display: none !important; } }
+
 @media (max-width: 860px) {
   .app { grid-template-columns: minmax(0, 1fr); }
   .side, .desktop-only, .search kbd { display: none; }
@@ -233,6 +236,7 @@ h1, h2 { text-wrap: balance; }
   .form .btn.primary, .form-foot .actions .btn { padding-block: 12px; }
   .form-foot .actions .btn { flex: 1 1 auto; }
   .panel.narrow { max-width: none; }
+  .panel.narrow .form .btn.primary { align-self: stretch; }
   .table li { flex-wrap: wrap; }
   .table li .cover { width: 64px; }
   .invites li .actions { width: 100%; }
@@ -529,6 +533,7 @@ a.author:hover { text-decoration: underline; color: var(--fg); }
 .profile-id .presence { color: var(--fg); }
 .profile .bio { margin: 6px 0 0; white-space: pre-wrap; max-width: 60ch; }
 .profile-actions { flex-wrap: wrap; }
+.table.scores { max-width: 720px; }
 .table.scores .score, .board .score { font-variant-numeric: tabular-nums; font-size: 16px; }
 
 .edit-profile { margin-top: 28px; display: flex; flex-direction: column; gap: 8px; }
@@ -612,6 +617,7 @@ a.author:hover { text-decoration: underline; color: var(--fg); }
 .board li:nth-child(-n+3) .rank { color: var(--fg); }
 .board .person { flex: 1; }
 .leaderboard .check { margin-bottom: 10px; max-width: 560px; }
+.leaderboard { scroll-margin-top: 90px; }
 
 @media (max-width: 860px) {
   .chat-layout { grid-template-columns: minmax(0, 1fr); border-left: 0; border-right: 0; margin: -20px calc(-1 * max(16px, env(safe-area-inset-left, 0px))) 0; min-height: 0; }
@@ -719,7 +725,8 @@ a.author:hover { text-decoration: underline; color: var(--fg); }
 .job-msg p { margin: 0; }
 .job-msg ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
 .job-files { list-style: none; padding: 0 !important; }
-.job-files code { font-size: 13px; }
+.job-files code { font-size: 13px; overflow-wrap: anywhere; }
+.connect-job .h, .connect .fb-title { overflow-wrap: anywhere; }
 .job-working { display: flex; align-items: center; gap: 10px; color: var(--muted); margin: 0; }
 .dots-anim { display: inline-flex; gap: 4px; }
 .dots-anim i { width: 8px; height: 8px; background: var(--accent); border: 1px solid var(--accent-ink); animation: dot-hop 1s steps(2) infinite; }
@@ -789,3 +796,8 @@ a.author:hover { text-decoration: underline; color: var(--fg); }
 .admin-links span:not(.count-pill) { color: var(--muted); font-size: 14px; }
 .model-error-detail { display: block; margin-top: 4px; color: var(--muted); font-family: ui-monospace, monospace; font-size: 12px; overflow-wrap: anywhere; }
 .ai-log-error { grid-column: 1 / -1; }
+
+/* page not found */
+.lost { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 24px 0; }
+.lost-code { font-family: var(--f-px); font-size: clamp(56px, 12vw, 96px); line-height: 1; color: var(--fg); text-shadow: 4px 4px 0 var(--accent); }
+.lost p { margin: 0; color: var(--muted); max-width: 50ch; }
