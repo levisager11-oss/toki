@@ -10,6 +10,9 @@ import { BellIcon, BubbleIcon, HeartTabIcon, HomeIcon, KeyIcon, ListIcon, LogoMa
 import { useBadges } from "../lib/useBadges";
 import { Avatar } from "./Avatar";
 
+// The admin pages, all reached through "Admin" in the sidebar.
+const ADMIN_PAGE = /^\/(admin|applications|invites|reports)(\/|$)/;
+
 // A game's own page, not e.g. its feedback board.
 const GAME_PAGE = /^\/game\/[^/]+\/?$/;
 
@@ -90,7 +93,6 @@ export function Layout() {
             <NavLink to="/chat">{t("nav.chat")}{badges.chats > 0 && <span className="count-pill">{badges.chats}</span>}</NavLink>
             <NavLink to="/friends">{t("nav.friends")}</NavLink>
             <NavLink to="/notifications">{t("nav.notifications")}{badges.notifications > 0 && <span className="count-pill">{badges.notifications}</span>}</NavLink>
-            {profile.role === "admin" && <NavLink to="/reports">{t("nav.reports")}</NavLink>}
           </nav>
         )}
         {canCreate(profile) && profile && (
@@ -101,14 +103,10 @@ export function Layout() {
             <NavLink to="/feedback/inbox">{t("fb.inbox.title")}</NavLink>
             <NavLink to="/connect">{t("nav.connect")}</NavLink>
             {profile.role === "admin" && (
-              <>
-                <NavLink to="/admin/ai">{t("nav.ai")}</NavLink>
-                <NavLink to="/applications">
-                  {t("nav.applications")}
-                  {openApps > 0 && <span className="count-pill">{openApps}</span>}
-                </NavLink>
-                <NavLink to="/invites">{t("nav.invites")}</NavLink>
-              </>
+              <NavLink to="/admin" className={() => (ADMIN_PAGE.test(location.pathname) ? "active" : "")}>
+                {t("nav.admin")}
+                {openApps > 0 && <span className="count-pill">{openApps}</span>}
+              </NavLink>
             )}
           </nav>
         )}
@@ -185,7 +183,9 @@ export function Layout() {
                 <NavLink to="/add"><PlusIcon /><span>{t("nav.addGame")}</span></NavLink>
               </>
             )}
-            {profile.role === "admin" && <NavLink to="/invites"><KeyIcon /><span>{t("nav.invites")}</span></NavLink>}
+            {profile.role === "admin" && (
+              <NavLink to="/admin" className={() => (ADMIN_PAGE.test(location.pathname) ? "active" : "")}><KeyIcon /><span>{t("nav.admin")}</span></NavLink>
+            )}
             <NavLink to="/account"><UserIcon /><span>{t("nav.account")}</span></NavLink>
           </>
         ) : (

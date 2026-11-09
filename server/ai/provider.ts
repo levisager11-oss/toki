@@ -1,5 +1,6 @@
 // Talking to the AI. One function for every provider (OpenAI-compatible endpoints here, Anthropic in
 // anthropic.ts), so the code that uses it doesn't change with the provider.
+import { tlsErrorCode, tolerantFetch } from "../tls.js";
 import { anthropicComplete, anthropicModels } from "./anthropic.js";
 
 export interface ChatMessage {
@@ -30,6 +31,12 @@ export class AiError extends Error {
   }
 }
 
+/** The endpoint couldn't be reached; says why when known (e.g. a certificate or DNS problem). */
+function unreachable(e: unknown): AiError {
+  const code = tlsErrorCode(e);
+  return new AiError("provider_error", `couldn't reach the AI endpoint${code ? ` (${code})` : ""}`);
+}
+
 /** A generous guess of how many tokens a text has (about 3 characters each), so reservations are on the safe side. */
 export const estimateTokens = (text: string) => Math.ceil(text.length / 3);
 
@@ -38,12 +45,12 @@ export const TIMEOUT_MS = 240_000;
 export async function complete(
   config: ProviderConfig,
   req: { messages: ChatMessage[]; maxTokens: number; temperature?: number },
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl?: typeof fetch,
 ): Promise<Completion> {
   if (!config.apiKey || !config.model || (!config.baseUrl && config.provider !== "anthropic")) throw new AiError("not_configured");
   switch (config.provider) {
     case "openai_compatible":
-      return openaiCompatible(config, req, fetchImpl);
+      return openaiCompatible(config, req, fetchImpl ?? tolerantFetch);
     case "anthropic":
       return anthropicComplete(config, req, fetchImpl);
     default:
@@ -54,7 +61,7 @@ export async function complete(
 async function openaiCompatible(
   config: ProviderConfig,
   req: { messages: ChatMessage[]; maxTokens: number; temperature?: number },
-  fetchImpl: typeof fetch,
+  fetchImpl: (url: string, init: RequestInit) => Promise<Response>,
 ): Promise<Completion> {
   let res: Response;
   try {
@@ -66,7 +73,7 @@ async function openaiCompatible(
     });
   } catch (e) {
     if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) throw new AiError("timeout");
-    throw new AiError("provider_error", "couldn't reach the AI endpoint");
+    throw unreachable(e);
   }
   const raw = await res.text();
   let body: {
@@ -108,18 +115,18 @@ function perMillion(v: unknown): number | undefined {
 }
 
 /** The models an endpoint offers (GET /models), sorted by name. */
-export async function listModels(config: Omit<ProviderConfig, "model">, fetchImpl: typeof fetch = fetch): Promise<ModelInfo[]> {
+export async function listModels(config: Omit<ProviderConfig, "model">, fetchImpl?: typeof fetch): Promise<ModelInfo[]> {
   if (!config.apiKey) throw new AiError("not_configured");
   if (config.provider === "anthropic") return anthropicModels(config, fetchImpl);
   if (!config.baseUrl) throw new AiError("not_configured");
   let res: Response;
   try {
-    res = await fetchImpl(`${config.baseUrl.replace(/\/+$/, "")}/models`, {
+    res = await (fetchImpl ?? tolerantFetch)(`${config.baseUrl.replace(/\/+$/, "")}/models`, {
       headers: { authorization: `Bearer ${config.apiKey}` },
       signal: AbortSignal.timeout(30_000),
     });
-  } catch {
-    throw new AiError("provider_error", "couldn't reach the AI endpoint");
+  } catch (e) {
+    throw unreachable(e);
   }
   const raw = await res.text();
   let body: { data?: unknown; error?: { message?: string } } = {};
