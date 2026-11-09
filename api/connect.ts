@@ -12,15 +12,18 @@ import { DbError } from "../server/db.js";
 import { githubConfigured } from "../server/env.js";
 import { github } from "../server/github.js";
 import { body, context, isUuid, json, type Ctx } from "../server/http.js";
+import { buildRepo } from "../server/connect/buildRepo.js";
+import { hostingDeps, r2Config } from "../server/hosting.js";
 
-const PUBLIC = "id,repo,features,notes,status,messages,pr_url,error,error_detail,game_id,feedback_id,engine,created_at,updated_at";
+const PUBLIC = "id,repo,features,notes,status,messages,pr_url,error,error_detail,game_id,feedback_id,engine,source,ai,created_at,updated_at";
 // A step holds the run this long at most; a crashed step frees it again after that.
 const LEASE_MS = 290_000;
 
 interface Row extends Omit<Job, "game" | "bug"> {
   engine: "steps" | "agent";
+  ai: "strong" | "free";
   user_id: string;
-  installation_id: number;
+  installation_id: number | null;
   game_id: string | null;
   pr_url: string | null;
   error: string | null;
@@ -53,7 +56,56 @@ async function view(ctx: Ctx, id: string) {
   return job ? json({ job }) : json({ error: "not_found" }, 404);
 }
 
+/** Which AI writes the code: one-click runs use the admin's choice for them, others the strong AI. */
+async function whichAi(ctx: Ctx, quick: boolean): Promise<"strong" | "free" | Response> {
+  if (!quick) return "strong";
+  const [s] = await ctx.db.select<{ quick_code_ai: "free" | "strong" | "off" }>("ai_settings", "id=eq.1&select=quick_code_ai");
+  const choice = s?.quick_code_ai ?? "free";
+  if (choice === "off") return json({ error: "quick_off" }, 503);
+  if (choice === "free" && (!(await freeSettings(ctx.db)) || !(ctx.env.freeAiKey || ctx.env.aiKey))) return json({ error: "ai_not_configured" }, 503);
+  return choice;
+}
+
+/** A run on a game uploaded to Toki: Toki Connect reads its live files and puts its change live. */
+async function startUpload(ctx: Ctx, b: Record<string, unknown>) {
+  if (!isUuid(b.game_id)) return json({ error: "bad_request" }, 400);
+  const [game] = await ctx.db.select<{ created_by: string | null; hosted_site: string | null }>("games", `id=eq.${b.game_id}&select=created_by,hosted_site`);
+  if (!game || (game.created_by !== ctx.user.id && ctx.user.role !== "admin")) return json({ error: "not_allowed" }, 403);
+  const [live] = await ctx.db.select("game_builds", `game_id=eq.${b.game_id}&status=eq.live&select=id`);
+  if (!game.hosted_site || !live) return json({ error: "not_hosted" }, 409);
+  const ai = await whichAi(ctx, b.quick === true);
+  if (ai instanceof Response) return ai;
+  if (ai === "strong") {
+    const [settings] = await ctx.db.select<{ enabled: boolean }>("ai_settings", "id=eq.1&select=enabled");
+    if (!settings?.enabled || (!ctx.env.aiKey && !ctx.env.anthropicKey)) return json({ error: "ai_disabled" }, 503);
+  }
+  try {
+    const [job] = await ctx.db.insert<{ id: string }>("connect_jobs", {
+      user_id: ctx.user.id,
+      installation_id: null,
+      source: "upload",
+      repo: `toki/${game.hosted_site}`,
+      features: ["scores"],
+      notes: typeof b.notes === "string" ? b.notes.trim().slice(0, 1000) : "",
+      game_id: b.game_id,
+      engine: "steps",
+      ai,
+      state: { lang: b.lang === "de" ? "de" : "en" },
+    });
+    return view(ctx, job.id);
+  } catch (e) {
+    if (e instanceof DbError && e.code === "23505") return json({ error: "busy" }, 409);
+    throw e;
+  }
+}
+
 async function start(ctx: Ctx, b: Record<string, unknown>) {
+  if (b.source === "upload") return startUpload(ctx, b);
+  const quick = b.quick === true;
+  const ai = await whichAi(ctx, quick);
+  if (ai instanceof Response) return ai;
+  // A game that follows a branch: the change goes to that branch (the pull request's base).
+  const branch = typeof b.branch === "string" && /^(?!.*\.\.)(?!\/)[\w./-]{1,200}$/.test(b.branch) ? b.branch : undefined;
   const installation = Number(b.installation_id);
   const repo = typeof b.repo === "string" ? b.repo : "";
   // A bug fix: the feedback post says which game, and only the game's developer (or an admin) may.
@@ -70,12 +122,12 @@ async function start(ctx: Ctx, b: Record<string, unknown>) {
     gameId = post.game_id;
   }
   if (!Number.isSafeInteger(installation) || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo) || !features.length) return json({ error: "bad_request" }, 400);
-  if (!ctx.env.aiKey && !ctx.env.anthropicKey) return json({ error: "ai_not_configured" }, 503);
+  if (ai === "strong" && !ctx.env.aiKey && !ctx.env.anthropicKey) return json({ error: "ai_not_configured" }, 503);
   if (!githubConfigured(ctx.env.github)) return json({ error: "github_not_configured" }, 503);
   const [settings] = await ctx.db.select<{ enabled: boolean; provider: string; agent_enabled: boolean }>("ai_settings", "id=eq.1&select=enabled,provider,agent_enabled");
-  if (!settings?.enabled) return json({ error: "ai_disabled" }, 503);
+  if (ai === "strong" && !settings?.enabled) return json({ error: "ai_disabled" }, 503);
   // Claude Managed Agents when the admin turned it on (Anthropic only); otherwise step by step.
-  const engine = settings.agent_enabled && settings.provider === "anthropic" && ctx.env.anthropicKey ? "agent" : "steps";
+  const engine = ai === "strong" && settings.agent_enabled && settings.provider === "anthropic" && ctx.env.anthropicKey ? "agent" : "steps";
 
   // The installation must be one GitHub confirmed for this account, and the repository one it can use.
   const [owned] = await ctx.db.select("github_installations", `user_id=eq.${ctx.user.id}&installation_id=eq.${installation}&select=installation_id`);
@@ -96,7 +148,8 @@ async function start(ctx: Ctx, b: Record<string, unknown>) {
       game_id: gameId,
       feedback_id: feedbackId,
       engine,
-      state: { lang: b.lang === "de" ? "de" : "en" },
+      ai,
+      state: { lang: b.lang === "de" ? "de" : "en", ...(branch ? { branch } : {}) },
     });
     return view(ctx, job.id);
   } catch (e) {
@@ -140,19 +193,30 @@ async function run(ctx: Ctx, b: Record<string, unknown>, origin: string) {
   const [opts] = await ctx.db.select<{ connect_free_steps: boolean }>("ai_settings", "id=eq.1&select=connect_free_steps");
   const freeAi = opts?.connect_free_steps && (ctx.env.freeAiKey || ctx.env.aiKey) ? await freeSettings(ctx.db) : null;
   const gh = github(ctx.env.github);
+  const freeOnly = job.ai === "free" ? await freeSettings(ctx.db) : null;
   const result = await step({ ...job, game, bug }, {
     origin,
     async repo() {
+      if (job.source === "upload") {
+        const { config } = await r2Config(ctx.db, ctx.env.serviceKey);
+        if (!config || !job.game_id) throw new DbError("not_allowed", 403);
+        return buildRepo(hostingDeps(ctx.db, config), { id: ctx.user.id, role: ctx.user.role }, job.game_id);
+      }
       // Still connected? (The developer may have disconnected GitHub since.)
       const [owned] = await ctx.db.select("github_installations", `user_id=eq.${ctx.user.id}&installation_id=eq.${job.installation_id}&select=installation_id`);
-      if (!owned) throw new DbError("not_allowed", 403);
+      if (!owned || job.installation_id === null) throw new DbError("not_allowed", 403);
       return gh.repo(job.installation_id, job.repo);
     },
     async ai(messages, maxTokens) {
+      // One-click runs where the admin chose the free AI: it writes the code too (no cost).
+      if (job.ai === "free") {
+        const c = await freeCompletion({ db: ctx.db, keys: { free: ctx.env.freeAiKey, openai: ctx.env.aiKey }, userId: ctx.user.id, feature: "connect", messages, settings: freeOnly, timeoutMs: 240_000 });
+        return c.text;
+      }
       const c = await budgetedCompletion({ db: ctx.db, keys: { openai_compatible: ctx.env.aiKey, anthropic: ctx.env.anthropicKey }, userId: ctx.user.id, feature: "connect", jobId: job.id, messages, maxTokens });
       return c.text;
     },
-    ...(freeAi
+    ...(freeAi && job.ai !== "free"
       ? {
           async free(messages: Parameters<typeof freeCompletion>[0]["messages"]) {
             const c = await freeCompletion({ db: ctx.db, keys: { free: ctx.env.freeAiKey, openai: ctx.env.aiKey }, userId: ctx.user.id, feature: "connect", messages, settings: freeAi, timeoutMs: 120_000 });
@@ -238,11 +302,11 @@ async function runAgent(ctx: Ctx, row: Row, job: Job, origin: string): Promise<S
         return res.text();
       },
       async start(text) {
-        const [owned] = await ctx.db.select("github_installations", `user_id=eq.${ctx.user.id}&installation_id=eq.${row.installation_id}&select=installation_id`);
+        const [owned] = await ctx.db.select("github_installations", `user_id=eq.${ctx.user.id}&installation_id=eq.${row.installation_id!}&select=installation_id`);
         if (!owned) throw new DbError("not_allowed", 403);
         const a = await ensureAgent(client, ctx.db, s);
-        const branch = await (await gh.repo(row.installation_id, row.repo)).defaultBranch();
-        const token = await gh.readOnlyToken(row.installation_id, row.repo);
+        const branch = row.state?.branch ?? (await (await gh.repo(row.installation_id!, row.repo)).defaultBranch());
+        const token = await gh.readOnlyToken(row.installation_id!, row.repo);
         return startSession(client, { ...a, repo: row.repo, token, branch, budgetUsd: budget, text, jobId: row.id });
       },
       status: (id) => sessionStatus(client, id),
@@ -252,8 +316,8 @@ async function runAgent(ctx: Ctx, row: Row, job: Job, origin: string): Promise<S
       interrupt: (id) => interrupt(client, id),
       changes: (id) => changesFile(client, id),
       async openPullRequest(p) {
-        const repo = await gh.repo(row.installation_id, row.repo);
-        return repo.openPullRequest({ ...p, base: await repo.defaultBranch(), branch: `toki-connect/${row.id.slice(0, 8)}`, message: p.title });
+        const repo = await gh.repo(row.installation_id!, row.repo);
+        return repo.openPullRequest({ ...p, base: row.state?.branch ?? (await repo.defaultBranch()), branch: `toki-connect/${row.id.slice(0, 8)}`, message: p.title });
       },
       async wait() {
         // Up to about 20 seconds while the agent works, so the page doesn't ask every few seconds.

@@ -111,6 +111,8 @@ describe("deploying a commit", () => {
       store: {
         uploadUrl: (key: string) => `https://r2.test/${key}`,
         put: async (k: string, v: string) => void pointers.set(k, v),
+        getText: async () => "",
+        copy: async () => {},
         remove: async () => {},
         list: async (prefix: string) => [...objects].filter(([k]) => k.startsWith(prefix)).map(([key, size]) => ({ key, size })),
         removeMany: async () => {},

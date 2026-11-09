@@ -3,6 +3,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Db } from "../server/db";
 import { finishUpload, HostingError, rollBack, startUpload, sweep, type Deps } from "../server/hosting";
+import { buildRepo } from "../server/connect/buildRepo";
 import type { R2 } from "../server/r2";
 
 type Row = Record<string, unknown>;
@@ -70,10 +71,21 @@ function fakeDb(tables: Record<string, Row[]>): Db {
   };
 }
 
-function fakeStore(files: Map<string, number>, pointers: Map<string, string>): R2 {
+function fakeStore(files: Map<string, number>, pointers: Map<string, string>, texts = new Map<string, string>()): R2 {
   return {
     uploadUrl: (key: string, size: number) => `https://r2.test/${key}?size=${size}`,
-    put: async (key: string, body: string) => void pointers.set(key, body),
+    put: async (key: string, body: string) => {
+      if (key.startsWith("sites/")) pointers.set(key, body);
+      else {
+        files.set(key, Buffer.byteLength(body));
+        texts.set(key, body);
+      }
+    },
+    getText: async (key: string) => texts.get(key) ?? "",
+    copy: async (from: string, to: string) => {
+      files.set(to, files.get(from)!);
+      if (texts.has(from)) texts.set(to, texts.get(from)!);
+    },
     remove: async (key: string) => void (files.delete(key), pointers.delete(key)),
     list: async (prefix: string) => [...files].filter(([k]) => k.startsWith(prefix)).map(([key, size]) => ({ key, size })),
     removeMany: async (keys: string[]) => keys.forEach((k) => files.delete(k)),
@@ -192,5 +204,21 @@ describe("hosting a game", () => {
     await sweep(deps);
     expect(files.size).toBe(0);
     expect(tables.game_builds).toHaveLength(0);
+  });
+
+  it("lets Toki Connect change an uploaded game: its change goes live as the next version", async () => {
+    const s1 = await startUpload(deps, DEV, { game_id: game().id, files: FILES });
+    uploadAll(s1);
+    await finishUpload(deps, DEV, { build_id: s1.build_id });
+    const repo = await buildRepo(deps, DEV, game().id as string);
+    expect((await repo.tree("live")).map((e) => e.path).sort()).toEqual(["game.js", "index.html"]);
+    const url = await repo.openPullRequest({ base: "live", branch: "x", title: "t", body: "b", message: "m", files: { "game.js": "toki.score(1)" } });
+    expect(url).toBe("");
+    const live = tables.game_builds.find((b) => b.status === "live")!;
+    expect(live.id).not.toBe(s1.build_id);
+    expect(files.get(`b/${live.id}/game.js`)).toBe(13);
+    expect(files.get(`b/${live.id}/index.html`)).toBe(100);
+    expect(JSON.parse(pointers.get("sites/snake.json")!).build).toBe(live.id);
+    expect(tables.game_builds.find((b) => b.id === s1.build_id)!.status).toBe("previous");
   });
 });

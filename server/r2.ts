@@ -122,6 +122,13 @@ export function r2(config: R2Config, fetchImpl: typeof fetch = fetch) {
     put: (key: string, body: string, contentType = "application/json") =>
       call("PUT", keyPath(key), { body, headers: { "content-type": contentType } }).then(() => undefined),
 
+    /** A text file (e.g. a game's code for Toki Connect). */
+    getText: (key: string) => call("GET", keyPath(key)),
+
+    /** Copies a file inside the bucket (no download): for a new version that keeps most files. */
+    copy: (from: string, to: string) =>
+      call("PUT", keyPath(to), { headers: { "x-amz-copy-source": `/${encode(config.bucket)}/${encode(from, true)}` } }).then(() => undefined),
+
     async remove(key: string) {
       await call("DELETE", keyPath(key)).catch((e) => {
         if (!(e instanceof R2Error && e.status === 404)) throw e;

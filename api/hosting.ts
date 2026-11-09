@@ -76,6 +76,9 @@ export async function GET(request: Request) {
   if (w instanceof Response) return w;
   const { config, source } = await r2Config(w.db, w.serviceKey);
   const out: Record<string, unknown> = { enabled: !!config, domain: config?.domain ?? null, maxBytes: MAX_GAME_BYTES };
+  // One-click add: which AI adds leaderboard code ("off" when it isn't set up).
+  const [ai] = await w.db.select<{ quick_code_ai: string; enabled: boolean; free_enabled: boolean }>("ai_settings", "id=eq.1&select=quick_code_ai,enabled,free_enabled");
+  out.quickCode = !ai || ai.quick_code_ai === "off" ? "off" : ai.quick_code_ai === "free" ? (ai.free_enabled ? "free" : "off") : ai.enabled ? "strong" : "off";
   if (w.user.role === "admin") {
     out.source = source;
     out.accountId = config?.accountId ?? null;

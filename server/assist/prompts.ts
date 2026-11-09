@@ -8,14 +8,14 @@ import { parseAiJson } from "../connect/files.js";
 
 export type Lang = "en" | "de";
 const LANG: Record<Lang, string> = { en: "English", de: "German" };
-const GERMAN_STYLE = "In German, use „…“ quotes and write “ss” instead of “ß” (Swiss spelling).";
+export const GERMAN_STYLE = "In German, use „…“ quotes and write “ss” instead of “ß” (Swiss spelling).";
 
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 const cut = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1)}…` : s);
 const oneLine = (s: string) => s.replace(/\s+/g, " ").trim();
 
 /** The JSON object in an answer (after any <think> part of thinking models), or null when there is none. */
-function json(text: string): Record<string, unknown> | null {
+export function json(text: string): Record<string, unknown> | null {
   try {
     return parseAiJson(text.replace(/<think>[\s\S]*?<\/think>/gi, ""));
   } catch {

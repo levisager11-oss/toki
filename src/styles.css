@@ -911,3 +911,20 @@ main.content:focus { outline: none; }
   .import-row { flex-direction: column; }
 }
 .upload-keys input { padding: 9px 10px; font-size: 15px; }
+
+/* one-click "Add your game" */
+.quick-add { display: flex; flex-direction: column; gap: 12px; max-width: 760px; }
+.quick-add .lead { margin: 0; }
+.quick-scan { padding: 24px 0; }
+.quick-manual { margin: 4px 0 0; font-size: 14px; }
+.quick-form { display: flex; flex-direction: column; }
+.quick-more { margin-top: 10px; }
+.quick-more summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+.quick-features { list-style: none; padding: 0; margin: 14px 0 4px; display: flex; flex-direction: column; gap: 6px; }
+.quick-features .fb-check { margin: 0; font-weight: 400; }
+.quick-steps { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; font-size: 15px; }
+.quick-steps li { border-left: 3px solid var(--line); padding: 6px 10px; background: var(--surface); }
+.quick-steps li b { display: inline-block; width: 1.2em; }
+.quick-steps li.ok { border-left-color: #2f9e5b; }
+.quick-steps li.fail { border-left-color: var(--danger); }
+.quick-steps li.busy { border-left-color: var(--accent); }

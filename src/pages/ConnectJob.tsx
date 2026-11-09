@@ -58,7 +58,7 @@ export function ConnectJob() {
   return (
     <section className="fb-board connect-job">
       <Link to="/connect" className="back">← {t("connect.back")}</Link>
-      <h1 className="h">{job.repo}</h1>
+      <h1 className="h">{job.source === "upload" ? t("connect.onToki", { site: job.repo.replace(/^toki\//, "") }) : job.repo}</h1>
       <p className="fb-meta">
         <JobBadge status={job.status} pr={!!job.pr_url} />
         <span>{job.features.map((f) => t(featureKey(f))).join(" + ")}</span>
@@ -94,7 +94,8 @@ export function ConnectJob() {
       )}
       {job.status === "done" && !job.pr_url && (
         <div className="check good job-done">
-          <p>{t("connect.already")}</p>
+          {/* A game on Toki: the change went live as a new version (no pull request). */}
+          <p>{job.source === "upload" && job.messages.some((m) => m.kind === "done" && m.files.length > 0) ? t("connect.doneLive") : t("connect.already")}</p>
         </div>
       )}
       {job.status === "failed" && (

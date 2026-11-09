@@ -21,6 +21,8 @@ import { githubConfigured } from "../server/env.js";
 import { github, GitHubError } from "../server/github.js";
 import { body, context, isUuid, json, type Ctx } from "../server/http.js";
 import type { ChatMessage } from "../server/ai/provider.js";
+import { basics, gameFolder, readScan, readTokiJson, scanPrompt, withToki, type ScanFile } from "../server/assist/scan.js";
+import { freeSettings } from "../server/ai/free.js";
 
 // Vercel gives this function 5 minutes (vercel.json). Players and developers wait for most
 // answers, so those get 90 seconds; learning a game from its code may take longer.
@@ -45,6 +47,8 @@ export async function POST(request: Request) {
         return await release(ctx, b, lang);
       case "describe":
         return await describe(ctx, b);
+      case "scan":
+        return await scan(ctx, b);
       case "summary":
         return await summary(ctx, b, lang);
       case "application":
@@ -267,6 +271,80 @@ async function describe(ctx: Ctx, b: Record<string, unknown>) {
   );
   const out = readDescribe(answer);
   return out ? json(out) : json({ error: "ai_bad_answer" }, 502);
+}
+
+// ---------- one-click add: reading a game ----------
+
+const MAX_SCAN = 150_000;
+
+/**
+ * A game's files (sent from the browser for an upload; read from GitHub for a repository) →
+ * the details for its page, the folder with the game (repositories), and whether a leaderboard fits.
+ */
+async function scan(ctx: Ctx, b: Record<string, unknown>) {
+  if (ctx.user.role === "player") return json({ error: "not_allowed" }, 403);
+  let files: ScanFile[] = [];
+  let paths: string[] = [];
+  let name = str(b.name, 100);
+  let folder: string | null = null;
+  let needsBuild = false;
+
+  if (b.source === "github") {
+    if (!githubConfigured(ctx.env.github)) return json({ error: "github_off" }, 503);
+    const installation = Number(b.installation_id);
+    const repoName = str(b.repo, 140);
+    const branch = str(b.branch, 200);
+    const [owned] = await ctx.db.select("github_installations", `user_id=eq.${ctx.user.id}&installation_id=eq.${installation}&select=installation_id`);
+    if (!owned || !/^[\w.-]+\/[\w.-]+$/.test(repoName) || !branch) return json({ error: "not_allowed" }, 403);
+    const gh = github(ctx.env.github);
+    if (!(await gh.repos(installation)).some((r) => r.repo.toLowerCase() === repoName.toLowerCase())) return json({ error: "not_allowed" }, 403);
+    const repo = await gh.repo(installation, repoName);
+    const tree = (await repo.tree(branch)).filter((e) => e.type === "blob");
+    paths = tree.map((e) => e.path);
+    name = repoName.split("/")[1];
+    // The start pages and package.json, to find the folder with the playable game.
+    const pages = new Map<string, string>();
+    const wanted = paths.filter((p) => /(^|\/)index\.html$/i.test(p) && p.split("/").length <= 3).slice(0, 8);
+    if (paths.includes("package.json")) wanted.push("package.json");
+    for (const p of wanted) pages.set(p, (await repo.read(p, branch).catch(() => "")).slice(0, 60_000));
+    ({ folder, needsBuild } = gameFolder(paths, (p) => pages.get(p)));
+    const inFolder = folder ? tree.filter((e) => e.path.startsWith(`${folder}/`)).map((e) => ({ ...e, path: e.path.slice(folder!.length + 1) })) : tree;
+    let total = 0;
+    for (const p of pickFiles(folder === null ? tree : inFolder)) {
+      const full = folder ? `${folder}/${p}` : p;
+      const t = pages.get(full) ?? (await repo.read(full, branch).catch(() => ""));
+      if (total + t.length > MAX_SCAN) continue;
+      files.push({ path: p, text: t.slice(0, 60_000) });
+      total += t.length;
+    }
+    const toki = paths.includes("toki.json") ? await repo.read("toki.json", branch).catch(() => "") : "";
+    if (toki) files.push({ path: "toki.json", text: toki.slice(0, 20_000) });
+  } else {
+    // An upload: the browser sends the game's start page and a sample of its code.
+    paths = (Array.isArray(b.paths) ? b.paths : []).filter((p): p is string => typeof p === "string").slice(0, 3000).map((p) => p.slice(0, 300));
+    let total = 0;
+    for (const f of Array.isArray(b.files) ? b.files.slice(0, 40) : []) {
+      const path = str((f as ScanFile)?.path, 300);
+      const t = typeof (f as ScanFile)?.text === "string" ? (f as ScanFile).text.slice(0, 60_000) : "";
+      if (!path || total + t.length > MAX_SCAN) continue;
+      files.push({ path, text: t });
+      total += t.length;
+    }
+  }
+
+  const tokiFile = files.find((f) => f.path === "toki.json");
+  let proposal = basics(files, name);
+  let ai = false;
+  if (await freeSettings(ctx.db)) {
+    try {
+      proposal = readScan(await ask(ctx, "describe", scanPrompt(files, paths, proposal, name), 0.3), proposal);
+      ai = true;
+    } catch {
+      /* the AI is a help here, not a must: the simple checks stay */
+    }
+  }
+  if (tokiFile) proposal = withToki(proposal, readTokiJson(tokiFile.text));
+  return json({ proposal, folder, needsBuild, ai });
 }
 
 // ---------- summaries ----------

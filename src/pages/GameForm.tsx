@@ -20,6 +20,7 @@ import { HostedUpload, type Picked } from "../components/HostedUpload";
 import { ImportFromLink } from "../components/ImportFromLink";
 import { gitConnect, gitDisconnect, hostError, unhostGame, uploadGame, useHosting, type GitChoice, type GitRow, type Imported } from "../lib/hosting";
 import { GitHubFollow } from "../components/GitHubFollow";
+import { QuickAdd } from "../components/QuickAdd";
 import { siteFor, siteUrl } from "../lib/hostingRules";
 
 const MAX_IMAGE = 2 * 1024 * 1024;
@@ -63,6 +64,8 @@ export function GameForm() {
   const [gitChoice, setGitChoice] = useState<GitChoice | null>(null);
   const [picked, setPicked] = useState<Picked | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
+  // New games: the one-click way first; "fill in everything yourself" shows this form.
+  const [manual, setManual] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   // Pictures uploaded while this form is open. The ones not saved with the game are deleted again.
@@ -118,6 +121,10 @@ export function GameForm() {
   }, [editSlug]);
 
   if (missing) return <NotFound />;
+  if (!editSlug && !manual) {
+    if (hosting === null) return <p className="msg" aria-busy="true">{t("loading")}</p>;
+    if (hosting.enabled && hosting.domain) return <QuickAdd hosting={hosting} onManual={() => setManual(true)} />;
+  }
   if (editSlug && !orig) return <p className="msg">{t("loading")}</p>;
   if (orig && profile && profile.role !== "admin" && orig.created_by !== profile.id) return <p className="msg">{t("auth.noRights")}</p>;
 

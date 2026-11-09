@@ -97,3 +97,19 @@ describe("games that follow a GitHub repository", () => {
     expect(await t.admin("select 1 from game_git where game_id = $1", [g.id])).toHaveLength(0);
   });
 });
+
+describe("one-click add", () => {
+  it("lets admins choose which AI adds leaderboard code, free by default", async () => {
+    expect((await t.admin<{ quick_code_ai: string }>("select quick_code_ai from ai_settings where id = 1"))[0].quick_code_ai).toBe("free");
+    await t.as(admin, "update ai_settings set quick_code_ai = 'strong' where id = 1");
+    expect((await t.admin<{ quick_code_ai: string }>("select quick_code_ai from ai_settings where id = 1"))[0].quick_code_ai).toBe("strong");
+    await expect(t.as(admin, "update ai_settings set quick_code_ai = 'magic' where id = 1")).rejects.toThrow(/check constraint/);
+    await t.as(dev, "update ai_settings set quick_code_ai = 'off' where id = 1");
+    expect((await t.admin<{ quick_code_ai: string }>("select quick_code_ai from ai_settings where id = 1"))[0].quick_code_ai).toBe("strong");
+  });
+
+  it("keeps runs on uploaded games without a GitHub installation, and GitHub runs with one", async () => {
+    await t.service("insert into connect_jobs (user_id, repo, features, source, ai) values ($1, 'toki/snake', '{scores}', 'upload', 'free')", [dev.id]);
+    await expect(t.service("insert into connect_jobs (user_id, repo, features) values ($1, 'a/b', '{scores}')", [otherDev.id])).rejects.toThrow(/connect_jobs_installation_check/);
+  });
+});

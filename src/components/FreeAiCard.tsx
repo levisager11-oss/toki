@@ -4,7 +4,7 @@ import { aiStatus, clearAiKey, freeUsage, saveAiSettings, setAiKey, THINKING, ty
 import { assistError, testFreeAi, type FreeTest } from "../lib/assist";
 import { ModelPicker } from "./ModelPicker";
 
-type Form = { free_enabled: boolean; free_base_url: string; free_model: string; free_thinking: Thinking; connect_free_steps: boolean };
+type Form = { free_enabled: boolean; free_base_url: string; free_model: string; free_thinking: Thinking; connect_free_steps: boolean; quick_code_ai: "free" | "strong" | "off" };
 
 /** Admins: the free AI (an endpoint where tokens cost nothing) and what it was used for. */
 export function FreeAiCard({ settings }: { settings: AiSettings }) {
@@ -15,6 +15,7 @@ export function FreeAiCard({ settings }: { settings: AiSettings }) {
     free_model: settings.free_model,
     free_thinking: settings.free_thinking ?? "default",
     connect_free_steps: settings.connect_free_steps,
+    quick_code_ai: settings.quick_code_ai ?? "free",
   };
   const [form, setForm] = useState<Form>(initial);
   const [saved, setSaved] = useState(JSON.stringify(initial));
@@ -78,6 +79,11 @@ export function FreeAiCard({ settings }: { settings: AiSettings }) {
         <span>{t("ai.free.connectSteps")}</span>
       </label>
       <small>{t("ai.free.connectStepsHelp")}</small>
+      <label htmlFor="quick-code-ai">{t("ai.quickCode")}</label>
+      <select id="quick-code-ai" value={form.quick_code_ai} onChange={(e) => setForm({ ...form, quick_code_ai: e.target.value as Form["quick_code_ai"] })} aria-describedby="quick-code-help">
+        {(["free", "strong", "off"] as const).map((v) => <option key={v} value={v}>{t(`ai.quickCode.${v}`)}</option>)}
+      </select>
+      <small id="quick-code-help">{t("ai.quickCodeHelp")}</small>
       {msg === "saved" && <p className="check good" role="status">{t("ai.saved")}</p>}
       {msg === "error" && <p className="error" role="alert">{t("ai.free.saveError")}</p>}
       <div className="actions fb-form-actions">

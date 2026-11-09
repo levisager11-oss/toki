@@ -54,6 +54,8 @@ export interface AiSettings {
   free_thinking: Thinking;
   /** Toki Connect lets the free AI do the easy steps */
   connect_free_steps: boolean;
+  /** one-click add: which AI adds leaderboard code */
+  quick_code_ai: "free" | "strong" | "off";
   updated_at: string;
 }
 
@@ -67,7 +69,7 @@ export async function getAiSettings(): Promise<AiSettings> {
 }
 
 export type SettingsChange = Partial<
-  Pick<AiSettings, "enabled" | "provider" | "base_url" | "model" | "input_price" | "output_price" | "monthly_cap" | "default_quota" | "thinking" | "agent_enabled" | "agent_budget" | "free_enabled" | "free_base_url" | "free_model" | "free_thinking" | "connect_free_steps">
+  Pick<AiSettings, "enabled" | "provider" | "base_url" | "model" | "input_price" | "output_price" | "monthly_cap" | "default_quota" | "thinking" | "agent_enabled" | "agent_budget" | "free_enabled" | "free_base_url" | "free_model" | "free_thinking" | "connect_free_steps" | "quick_code_ai">
 >;
 
 export interface FreeUsage {
@@ -297,6 +299,8 @@ export type JobMessage =
   | { from: "ai"; kind: "impossible"; text: string; at: string };
 
 export interface ConnectJob {
+  /** "upload": a game hosted on Toki (its change goes live as a new version, no pull request) */
+  source?: "github" | "upload";
   /** "agent": Claude Managed Agents works in its own copy of the repository */
   engine: "steps" | "agent";
   id: string;
@@ -316,7 +320,7 @@ export interface ConnectJob {
   updated_at: string;
 }
 
-const JOB = "id, repo, features, notes, status, messages, pr_url, error, error_detail, game_id, feedback_id, engine, created_at, updated_at";
+const JOB = "id, repo, features, notes, status, messages, pr_url, error, error_detail, game_id, feedback_id, engine, source, created_at, updated_at";
 
 export async function myJobs(): Promise<ConnectJob[]> {
   const { data, error } = await supabase.from("connect_jobs").select(JOB).order("created_at", { ascending: false }).limit(20);
@@ -358,6 +362,7 @@ export const cancelJob = (id: string) => connect({ action: "cancel", id });
 const KNOWN_ERRORS = [
   "ai_disabled", "not_allowed", "cap_reached", "quota_reached", "ai_not_configured", "ai_provider_error", "ai_timeout", "ai_refused", "ai_empty_answer",
   "ai_bad_answer", "ai_bad_edits", "agent_budget", "github_not_found", "github_error", "github_not_configured", "too_many_steps", "impossible", "cancelled", "busy",
+  "quick_off", "not_hosted",
 ] as const;
 export type ConnectError = (typeof KNOWN_ERRORS)[number] | "error";
 

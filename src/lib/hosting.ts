@@ -10,6 +10,8 @@ export interface HostingStatus {
   enabled: boolean;
   domain: string | null;
   maxBytes: number;
+  /** One-click add: which AI adds leaderboard code */
+  quickCode?: "free" | "strong" | "off";
   /** admins only */
   source?: "env" | "toki" | null;
   accountId?: string | null;
@@ -209,3 +211,54 @@ export const gitDisconnect = (gameId: string) => post<{ ok: true }>({ action: "g
 
 /** Where to come back to after connecting GitHub (ConnectGitHub reads it). */
 export const GITHUB_RETURN_KEY = "toki.githubReturn";
+
+// ---------- one-click add ----------
+
+export interface Proposal {
+  title: string;
+  description: string;
+  description_de: string;
+  category: Category;
+  engine: string;
+  controls: string;
+  score_order: "high" | "low";
+  score_format: "points" | "time";
+  leaderboard: boolean;
+  has_scores: boolean;
+  isolation: boolean;
+}
+export interface ScanResult {
+  proposal: Proposal;
+  /** GitHub: the folder with the playable game (null: none found) */
+  folder: string | null;
+  needsBuild: boolean;
+  /** whether the AI helped (else only simple checks) */
+  ai: boolean;
+}
+
+const TEXT = /\.(html?|js|mjs|json|txt|md|gd|cfg)$/i;
+/** The start page and a sample of the code, for the AI to read (at most about 150 KB). */
+export async function scanSample(files: PickedFile[], entry: string): Promise<{ path: string; text: string }[]> {
+  const rank = (p: string) =>
+    (p === entry ? 1000 : 0) + (/toki\.json$/i.test(p) ? 900 : 0) + (/\.html?$/i.test(p) ? 200 : 0) + (/(game|main|play|score|level|app)/i.test(p) ? 50 : 0) - p.split("/").length;
+  const out: { path: string; text: string }[] = [];
+  let total = 0;
+  for (const f of files.filter((x) => TEXT.test(x.path) && !/\.min\.js$/i.test(x.path)).sort((a, b) => rank(b.path) - rank(a.path))) {
+    if (out.length >= 30) break;
+    if (f.size > 60_000 && f.path !== entry) continue;
+    const text = (await f.data.slice(0, 60_000).text());
+    if (total + text.length > 150_000) continue;
+    out.push({ path: f.path, text });
+    total += text.length;
+  }
+  return out;
+}
+
+export const scanUpload = (name: string, files: PickedFile[], sample: { path: string; text: string }[]) =>
+  api<ScanResult>("/api/assist", { method: "POST", body: JSON.stringify({ action: "scan", source: "upload", name, paths: files.map((f) => f.path), files: sample }) });
+export const scanRepo = (installation_id: number, repo: string, branch: string) =>
+  api<ScanResult>("/api/assist", { method: "POST", body: JSON.stringify({ action: "scan", source: "github", installation_id, repo, branch }) });
+
+/** Starts Toki Connect adding leaderboard support (a new live version, or a pull request). */
+export const startLeaderboard = (p: { game_id: string; lang: string } & ({ source: "upload" } | { source: "github"; installation_id: number; repo: string; branch: string })) =>
+  api<{ job: { id: string } }>("/api/connect", { method: "POST", body: JSON.stringify({ action: "start", quick: true, features: ["scores"], ...p }) });
