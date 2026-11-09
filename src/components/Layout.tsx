@@ -5,7 +5,6 @@ import { useI18n } from "../lib/i18n";
 import { canCreate } from "../lib/types";
 import { matchIsolation, pageIsolated } from "../lib/isolation";
 import { useBottomBarFix } from "../lib/useBottomBarFix";
-import { REVIEW_CHANGED, reviewCount } from "../lib/review";
 import { HeartTabIcon, HomeIcon, KeyIcon, ListIcon, LogoMark, LogoutIcon, PlusIcon, SearchIcon, UserIcon } from "./icons";
 
 // A game's own page, not e.g. its feedback board.
@@ -21,20 +20,6 @@ export function Layout() {
   const searchRef = useRef<HTMLInputElement>(null);
   const tabbarRef = useRef<HTMLElement>(null);
   useBottomBarFix(tabbarRef);
-  // Admins: how many games wait for review, shown next to "Review".
-  const [toReview, setToReview] = useState(0);
-  const isAdmin = profile?.role === "admin";
-  useEffect(() => {
-    if (!isAdmin) return setToReview(0);
-    let alive = true;
-    const load = () => reviewCount().then((n) => alive && setToReview(n));
-    load();
-    window.addEventListener(REVIEW_CHANGED, load);
-    return () => {
-      alive = false;
-      window.removeEventListener(REVIEW_CHANGED, load);
-    };
-  }, [isAdmin, location.pathname]);
 
   useEffect(() => {
     setQ(params.get("q") ?? "");
@@ -87,15 +72,7 @@ export function Layout() {
             <NavLink to="/my-games">{t("nav.myGames")}</NavLink>
             <NavLink to="/add">{t("nav.addGame")}</NavLink>
             <NavLink to="/feedback/inbox">{t("fb.inbox.title")}</NavLink>
-            {profile.role === "admin" && (
-              <>
-                <NavLink to="/review">
-                  {t("nav.review")}
-                  {toReview > 0 && <span className="badge" aria-label={`(${toReview})`}>{toReview}</span>}
-                </NavLink>
-                <NavLink to="/invites">{t("nav.invites")}</NavLink>
-              </>
-            )}
+            {profile.role === "admin" && <NavLink to="/invites">{t("nav.invites")}</NavLink>}
           </nav>
         )}
         <div className="side-foot">

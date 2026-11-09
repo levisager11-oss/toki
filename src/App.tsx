@@ -17,7 +17,6 @@ const FeedbackBoard = lazy(() => import("./pages/FeedbackBoard").then((m) => ({ 
 const FeedbackPost = lazy(() => import("./pages/FeedbackPost").then((m) => ({ default: m.FeedbackPost })));
 const FeedbackInbox = lazy(() => import("./pages/FeedbackInbox").then((m) => ({ default: m.FeedbackInbox })));
 const Releases = lazy(() => import("./pages/Releases").then((m) => ({ default: m.Releases })));
-const Review = lazy(() => import("./pages/Review").then((m) => ({ default: m.Review })));
 const Invites = lazy(() => import("./pages/Invites").then((m) => ({ default: m.Invites })));
 
 const Later = ({ children }: { children: ReactNode }) => <Suspense fallback={null}>{children}</Suspense>;
@@ -41,7 +40,6 @@ export function App() {
         <Route path="add" element={<RequireMember><Later><GameForm key="add" /></Later></RequireMember>} />
         <Route path="edit/:slug" element={<RequireMember><Later><GameForm /></Later></RequireMember>} />
         <Route path="account" element={<RequireMember player><Later><Account /></Later></RequireMember>} />
-        <Route path="review" element={<RequireMember admin><Later><Review /></Later></RequireMember>} />
         <Route path="invites" element={<RequireMember admin><Later><Invites /></Later></RequireMember>} />
         <Route path="*" element={<NotFound />} />
       </Route>

@@ -1,7 +1,7 @@
 import { supabase } from "./supabase";
 import type { Game } from "./types";
 
-const SELECT = "*, author:profiles!games_created_by_fkey(username, role), stats:game_stats(plays, likes)";
+const SELECT = "*, author:profiles!games_created_by_fkey(username), stats:game_stats(plays, likes)";
 
 export async function listGames(): Promise<Game[]> {
   const { data, error } = await supabase.from("games").select(SELECT).order("created_at", { ascending: false });
@@ -43,9 +43,6 @@ export async function myGameStats(): Promise<Record<string, number[]>> {
   if (error) throw error;
   return Object.fromEntries((data as { game_id: string; daily: number[] }[]).map((r) => [r.game_id, r.daily]));
 }
-
-/** Approved, so it shows for everyone. Games under review only show for their developer and admins. */
-export const isLive = (g: Pick<Game, "status">) => (g.status ?? "approved") === "approved";
 
 export const plays = (g: Game) => g.stats?.plays ?? 0;
 export const likes = (g: Game) => g.stats?.likes ?? 0;

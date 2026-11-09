@@ -5,7 +5,7 @@ import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
 import { getGame, slugify } from "../lib/games";
 import { invalidateGames } from "../lib/useGames";
-import { CATEGORIES, isTrusted, type Category, type Game } from "../lib/types";
+import { CATEGORIES, type Category, type Game } from "../lib/types";
 import { COVERS, coverFor } from "../pixel/scenes";
 import { Cover } from "../components/Cover";
 import { NotFound } from "./NotFound";
@@ -52,8 +52,7 @@ export function GameForm() {
       setTitle(g.title);
       setSlug(g.slug);
       setSlugEdited(true);
-      // A new link waiting for review is what the developer last asked for.
-      setUrl(g.pending_play_url ?? g.play_url);
+      setUrl(g.play_url);
       setDescription(g.description);
       setDescriptionDe(g.description_de ?? "");
       setControls(g.controls);
@@ -70,11 +69,7 @@ export function GameForm() {
 
   if (missing) return <NotFound />;
   if (editSlug && !orig) return <p className="msg">{t("loading")}</p>;
-  if (orig && profile && profile.role !== "admin" && orig.created_by !== profile.id) return <p className="msg">{t("form.notYours")}</p>;
-  const trusted = isTrusted(profile);
-  // Untrusted developers: a new game waits for review, and so does a new link for an approved game.
-  const reviewed = !trusted && (!orig || orig.status !== "approved");
-  const linkReviewed = !trusted && orig?.status === "approved";
+  if (orig && profile && profile.role !== "admin" && orig.created_by !== profile.id) return <p className="msg">{t("auth.noRights")}</p>;
 
   const effectiveSlug = slugEdited ? slug : slugify(title);
   const previewCover = cover || coverFor(effectiveSlug || "game", null);
@@ -144,8 +139,7 @@ export function GameForm() {
       ? await supabase.from("games").update(row).eq("id", orig.id)
       : await supabase.from("games").insert({ ...row, created_by: profile!.id });
     setBusy(false);
-    if (res.error)
-      return setErr(res.error.code === "23505" ? t("form.slugTaken") : res.error.message.includes("too_many_pending") ? t("form.tooManyPending") : t("form.error"));
+    if (res.error) return setErr(res.error.code === "23505" ? t("form.slugTaken") : t("form.error"));
     invalidateGames();
     navigate(`/game/${row.slug}`);
   };
@@ -171,8 +165,6 @@ export function GameForm() {
           <label htmlFor="url">{t("form.url")}</label>
           <input id="url" type="url" required placeholder="https://" value={url} onChange={(e) => setUrl(e.target.value)} aria-describedby="url-help" />
           <small id="url-help">{t("form.urlHelp")}</small>
-          {linkReviewed && <small>{t("form.reviewLink")}</small>}
-          {orig?.pending_play_url && <small>{t("form.liveLink", { url: orig.play_url })}</small>}
           <LinkCheck url={url.trim()} isolation={isolation} />
           <label className="check">
             <input id="isolation" type="checkbox" checked={isolation} onChange={(e) => setIsolation(e.target.checked)} aria-describedby="isolation-help" />
@@ -275,7 +267,6 @@ export function GameForm() {
         </div>
 
         <div className="form-foot">
-          {reviewed && <p className="check">{t("form.reviewInfo")}</p>}
           {err && <p className="error" role="alert">{err}</p>}
           <div className="actions">
             <button className="btn primary" disabled={busy}>{busy ? t("form.saving") : t("form.save")}</button>

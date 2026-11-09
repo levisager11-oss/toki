@@ -6,7 +6,6 @@ import { useGames } from "../lib/useGames";
 import { compact, likes, myGameStats, plays } from "../lib/games";
 import { Cover } from "../components/Cover";
 import { HeartIcon, PlayIcon } from "../components/icons";
-import { GameStatusBadge } from "../components/GameStatus";
 
 export function MyGames() {
   const { t } = useI18n();
@@ -28,7 +27,6 @@ export function MyGames() {
       <div className="sechead">
         <h1 className="h">{isAdmin ? t("my.allTitle") : t("my.title")}</h1>
         <div className="actions">
-          {isAdmin && <Link to="/review" className="btn">{t("nav.review")}</Link>}
           <Link to="/feedback/inbox" className="btn">{t("fb.inbox.title")}</Link>
           <Link to="/add" className="btn primary"><span aria-hidden="true">+</span>{t("my.add")}</Link>
         </div>
@@ -41,16 +39,12 @@ export function MyGames() {
             <li key={g.id}>
               <Cover slug={g.slug} cover={g.cover} image={g.thumbnail_url} />
               <div className="info">
-                <span className="my-title">
-                  <Link to={`/game/${g.slug}`} className="title">{g.title}</Link>
-                  <GameStatusBadge game={g} />
-                </span>
+                <Link to={`/game/${g.slug}`} className="title">{g.title}</Link>
                 <span className="sub">
                   {g.author ? `@${g.author.username}` : "Toki"} · {t(`cat.${g.category}`)}
                   {g.featured ? ` · ★ ${t("home.featured")}` : ""}
                 </span>
-                <span className="sub url">{g.pending_play_url ?? g.play_url}</span>
-                {g.review_note && g.created_by === profile.id && <span className="sub review-note">{t("game.review.note", { note: g.review_note })}</span>}
+                <span className="sub url">{g.play_url}</span>
               </div>
               <div className="stats">
                 <span title={t("stats.plays", { n: plays(g) })}><PlayIcon size={10} /> {compact(plays(g))}</span>

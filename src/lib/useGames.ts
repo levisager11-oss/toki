@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
-import { isLive } from "./games";
+import { useEffect, useState } from "react";
 import { listGames } from "./games";
 import { syncLikes } from "./local";
 import type { Game } from "./types";
@@ -65,11 +64,4 @@ export function useGames() {
   }, [version]);
 
   return { games, error };
-}
-
-/** Only games everyone can see: without the account's own games still under review. */
-export function useLiveGames() {
-  const { games, error } = useGames();
-  const live = useMemo(() => games?.filter(isLive) ?? null, [games]);
-  return { games: live, error };
 }
