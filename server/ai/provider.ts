@@ -123,7 +123,8 @@ async function openaiCompatible(
         body: JSON.stringify({
           model: config.model,
           messages: req.messages,
-          max_tokens: req.maxTokens,
+          // 0: no limit, the model may use as many tokens as it can (the free AI).
+          ...(req.maxTokens > 0 ? { max_tokens: req.maxTokens } : {}),
           temperature: req.temperature ?? 0.2,
           // Streamed, so text keeps arriving while the model writes: proxies in front of some
           // endpoints cut connections that stay quiet for 30 seconds or so.

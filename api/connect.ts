@@ -136,8 +136,8 @@ async function run(ctx: Ctx, b: Record<string, unknown>, origin: string) {
     },
     ...(freeAi
       ? {
-          async free(messages: Parameters<typeof freeCompletion>[0]["messages"], maxTokens: number) {
-            const c = await freeCompletion({ db: ctx.db, apiKey: ctx.env.aiKey, userId: ctx.user.id, feature: "connect", messages, maxTokens, settings: freeAi, timeoutMs: 120_000 });
+          async free(messages: Parameters<typeof freeCompletion>[0]["messages"]) {
+            const c = await freeCompletion({ db: ctx.db, apiKey: ctx.env.aiKey, userId: ctx.user.id, feature: "connect", messages, settings: freeAi, timeoutMs: 120_000 });
             return c.text;
           },
         }

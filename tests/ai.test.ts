@@ -123,6 +123,12 @@ describe("OpenAI-compatible provider", () => {
 
   it("guesses tokens on the generous side", () => expect(estimateTokens("abcdef")).toBe(2));
 
+  it("sends no token limit when asked for none (the free AI)", async () => {
+    const f = reply({ choices: [{ message: { content: "OK" } }] });
+    await complete({ ...CFG, model: "free-1" }, { messages: [{ role: "user", content: "hi" }], maxTokens: 0 }, f);
+    expect(JSON.parse(String((f.mock.calls[0] as [string, RequestInit])[1].body))).not.toHaveProperty("max_tokens");
+  });
+
   it("says when a thinking model ran out of tokens before answering", async () => {
     const f = reply({ choices: [{ message: { content: "" }, finish_reason: "length" }] });
     await expect(complete({ ...CFG, model: "think-1" }, { messages: [{ role: "user", content: "hi" }], maxTokens: 16 }, f)).rejects.toThrow(/used all its tokens/);

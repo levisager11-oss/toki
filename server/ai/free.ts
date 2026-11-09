@@ -1,5 +1,5 @@
 // The free AI: an OpenAI-compatible endpoint where tokens cost nothing (set up on the AI page as
-// "Free AI"). No prices or quotas; instead every account may make only so many calls an hour per
+// "Free AI"). No token limit is sent, so the model may answer as long as it can. No prices or quotas; instead every account may make only so many calls an hour per
 // feature (ai_free_take in the database), and calls are counted per day for the admin page.
 import type { Db } from "../db.js";
 import { AiError, complete, type ChatMessage, type Completion } from "./provider.js";
@@ -24,7 +24,6 @@ export interface FreeCall {
   userId: string;
   feature: FreeFeature;
   messages: ChatMessage[];
-  maxTokens: number;
   temperature?: number;
   /** Gives up after this long (the free features' server requests have a minute). */
   timeoutMs?: number;
@@ -43,7 +42,7 @@ export async function freeCompletion(call: FreeCall): Promise<Completion> {
   try {
     const c = await complete(
       { provider: "openai_compatible", baseUrl: s.free_base_url, model: s.free_model, apiKey: call.apiKey },
-      { messages: call.messages, maxTokens: call.maxTokens, temperature: call.temperature, timeoutMs: call.timeoutMs },
+      { messages: call.messages, maxTokens: 0, temperature: call.temperature, timeoutMs: call.timeoutMs },
       call.fetchImpl,
     );
     await record(true, c.inputTokens, c.outputTokens);
