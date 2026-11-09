@@ -1,7 +1,7 @@
 {
   "name": "Toki",
   "short_name": "Toki",
-  "description": "Browser games by Levi and friends.",
+  "description": "Browser games made by friends.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
