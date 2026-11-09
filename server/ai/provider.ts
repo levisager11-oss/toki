@@ -18,11 +18,15 @@ export interface Completion {
 
 export type ProviderName = "openai_compatible" | "anthropic";
 
+export type Thinking = "default" | "off" | "low" | "medium" | "high";
+
 export interface ProviderConfig {
   provider: ProviderName;
   baseUrl: string;
   model: string;
   apiKey: string;
+  /** How much the model may think first (OpenAI-compatible endpoints; ignored where unsupported). */
+  thinking?: Thinking;
 }
 
 export class AiError extends Error {
@@ -104,7 +108,28 @@ export function readOpenAiAnswer(raw: string): { text: string; usage: OpenAiAnsw
 
 // What some endpoints need, learned from their errors, per endpoint and model while this server
 // instance runs: min_p set to 0 (see below), no stream_options, or no streaming at all.
-const QUIRKS = new Map<string, { zeroMinP?: boolean; noStreamOptions?: boolean; noStream?: boolean }>();
+// Also which thinking settings an endpoint doesn't know (reasoning_effort, chat_template_kwargs).
+const QUIRKS = new Map<string, { zeroMinP?: boolean; noStreamOptions?: boolean; noStream?: boolean; noEffort?: boolean; noTemplateKwargs?: boolean }>();
+
+/**
+ * The request fields for a thinking level. "reasoning_effort" is the OpenAI way (also LiteLLM,
+ * Open WebUI, newer vLLM); "off" also uses Qwen's own switches (enable_thinking, /no_think).
+ */
+export function thinkingFields(thinking: Thinking | undefined, quirks: { noEffort?: boolean; noTemplateKwargs?: boolean }): Record<string, unknown> {
+  if (!thinking || thinking === "default") return {};
+  return {
+    ...(quirks.noEffort ? {} : { reasoning_effort: thinking === "off" ? "none" : thinking }),
+    ...(thinking === "off" && !quirks.noTemplateKwargs ? { chat_template_kwargs: { enable_thinking: false } } : {}),
+  };
+}
+
+/** With thinking off, Qwen models also understand "/no_think" in the instructions. */
+function withNoThink(messages: ChatMessage[], thinking: Thinking | undefined): ChatMessage[] {
+  if (thinking !== "off") return messages;
+  const i = messages.findIndex((m) => m.role === "system");
+  if (i < 0) return [{ role: "system", content: "/no_think" }, ...messages];
+  return messages.map((m, j) => (j === i ? { ...m, content: `${m.content}\n/no_think` } : m));
+}
 
 async function openaiCompatible(
   config: ProviderConfig,
@@ -122,7 +147,8 @@ async function openaiCompatible(
         headers: { "content-type": "application/json", authorization: `Bearer ${config.apiKey}` },
         body: JSON.stringify({
           model: config.model,
-          messages: req.messages,
+          messages: withNoThink(req.messages, config.thinking),
+          ...thinkingFields(config.thinking, quirks),
           // 0: no limit, the model may use as many tokens as it can (the free AI).
           ...(req.maxTokens > 0 ? { max_tokens: req.maxTokens } : {}),
           temperature: req.temperature ?? 0.2,
@@ -149,8 +175,11 @@ async function openaiCompatible(
   // again with min_p 0. Older servers may not know stream_options. Both are remembered. (Behind
   // LiteLLM, the same refusal can come as a 500 when the answer is streamed.)
   // Last, if a streamed answer fails on the server's side, try once without streaming.
-  for (let i = 0; i < 3 && (!res.ok || !!answer.error); i++) {
+  // An endpoint that doesn't know a thinking setting gets asked again without it.
+  for (let i = 0; i < 5 && (!res.ok || !!answer.error); i++) {
     if (/min_p/i.test(error) && !quirks.zeroMinP) quirks.zeroMinP = true;
+    else if (/reasoning|effort/i.test(error) && config.thinking && config.thinking !== "default" && !quirks.noEffort) quirks.noEffort = true;
+    else if (/chat_template|enable_thinking/i.test(error) && config.thinking === "off" && !quirks.noTemplateKwargs) quirks.noTemplateKwargs = true;
     else if (/stream_options/i.test(error) && !quirks.noStreamOptions) quirks.noStreamOptions = true;
     else if (!quirks.noStream && (res.status >= 500 || /stream/i.test(error))) quirks.noStream = true;
     else break;

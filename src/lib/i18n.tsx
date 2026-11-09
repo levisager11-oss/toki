@@ -800,6 +800,13 @@ const en = {
   "connect.leadGithubOnly": "Connect GitHub, so the AI helpers can read your game's code: for update drafts and the “Ask AI” helper on your game's page.",
   "ai.free.feature.help": "Ask AI (game helper)",
   "ai.free.feature.learn": "Learning games from GitHub",
+  "ai.free.thinking": "Thinking",
+  "ai.free.thinking.default": "Model default",
+  "ai.free.thinking.off": "Off (fastest)",
+  "ai.free.thinking.low": "Low",
+  "ai.free.thinking.medium": "Medium",
+  "ai.free.thinking.high": "High (slowest)",
+  "ai.free.thinkingHelp": "How much the AI thinks before it answers. Less is faster: try “Off” or “Low” if answers or “Learn from GitHub” take too long. Endpoints that don't support it ignore it.",
 };
 
 type Key = keyof typeof en;
@@ -1604,6 +1611,13 @@ const de: Record<Key, string> = {
   "connect.leadGithubOnly": "Verbinde GitHub, damit die KI-Helfer den Code deines Spiels lesen können: für Entwürfe von Updates und den Helfer „KI fragen“ auf der Seite deines Spiels.",
   "ai.free.feature.help": "KI fragen (Spielhilfe)",
   "ai.free.feature.learn": "Spiele von GitHub lernen",
+  "ai.free.thinking": "Nachdenken",
+  "ai.free.thinking.default": "Wie das Modell will",
+  "ai.free.thinking.off": "Aus (am schnellsten)",
+  "ai.free.thinking.low": "Wenig",
+  "ai.free.thinking.medium": "Mittel",
+  "ai.free.thinking.high": "Viel (am langsamsten)",
+  "ai.free.thinkingHelp": "Wie viel die KI nachdenkt, bevor sie antwortet. Weniger ist schneller: Probier „Aus“ oder „Wenig“, wenn Antworten oder „Von GitHub lernen“ zu lange dauern. Endpunkte, die das nicht kennen, ignorieren es.",
 };
 
 export type Lang = "en" | "de";

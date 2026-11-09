@@ -123,6 +123,29 @@ describe("OpenAI-compatible provider", () => {
 
   it("guesses tokens on the generous side", () => expect(estimateTokens("abcdef")).toBe(2));
 
+  it("sends the thinking level, and Qwen's switches when thinking is off", async () => {
+    const f = reply({ choices: [{ message: { content: "OK" } }] });
+    await complete({ ...CFG, model: "think-low", thinking: "low" }, { messages: [{ role: "user", content: "hi" }], maxTokens: 0 }, f);
+    expect(JSON.parse(String((f.mock.calls[0] as [string, RequestInit])[1].body))).toMatchObject({ reasoning_effort: "low" });
+    await complete({ ...CFG, model: "think-off", thinking: "off" }, { messages: [{ role: "system", content: "Be brief." }, { role: "user", content: "hi" }], maxTokens: 0 }, f);
+    const off = JSON.parse(String((f.mock.calls[1] as [string, RequestInit])[1].body));
+    expect(off).toMatchObject({ reasoning_effort: "none", chat_template_kwargs: { enable_thinking: false } });
+    expect(off.messages[0].content).toBe("Be brief.\n/no_think");
+    await complete({ ...CFG, model: "think-default" }, { messages: [{ role: "user", content: "hi" }], maxTokens: 0 }, f);
+    expect(JSON.parse(String((f.mock.calls[2] as [string, RequestInit])[1].body))).not.toHaveProperty("reasoning_effort");
+  });
+
+  it("asks again without thinking settings the endpoint doesn't know", async () => {
+    const f = vi.fn(async (_u: string, init: RequestInit) => {
+      const b = JSON.parse(String(init.body));
+      if (b.reasoning_effort) return new Response(JSON.stringify({ error: { message: "Unrecognized request argument: reasoning_effort" } }), { status: 400 });
+      if (b.chat_template_kwargs) return new Response(JSON.stringify({ error: { message: "unknown field chat_template_kwargs" } }), { status: 400 });
+      return new Response(JSON.stringify({ choices: [{ message: { content: "OK" } }] }), { status: 200 });
+    }) as unknown as typeof fetch & ReturnType<typeof vi.fn>;
+    expect((await complete({ ...CFG, model: "think-strict", thinking: "off" }, { messages: [{ role: "user", content: "hi" }], maxTokens: 0 }, f)).text).toBe("OK");
+    expect(f).toHaveBeenCalledTimes(3);
+  });
+
   it("sends no token limit when asked for none (the free AI)", async () => {
     const f = reply({ choices: [{ message: { content: "OK" } }] });
     await complete({ ...CFG, model: "free-1" }, { messages: [{ role: "user", content: "hi" }], maxTokens: 0 }, f);

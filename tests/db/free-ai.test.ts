@@ -36,6 +36,12 @@ describe("free AI settings", () => {
     expect(await t.as(player, "select ai_free_on() as on")).toEqual([{ on: false }]);
   });
 
+  it("know only a few thinking levels", async () => {
+    await t.as(admin, "update ai_settings set free_thinking = 'low'");
+    await expect(t.as(admin, "update ai_settings set free_thinking = 'max'")).rejects.toThrow(/check/);
+    await t.as(admin, "update ai_settings set free_thinking = 'default'");
+  });
+
   it("need no prices", async () => {
     await t.as(admin, "update ai_settings set enabled = false, input_price = 0, output_price = 0, free_enabled = true");
     expect(await t.as(null, "select ai_free_on() as on")).toEqual([{ on: true }]);
