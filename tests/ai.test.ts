@@ -30,6 +30,20 @@ describe("OpenAI-compatible provider", () => {
     expect(JSON.parse(String((f.mock.calls[0] as [string, RequestInit])[1].body))).toMatchObject({ stream: true, stream_options: { include_usage: true } });
   });
 
+  it("tries once without streaming when a streamed answer fails on the server's side", async () => {
+    const f = vi.fn(async (_u: string, init: RequestInit) =>
+      JSON.parse(String(init.body)).stream
+        ? new Response(JSON.stringify({ error: { message: "upstream stream broke" } }), { status: 502 })
+        : new Response(JSON.stringify({ choices: [{ message: { content: "OK" } }], usage: { prompt_tokens: 5, completion_tokens: 1 } }), { status: 200 }),
+    ) as unknown as typeof fetch & ReturnType<typeof vi.fn>;
+    const cfg = { ...CFG, model: "stream-4" };
+    expect((await complete(cfg, { messages: [{ role: "user", content: "hi" }], maxTokens: 16 }, f)).text).toBe("OK");
+    expect(f).toHaveBeenCalledTimes(2);
+    // Remembered: the next call goes without streaming right away.
+    await complete(cfg, { messages: [{ role: "user", content: "hi" }], maxTokens: 16 }, f);
+    expect(f).toHaveBeenCalledTimes(3);
+  });
+
   it("reports an error sent inside the stream", async () => {
     const f = vi.fn(async () => new Response(sse([{ error: { message: "context too long" } }]), { status: 200 })) as unknown as typeof fetch;
     await expect(complete({ ...CFG, model: "stream-2" }, { messages: [{ role: "user", content: "hi" }], maxTokens: 16 }, f)).rejects.toMatchObject({
@@ -147,10 +161,14 @@ describe("budgeted AI calls", () => {
     expect(f).not.toHaveBeenCalled();
   });
 
-  it("settles a failed call as failed, counting what was sent", async () => {
+  it("settles a failed call as failed: free when refused, counting what was sent when the connection broke", async () => {
     const { db, calls } = fakeDb();
-    await expect(budgetedCompletion({ db, keys: { openai_compatible: "k", anthropic: "" }, userId: "u", feature: "connect", messages: [{ role: "user", content: "abc" }], maxTokens: 1, fetchImpl: reply({}, 500) })).rejects.toBeInstanceOf(AiError);
-    expect(calls[1].args).toMatchObject({ p_ok: false, p_output_tokens: 0, p_input_tokens: 11 });
+    const msg = [{ role: "user" as const, content: "abc" }];
+    await expect(budgetedCompletion({ db, keys: { openai_compatible: "k", anthropic: "" }, userId: "u", feature: "connect", messages: msg, maxTokens: 1, fetchImpl: reply({}, 400) })).rejects.toBeInstanceOf(AiError);
+    expect(calls[1].args).toMatchObject({ p_ok: false, p_output_tokens: 0, p_input_tokens: 0 });
+    const broken = vi.fn(async () => { throw new TypeError("fetch failed"); }) as unknown as typeof fetch;
+    await expect(budgetedCompletion({ db, keys: { openai_compatible: "k", anthropic: "" }, userId: "u", feature: "connect", messages: msg, maxTokens: 1, fetchImpl: broken })).rejects.toBeInstanceOf(AiError);
+    expect(calls[3].args).toMatchObject({ p_ok: false, p_output_tokens: 0, p_input_tokens: 11 });
   });
 
   it("needs the API key", async () => {

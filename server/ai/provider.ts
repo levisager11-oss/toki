@@ -26,7 +26,12 @@ export interface ProviderConfig {
 }
 
 export class AiError extends Error {
-  constructor(readonly code: "not_configured" | "provider_error" | "timeout" | "empty_answer" | "refused", message: string = code) {
+  constructor(
+    readonly code: "not_configured" | "provider_error" | "timeout" | "empty_answer" | "refused",
+    message: string = code,
+    /** The HTTP status when the service answered with an error (it then didn't work on the request). */
+    readonly status?: number,
+  ) {
     super(message);
   }
 }
@@ -96,8 +101,8 @@ export function readOpenAiAnswer(raw: string): { text: string; usage: OpenAiAnsw
 }
 
 // What some endpoints need, learned from their errors, per endpoint and model while this server
-// instance runs: min_p set to 0 (see below), or no stream_options.
-const QUIRKS = new Map<string, { zeroMinP?: boolean; noStreamOptions?: boolean }>();
+// instance runs: min_p set to 0 (see below), no stream_options, or no streaming at all.
+const QUIRKS = new Map<string, { zeroMinP?: boolean; noStreamOptions?: boolean; noStream?: boolean }>();
 
 async function openaiCompatible(
   config: ProviderConfig,
@@ -120,8 +125,7 @@ async function openaiCompatible(
           temperature: req.temperature ?? 0.2,
           // Streamed, so text keeps arriving while the model writes: proxies in front of some
           // endpoints cut connections that stay quiet for 30 seconds or so.
-          stream: true,
-          ...(quirks.noStreamOptions ? {} : { stream_options: { include_usage: true } }),
+          ...(quirks.noStream ? {} : { stream: true, ...(quirks.noStreamOptions ? {} : { stream_options: { include_usage: true } }) }),
           ...(quirks.zeroMinP ? { min_p: 0 } : {}),
         }),
         signal: AbortSignal.timeout(TIMEOUT_MS),
@@ -141,14 +145,16 @@ async function openaiCompatible(
   // with speculative decoding. They only use that default when the request doesn't say: so ask
   // again with min_p 0. Older servers may not know stream_options. Both are remembered. (Behind
   // LiteLLM, the same refusal can come as a 500 when the answer is streamed.)
-  for (let i = 0; i < 2 && (!res.ok || !!answer.error); i++) {
+  // Last, if a streamed answer fails on the server's side, try once without streaming.
+  for (let i = 0; i < 3 && (!res.ok || !!answer.error); i++) {
     if (/min_p/i.test(error) && !quirks.zeroMinP) quirks.zeroMinP = true;
     else if (/stream_options/i.test(error) && !quirks.noStreamOptions) quirks.noStreamOptions = true;
+    else if (!quirks.noStream && (res.status >= 500 || /stream/i.test(error))) quirks.noStream = true;
     else break;
     QUIRKS.set(key, quirks);
     ({ res, answer, error } = await send());
   }
-  if (!res.ok || (answer.error && !answer.text.trim())) throw new AiError("provider_error", error);
+  if (!res.ok || (answer.error && !answer.text.trim())) throw new AiError("provider_error", error, res.ok ? undefined : res.status);
   const { text, usage } = answer;
   if (!text.trim()) throw new AiError("empty_answer");
   const known = typeof usage?.prompt_tokens === "number" && typeof usage?.completion_tokens === "number";

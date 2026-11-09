@@ -788,3 +788,4 @@ a.author:hover { text-decoration: underline; color: var(--fg); }
 .admin-links b { display: flex; align-items: center; gap: 8px; }
 .admin-links span:not(.count-pill) { color: var(--muted); font-size: 14px; }
 .model-error-detail { display: block; margin-top: 4px; color: var(--muted); font-family: ui-monospace, monospace; font-size: 12px; overflow-wrap: anywhere; }
+.ai-log-error { grid-column: 1 / -1; }
