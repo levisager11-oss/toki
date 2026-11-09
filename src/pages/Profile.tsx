@@ -14,6 +14,7 @@ import { Cover } from "../components/Cover";
 import type { Game } from "../lib/types";
 import { NotFound } from "./NotFound";
 import { useTitle } from "../lib/useTitle";
+import { ShareButton } from "../components/ShareButton";
 
 /** A player's page: /u/:username */
 export function Profile() {
@@ -29,6 +30,7 @@ export function Profile() {
   const [busy, setBusy] = useState(false);
   const [reload, setReload] = useState(0);
   const [confirmBlock, setConfirmBlock] = useState(false);
+  const [confirmUnfriend, setConfirmUnfriend] = useState(false);
   const userId = session?.user.id;
 
   // Another player's page: don't show the last one's details while this one loads.
@@ -122,9 +124,14 @@ export function Profile() {
           {p.relation === "friend" && (
             <>
               <button type="button" className="btn primary" disabled={busy} onClick={message}>{t("soc.message")}</button>
-              <button type="button" className="btn" disabled={busy} onClick={() => act(() => removeFriend(p.id))}>{t("soc.unfriend")}</button>
+              {confirmUnfriend ? (
+                <button type="button" className="btn danger" disabled={busy} onClick={() => act(async () => { await removeFriend(p.id); setConfirmUnfriend(false); })}>{t("soc.unfriendSure")}</button>
+              ) : (
+                <button type="button" className="btn" disabled={busy} onClick={() => setConfirmUnfriend(true)}>{t("soc.unfriend")}</button>
+              )}
             </>
           )}
+          <ShareButton path={`/u/${p.username}`} title={`@${p.username} · Toki`} />
           {p.relation === "blocked" && <button type="button" className="btn" disabled={busy} onClick={() => act(() => unblockUser(p.id))}>{t("soc.unblock")}</button>}
           {["none", "sent", "received", "friend"].includes(p.relation) && (
             confirmBlock ? (

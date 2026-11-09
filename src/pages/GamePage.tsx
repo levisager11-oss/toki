@@ -20,7 +20,8 @@ import { TranslateToggle, useTranslate } from "../components/AiBits";
 import { GameHelper } from "../components/GameHelper";
 import { Screenshots } from "../components/ShotViewer";
 import { useFreeAi } from "../lib/assist";
-import { CloseIcon, FullscreenIcon, ShareIcon } from "../components/icons";
+import { CloseIcon, FullscreenIcon } from "../components/icons";
+import { ShareButton } from "../components/ShareButton";
 
 const LANDSCAPE_PHONE = "(orientation: landscape) and (pointer: coarse) and (max-height: 600px)";
 // A visit counts as a play after this long on the page (the server counts one per browser per day).
@@ -40,7 +41,6 @@ export function GamePage() {
   const landscapePhone = useMediaQuery(LANDSCAPE_PHONE);
   const fillScreen = pseudoFull || landscapePhone;
   const game = findGame(games, slug);
-  const [shared, setShared] = useState(false);
   const [helper, setHelper] = useState(false);
   const freeAi = useFreeAi();
   const gameId = game?.id;
@@ -140,19 +140,6 @@ export function GamePage() {
     else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
     else setPseudoFull(true);
   };
-  const share = async () => {
-    const url = `${location.origin}/game/${game.slug}`;
-    if (navigator.share) {
-      // The share sheet throws when the visitor closes it; nothing to do then.
-      await navigator.share({ title: game.title, url }).catch(() => {});
-      return;
-    }
-    // Only say "copied" when it was.
-    const copied = await navigator.clipboard?.writeText(url).then(() => true, () => false);
-    if (!copied) return void window.prompt(t("game.share"), url);
-    setShared(true);
-    setTimeout(() => setShared(false), 2000);
-  };
   const desc = (lang === "de" && game.description_de) || game.description;
   const canEdit = profile && (profile.role === "admin" || profile.id === game.created_by);
   // Same category first, then the most played.
@@ -197,7 +184,7 @@ export function GamePage() {
           </div>
           <div className="actions">
             <FavButton game={game} withLabel />
-            <button type="button" className="btn" onClick={share} aria-live="polite"><ShareIcon />{shared ? t("game.copied") : t("game.share")}</button>
+            <ShareButton path={`/game/${game.slug}`} title={game.title} />
             {canEdit && <Link to={`/edit/${game.slug}`} className="btn">{t("game.edit")}</Link>}
             <button type="button" className="btn primary" onClick={fullscreen}><FullscreenIcon />{t("game.fullscreen")}</button>
           </div>
