@@ -122,7 +122,10 @@ export function GamePage() {
     return (
       <div className="msg">
         <p>{t("game.notFound")}</p>
-        <Link to="/" className="btn">{t("back")}</Link>
+        <div className="actions">
+          <Link to={`/?q=${encodeURIComponent(slug.replace(/-/g, " "))}`} className="btn primary">{t("game.searchFor", { q: slug.replace(/-/g, " ") })}</Link>
+          <Link to="/" className="btn">{t("back")}</Link>
+        </div>
       </div>
     );
 
