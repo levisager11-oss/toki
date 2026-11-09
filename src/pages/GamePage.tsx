@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, Navigate, useParams } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
 import { useMediaQuery } from "../lib/useMediaQuery";
 import { markPlayed, visitorId } from "../lib/local";
-import { plays, recordPlay } from "../lib/games";
+import { findGame, plays, recordPlay } from "../lib/games";
 import { useGames } from "../lib/useGames";
 import { useSaveBridge } from "../lib/saves";
 import { matchIsolation } from "../lib/isolation";
@@ -31,7 +31,7 @@ export function GamePage() {
   // Phone turned sideways: the game fills the screen on its own; turning back to portrait leaves.
   const landscapePhone = useMediaQuery(LANDSCAPE_PHONE);
   const fillScreen = pseudoFull || landscapePhone;
-  const game = games?.find((g) => g.slug === slug);
+  const game = findGame(games, slug);
   const [shared, setShared] = useState(false);
   const gameId = game?.id;
   const userId = session?.user.id;
@@ -113,6 +113,9 @@ export function GamePage() {
         <Link to="/" className="btn">{t("back")}</Link>
       </div>
     );
+
+  // An old address of a renamed game: go to the current one.
+  if (game.slug !== slug) return <Navigate to={`/game/${game.slug}`} replace />;
 
   const fullscreen = () => {
     const el = frameWrap.current as (HTMLDivElement & { webkitRequestFullscreen?: () => void }) | null;

@@ -34,7 +34,12 @@ export function Signup() {
         password,
         options: { data: { invite: code, username: name }, emailRedirectTo: `${window.location.origin}/login` },
       });
-      if (error) return setErr(error.message.includes("Database error") ? t("signup.badInvite") : error.message);
+      if (error) {
+        if (!error.message.includes("Database error")) return setErr(error.message);
+        // The account couldn't be made: someone took the name just now, or the invite is used up.
+        const { data: takenNow } = await supabase.from("profiles").select("id").eq("username", name).maybeSingle();
+        return setErr(takenNow || !code ? t("signup.usernameTaken") : t("signup.badInvite"));
+      }
       const next = code ? "/my-games" : safeNext(params.get("next"));
       if (data.session) return navigate(next);
       // Accounts are confirmed on creation, so log straight in.

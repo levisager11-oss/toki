@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { listGames } from "./games";
-import { syncLikes } from "./local";
+import { renameSlugs, syncLikes } from "./local";
 import type { Game } from "./types";
 
 // Simple shared cache so moving between pages doesn't refetch every time.
@@ -27,6 +27,7 @@ export function patchGame(id: string, patch: (g: Game) => Game) {
 function load() {
   pending ??= listGames().then((g) => {
     cache = g;
+    renameSlugs(g);
     syncLikes(g);
     return g;
   });
@@ -46,8 +47,17 @@ export function useGames() {
     };
   }, []);
 
+  // A failed load is tried again when the connection comes back.
+  useEffect(() => {
+    if (!error) return;
+    const retry = () => invalidateGames();
+    window.addEventListener("online", retry);
+    return () => window.removeEventListener("online", retry);
+  }, [error]);
+
   useEffect(() => {
     let alive = true;
+    setError(false);
     if (cache) {
       setGames(cache);
       return;

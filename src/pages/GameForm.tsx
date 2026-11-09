@@ -211,7 +211,7 @@ export function GameForm() {
           <div className="actions">
             <label className="btn file">
               {t("form.upload")}
-              <input id="image" type="file" accept={IMAGE_TYPES} onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
+              <input id="image" type="file" accept={IMAGE_TYPES} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) upload(f); }} />
             </label>
             {image && <button type="button" className="btn" onClick={() => setImage(null)}>{t("form.removeImage")}</button>}
           </div>

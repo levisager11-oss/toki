@@ -26,6 +26,8 @@ export interface Game {
   created_at: string;
   updated_at: string;
   screenshots: string[];
+  /** Earlier addresses of the game, newest first. Old links still lead to it. */
+  old_slugs?: string[];
   /** The game only runs with cross-origin isolation (e.g. Godot 4 with threads). Off for most games. */
   needs_isolation?: boolean;
   author?: { username: string } | null;

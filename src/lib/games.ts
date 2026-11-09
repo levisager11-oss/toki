@@ -44,6 +44,12 @@ export async function myGameStats(): Promise<Record<string, number[]>> {
   return Object.fromEntries((data as { game_id: string; daily: number[] }[]).map((r) => [r.game_id, r.daily]));
 }
 
+/** The game at this address: its current slug, or (for links from before a rename) an old one. */
+export function findGame(games: Game[] | null | undefined, slug: string): Game | undefined {
+  if (!games) return undefined;
+  return games.find((g) => g.slug === slug) ?? games.find((g) => g.old_slugs?.includes(slug));
+}
+
 export const plays = (g: Game) => g.stats?.plays ?? 0;
 export const likes = (g: Game) => g.stats?.likes ?? 0;
 
