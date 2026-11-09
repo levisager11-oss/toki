@@ -3,6 +3,7 @@ import { Link, useLocation, useParams, useSearchParams } from "react-router-dom"
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
 import { useGames } from "../lib/useGames";
+import { findGame } from "../lib/games";
 import { deleteRelease, listReleases, nextVersion, type Release } from "../lib/releases";
 import { ReleaseCard } from "../components/ReleaseCard";
 import { ReleaseForm } from "../components/ReleaseForm";
@@ -15,7 +16,7 @@ export function Releases() {
   const { games, error: gamesError } = useGames();
   const location = useLocation();
   const [params, setParams] = useSearchParams();
-  const game = slug ? games?.find((g) => g.slug === slug) : undefined;
+  const game = slug ? findGame(games, slug) : undefined;
   const gameId = slug ? game?.id : null; // undefined while loading
   const [releases, setReleases] = useState<Release[] | null>(null);
   const [error, setError] = useState(false);

@@ -84,6 +84,19 @@ export function useFavorites() {
   return { favs, isFav: (slug: string) => favs.includes(slug), toggle };
 }
 
+/** Favorites and recently played saved under a game's old slug move to its current one. */
+export function renameSlugs(games: Game[]) {
+  const current = new Map<string, string>();
+  for (const g of games) for (const old of g.old_slugs ?? []) current.set(old, g.slug);
+  for (const g of games) current.delete(g.slug); // a slug in use by a game is that game's
+  if (!current.size) return;
+  for (const key of [FAV_KEY, RECENT_KEY, SYNCED_KEY]) {
+    const list = read(key);
+    if (!list.some((s) => current.has(s))) continue;
+    write(key, [...new Set(list.map((s) => current.get(s) ?? s))]);
+  }
+}
+
 /** Sends likes for favorites saved before likes existed, or that failed to send. */
 export function syncLikes(games: Game[]) {
   const favs = new Set(read(FAV_KEY));

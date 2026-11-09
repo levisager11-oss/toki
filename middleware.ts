@@ -12,10 +12,13 @@ export const config = { matcher: ["/", "/game/:slug*"] };
 const SITE_DESCRIPTION = "Free browser games. Play instantly, no account needed.";
 
 async function gameMeta(slug: string, origin: string): Promise<PageMeta | null> {
-  const q = `slug=eq.${encodeURIComponent(slug)}&select=slug,title,description,thumbnail_url,cover`;
+  // The current slug, or an old one of a renamed game.
+  const s = encodeURIComponent(slug);
+  const q = `or=(slug.eq.${s},old_slugs.cs.%7B${s}%7D)&select=slug,title,description,thumbnail_url,cover`;
   const res = await fetch(`${SUPABASE_URL}/rest/v1/games?${q}`, { headers: { apikey: SUPABASE_KEY } });
   if (!res.ok) return null;
-  const [g] = (await res.json()) as { slug: string; title: string; description: string; thumbnail_url: string | null; cover: string | null }[];
+  const rows = (await res.json()) as { slug: string; title: string; description: string; thumbnail_url: string | null; cover: string | null }[];
+  const g = rows.find((r) => r.slug === slug) ?? rows[0];
   if (!g) return null;
   return {
     title: `${g.title} · Toki`,

@@ -6,6 +6,7 @@ import { useI18n } from "../lib/i18n";
 import { canCreate } from "../lib/types";
 import { SaveHistory } from "../components/SaveHistory";
 import { MyFeedback } from "../components/MyFeedback";
+import { EditProfile } from "../components/EditProfile";
 
 export function Account() {
   const { t } = useI18n();
@@ -32,9 +33,17 @@ export function Account() {
       <h1 className="h">@{profile.username}</h1>
       <p className="lead">{t(`account.role.${profile.role}`)}</p>
       <p>{t("account.saves")}</p>
+      <div className="actions">
+        <Link to={`/u/${profile.username}`} className="btn">{t("soc.viewProfile")}</Link>
+        <Link to="/friends" className="btn">{t("nav.friends")}</Link>
+        <Link to="/chat" className="btn">{t("nav.chat")}</Link>
+        {profile.role === "admin" && <Link to="/reports" className="btn">{t("nav.reports")}</Link>}
+      </div>
+
+      <EditProfile />
 
       {canCreate(profile) ? (
-        <div className="actions">
+        <div className="actions" style={{ marginTop: 24 }}>
           <Link to="/my-games" className="btn">{t("nav.myGames")}</Link>
           <Link to="/add" className="btn">{t("nav.addGame")}</Link>
           <Link to="/feedback/inbox" className="btn">{t("fb.inbox.title")}</Link>

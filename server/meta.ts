@@ -20,12 +20,13 @@ export function injectMeta(html: string, m: PageMeta): string {
     `<meta name="twitter:card" content="summary_large_image" />`,
     `<link rel="canonical" href="${esc(m.url)}" />`,
   ].join("\n    ");
+  // Replacement functions, not strings: a "$" in a game's title must stay a "$".
   return html
-    .replace(/<title>[^<]*<\/title>/, `<title>${esc(m.title)}</title>`)
-    .replace(/<meta name="description" content="[^"]*" \/>/, `<meta name="description" content="${esc(description)}" />`)
+    .replace(/<title>[^<]*<\/title>/, () => `<title>${esc(m.title)}</title>`)
+    .replace(/<meta name="description" content="[^"]*" \/>/, () => `<meta name="description" content="${esc(description)}" />`)
     .replace(/\s*<meta (property="og:|name="twitter:)[^>]*>/g, "")
     .replace(/\s*<link rel="canonical"[^>]*>/g, "")
-    .replace("</head>", `    ${tags}\n  </head>`);
+    .replace("</head>", () => `    ${tags}\n  </head>`);
 }
 
 /** Chat apps and search engines that read link previews. Normal browsers don't match. */

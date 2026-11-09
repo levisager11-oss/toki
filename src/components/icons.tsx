@@ -45,6 +45,12 @@ export const ShareIcon = () => (
 export const UserIcon = () => (
   <svg {...tab}><path d="M10 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM3.5 17.5c.8-3.3 3.3-5 6.5-5s5.7 1.7 6.5 5" strokeLinejoin="round" /></svg>
 );
+export const BellIcon = () => (
+  <svg {...tab}><path d="M5 13.5V9a5 5 0 0 1 10 0v4.5l1.5 2h-13zM8.2 17.5a2 2 0 0 0 3.6 0" strokeLinejoin="round" /></svg>
+);
+export const BubbleIcon = () => (
+  <svg {...tab}><path d="M3 4h14v10H8l-4 3.5V14H3z" strokeLinejoin="round" /></svg>
+);
 export const ChatIcon = () => (
   <svg viewBox="0 0 16 16" aria-hidden="true" width="13" height="13"><path d="M2 3h12v8H7l-3 3v-3H2z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" /></svg>
 );

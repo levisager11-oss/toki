@@ -41,6 +41,11 @@ describe("injectMeta", () => {
     expect(out).toContain("<title>Deep &quot;Sub&quot; &lt;3</title>");
     expect(out).toContain(`<meta name="description" content="Dive deep" />`);
   });
+  it("keeps a $ in a title as it is", () => {
+    const cash = injectMeta(html, { title: "Cash $' Grab $&", description: "", image: "i", url: "u" });
+    expect(cash).toContain("<title>Cash $' Grab $&amp;</title>");
+    expect(cash.match(/<\/head>/g)).toHaveLength(1);
+  });
   it("adds preview tags once", () => {
     expect(out.match(/og:title/g)).toHaveLength(1);
     expect(out).toContain(`<meta property="og:image" content="https://x/og.png" />`);

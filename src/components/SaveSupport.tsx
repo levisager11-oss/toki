@@ -13,7 +13,8 @@ Do this:
 1. In the game's main HTML file (the page Toki opens), add the script below as an inline <script> inside <head>, before the game's own scripts. Copy it exactly.
 2. If the game saves with localStorage, nothing else is needed.
 3. If the game saves another way (IndexedDB, Godot user:// files, cookies, a server), also keep a copy of the save in localStorage under one key: write it there every time the game saves, and when the game starts, load from that key if it exists. For Godot, use JavaScriptBridge to call localStorage.
-4. Don't change anything else. Outside Toki the script does nothing.
+4. High scores (if the game has a score or a best time): when a round ends, call \`window.toki?.score(points)\`. For times, send milliseconds. Toki keeps each player's best and shows a leaderboard.
+5. Don't change anything else. Outside Toki the script does nothing.
 
 Script:
 ${code}
