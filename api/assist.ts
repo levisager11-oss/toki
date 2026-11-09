@@ -24,6 +24,9 @@ import type { ChatMessage } from "../server/ai/provider.js";
 
 // Vercel gives this function a minute; leave room to answer.
 const TIMEOUT_MS = 50_000;
+// Tokens are free here, so every answer gets plenty of room: models that think first (like Qwen)
+// use part of it for thinking, and an answer cut off before any text comes back empty.
+const ROOM = 4000;
 
 export async function POST(request: Request) {
   const ctx = await context(request, ["admin", "creator", "player"]);
@@ -128,7 +131,7 @@ async function translate(ctx: Ctx, user: Db, b: Record<string, unknown>) {
     }
   }
   const size = texts.join("").length;
-  const answer = await ask(ctx, "translate", translatePrompt(texts, to), Math.min(8000, Math.ceil(size / 2) + 1500), 0.1);
+  const answer = await ask(ctx, "translate", translatePrompt(texts, to), Math.min(12000, Math.ceil(size / 2) + ROOM), 0.1);
   const out = readTranslation(answer, texts);
   if (!out) return json({ error: "ai_bad_answer" }, 502);
   const stored = JSON.stringify(out);
@@ -154,7 +157,7 @@ async function similar(ctx: Ctx, user: Db, b: Record<string, unknown>) {
     `select=id,kind,title,body,vote_count&hidden=eq.false&status=in.(open,planned,in_progress)&${gameId ? `game_id=eq.${gameId}` : "game_id=is.null"}&order=vote_count.desc&limit=150`,
   );
   if (!list.length) return json({ posts: [] });
-  const answer = await ask(ctx, "similar", similarPrompt({ kind, title, body: text }, list), 1500, 0);
+  const answer = await ask(ctx, "similar", similarPrompt({ kind, title, body: text }, list), ROOM, 0);
   const posts = readSimilar(answer, list).map((id) => list.find((p) => p.id === id)!);
   return json({ posts: posts.map((p) => ({ id: p.id, kind: p.kind, title: p.title, vote_count: p.vote_count })) });
 }
@@ -195,7 +198,7 @@ async function suggest(ctx: Ctx, b: Record<string, unknown>, lang: Lang) {
       return json({ games: saved.games.filter((g) => byId.has(g.id) && !seen.has(g.id)), cached: true });
     }
   }
-  const answer = await ask(ctx, "suggest", suggestPrompt(liked.slice(0, 10), played.slice(0, 10), candidates, lang), 1500, 0.4);
+  const answer = await ask(ctx, "suggest", suggestPrompt(liked.slice(0, 10), played.slice(0, 10), candidates, lang), ROOM, 0.4);
   const games = readSuggest(answer, candidates);
   await ctx.db
     .insert("ai_suggestions", { user_id: ctx.user.id, lang, basis, games, created_at: new Date().toISOString() }, "resolution=merge-duplicates,return=minimal")
@@ -235,7 +238,7 @@ async function release(ctx: Ctx, b: Record<string, unknown>, lang: Lang) {
   }
   const notes = str(b.notes, 1500);
   if (!notes && !fixes.length && !commits.length) return json({ error: "nothing_to_write", commitsError }, 400);
-  const answer = await ask(ctx, "release", releasePrompt({ game: game?.title ?? null, lang, notes, fixes, commits, lastVersion: last?.version ?? null }), 2500, 0.3);
+  const answer = await ask(ctx, "release", releasePrompt({ game: game?.title ?? null, lang, notes, fixes, commits, lastVersion: last?.version ?? null }), ROOM + 2000, 0.3);
   const draft = readRelease(answer);
   if (!draft) return json({ error: "ai_bad_answer" }, 502);
   return json({ ...draft, commits: commits.length, commitsError });
@@ -261,7 +264,7 @@ async function describe(ctx: Ctx, b: Record<string, unknown>) {
       de: str(b.description_de, 1000),
       page: page?.ok ? { title: page.title, text: page.text } : null,
     }),
-    2000,
+    ROOM,
     0.5,
   );
   const out = readDescribe(answer);
@@ -299,7 +302,7 @@ async function summary(ctx: Ctx, b: Record<string, unknown>, lang: Lang) {
     answered: r.answered,
     status: r.status,
   }));
-  const answer = await ask(ctx, "summary", inboxPrompt(posts, lang), 2500, 0.2);
+  const answer = await ask(ctx, "summary", inboxPrompt(posts, lang), ROOM + 2000, 0.2);
   return json({ text: plain(answer, 4000) });
 }
 
@@ -308,7 +311,7 @@ async function application(ctx: Ctx, b: Record<string, unknown>, lang: Lang) {
   const [app] = await ctx.db.select<{ about: string; links: string }>("developer_applications", `id=eq.${b.id}&select=about,links`);
   if (!app) return json({ error: "not_found" }, 404);
   const pages = await Promise.all(linksIn(`${app.links}\n${app.about}`).map((u) => readPage(u)));
-  const answer = await ask(ctx, "summary", applicationPrompt(app, pages, lang), 1500, 0.2);
+  const answer = await ask(ctx, "summary", applicationPrompt(app, pages, lang), ROOM, 0.2);
   return json({ text: plain(answer, 2000) });
 }
 
@@ -336,7 +339,7 @@ async function help(ctx: Ctx, b: Record<string, unknown>, lang: Lang) {
       guide: h?.guide ?? "",
     };
   }
-  const answer = await ask(ctx, "help", helpPrompt(game, turns, lang), 1200, 0.3);
+  const answer = await ask(ctx, "help", helpPrompt(game, turns, lang), ROOM, 0.3);
   const text = plain(answer, 3000);
   return text ? json({ text }) : json({ error: "ai_empty_answer" }, 502);
 }
@@ -368,12 +371,12 @@ async function helpSetup(ctx: Ctx, b: Record<string, unknown>) {
     const files: Record<string, string> = {};
     let total = 0;
     for (const p of guideFiles(tree, pickFiles(tree))) {
-      if (total >= 60_000) break;
-      const c = (await access.read(p, branch)).slice(0, 15_000);
+      if (total >= 40_000) break;
+      const c = (await access.read(p, branch)).slice(0, 12_000);
       files[p] = c;
       total += c.length;
     }
-    const answer = await ask(ctx, "learn", learnPrompt(g, files), 3000, 0.2);
+    const answer = await ask(ctx, "learn", learnPrompt(g, files), ROOM + 4000, 0.2);
     const guide = plain(answer, 8000);
     if (!guide) return json({ error: "ai_empty_answer" }, 502);
     Object.assign(row, { installation_id: installation, repo, guide, learned_at: new Date().toISOString() });

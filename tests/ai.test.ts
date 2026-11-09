@@ -122,6 +122,11 @@ describe("OpenAI-compatible provider", () => {
   });
 
   it("guesses tokens on the generous side", () => expect(estimateTokens("abcdef")).toBe(2));
+
+  it("says when a thinking model ran out of tokens before answering", async () => {
+    const f = reply({ choices: [{ message: { content: "" }, finish_reason: "length" }] });
+    await expect(complete({ ...CFG, model: "think-1" }, { messages: [{ role: "user", content: "hi" }], maxTokens: 16 }, f)).rejects.toThrow(/used all its tokens/);
+  });
 });
 
 /** A database that only knows ai_reserve and ai_settle. */
