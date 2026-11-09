@@ -120,6 +120,16 @@ export function Layout() {
 
   return (
     <div className="app">
+      <a
+        href="#main"
+        className="skip-link"
+        onClick={(e) => {
+          e.preventDefault();
+          document.getElementById("main")?.focus();
+        }}
+      >
+        {t("nav.skip")}
+      </a>
       <aside className="side">
         <Link to="/" className="logo"><LogoMark />toki</Link>
         <nav className="navgroup" aria-label={t("nav.play")}>
@@ -203,7 +213,7 @@ export function Layout() {
           )}
 
         </header>
-        <main className="content">
+        <main className="content" id="main" tabIndex={-1}>
           {/* A new boundary per page, so going to another page clears an error. */}
           <ErrorBoundary key={location.pathname}>
             <Outlet />

@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 
 const en = {
   "nav.play": "Play",
+  "nav.skip": "Skip to content",
   "nav.discover": "Discover",
   "nav.favorites": "Favorites",
   "nav.all": "All games",
@@ -866,6 +867,7 @@ export type Key = keyof typeof en;
 
 const de: Record<Key, string> = {
   "nav.play": "Spielen",
+  "nav.skip": "Zum Inhalt springen",
   "nav.discover": "Entdecken",
   "nav.favorites": "Favoriten",
   "nav.all": "Alle Spiele",

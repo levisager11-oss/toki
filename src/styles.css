@@ -870,3 +870,8 @@ a.author:hover { text-decoration: underline; color: var(--fg); }
 
 /* "What's new" has an update this browser hasn't seen */
 .new-dot { display: inline-block; width: 8px; height: 8px; margin-left: 6px; background: var(--danger); vertical-align: middle; }
+
+/* keyboard users: jump past the menu */
+.skip-link { position: absolute; left: 8px; top: -60px; z-index: 100; background: var(--accent); color: var(--accent-ink); padding: 8px 12px; font-weight: 700; border: 2px solid var(--accent-ink); }
+.skip-link:focus { top: 8px; }
+main.content:focus { outline: none; }
