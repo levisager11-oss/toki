@@ -11,6 +11,7 @@ import { FixedIn, PostMeta, useStatusLabel, VoteButton } from "../components/Fee
 import { useAiStatus } from "../lib/assist";
 import { TranslateToggle, useTranslate } from "../components/AiBits";
 import { useTitle } from "../lib/useTitle";
+import { Linkify } from "../components/Linkify";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -118,7 +119,7 @@ export function FeedbackPost() {
           {post.release && <p className="check good fb-fixed-note"><FixedIn post={post} /></p>}
           {post.private && <p className="check">{t("fb.post.privateNote")}</p>}
           {post.hidden && <p className="check warn">{t("fb.post.hiddenNote")}</p>}
-          {post.body && <p className="fb-body">{tr.texts?.[1] ?? post.body}</p>}
+          {post.body && <p className="fb-body"><Linkify text={tr.texts?.[1] ?? post.body} /></p>}
           <TranslateToggle tr={tr} />
           <p className="sub fb-dates">
             {post.edited_at && <>{t("fb.post.edited")} {ago(post.edited_at, lang)} · </>}
@@ -323,7 +324,7 @@ function ReplyBody({ reply }: { reply: FeedbackReply }) {
   const tr = useTranslate("reply", reply.id, reply.body);
   return (
     <>
-      <p className="fb-body">{tr.texts?.[0] ?? reply.body}</p>
+      <p className="fb-body"><Linkify text={tr.texts?.[0] ?? reply.body} /></p>
       <TranslateToggle tr={tr} />
     </>
   );

@@ -66,6 +66,7 @@ h1, h2 { text-wrap: balance; }
 .btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
 .btn.ghost-danger { border-color: var(--line); color: var(--danger); }
 .linkish.danger-text { color: var(--danger); }
+.auto-link { color: inherit; text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
 .btn.fav-btn[aria-pressed="true"] { color: var(--danger); }
 .btn.fav-btn[aria-pressed="true"] path, .fav[aria-pressed="true"] path { fill: currentColor; }
 

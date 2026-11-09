@@ -11,6 +11,7 @@ import {
 } from "../lib/social";
 import { TranslateToggle, useTranslate } from "./AiBits";
 import { Avatar } from "./Avatar";
+import { Linkify } from "./Linkify";
 
 /**
  * The messages of one chat with a box to write. New messages arrive live (Supabase Realtime),
@@ -29,7 +30,10 @@ export function ChatView({ chatId, kind, compact }: { chatId: string; kind: Chat
   const [reporting, setReporting] = useState<number | null>(null);
   const [reason, setReason] = useState("");
   const [reported, setReported] = useState<Set<number>>(new Set());
+  // Deleting takes two taps: the first asks "Sure?".
+  const [deleting, setDeleting] = useState<number | null>(null);
   const list = useRef<HTMLDivElement>(null);
+  const box = useRef<HTMLTextAreaElement>(null);
   const stick = useRef(true); // keep showing the newest message while the list is scrolled to the bottom
   const people = useRef(new Map<string, Person>());
   const me = session?.user.id;
@@ -75,6 +79,14 @@ export function ChatView({ chatId, kind, compact }: { chatId: string; kind: Chat
       supabase.removeChannel(channel);
     };
   }, [chatId, me]);
+
+  // The box grows with the message (up to a few lines), and shrinks again after sending.
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight + 2, 140)}px`;
+  }, [text]);
 
   useLayoutEffect(() => {
     const el = list.current;
@@ -182,7 +194,16 @@ export function ChatView({ chatId, kind, compact }: { chatId: string; kind: Chat
               )}
               <MessageText id={m.id} body={m.body} />
               <div className="msg-tools">
-                {(mine || isAdmin) && <button type="button" className="linkish" onClick={() => remove(m.id)}>{t("chat.delete")}</button>}
+                {(mine || isAdmin) && (
+                  <button
+                    type="button"
+                    className={`linkish ${deleting === m.id ? "danger-text" : ""}`}
+                    onClick={() => (deleting === m.id ? (setDeleting(null), remove(m.id)) : setDeleting(m.id))}
+                    onBlur={() => setDeleting((cur) => (cur === m.id ? null : cur))}
+                  >
+                    {deleting === m.id ? t("chat.deleteSure") : t("chat.delete")}
+                  </button>
+                )}
                 {!mine && (reported.has(m.id)
                   ? <span className="sub">{t("chat.reported")}</span>
                   : <button type="button" className="linkish" onClick={() => setReporting(m.id)}>{t("chat.report")}</button>)}
@@ -200,7 +221,7 @@ export function ChatView({ chatId, kind, compact }: { chatId: string; kind: Chat
       </div>
       {err && <p className="error" role="alert">{err}</p>}
       <form className="composer" onSubmit={send}>
-        <textarea rows={1} maxLength={LIMITS.message} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={onKey}
+        <textarea ref={box} rows={1} maxLength={LIMITS.message} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={onKey}
           placeholder={t("chat.placeholder")} aria-label={t("chat.placeholder")} enterKeyHint="send" />
         <button className="btn primary" disabled={sending || !text.trim()}>{t("chat.send")}</button>
       </form>
@@ -213,7 +234,7 @@ function MessageText({ id, body }: { id: number; body: string }) {
   const tr = useTranslate("message", id, body);
   return (
     <>
-      <p className="body">{tr.texts?.[0] ?? body}</p>
+      <p className="body"><Linkify text={tr.texts?.[0] ?? body} /></p>
       <TranslateToggle tr={tr} />
     </>
   );
