@@ -307,6 +307,8 @@ h1, h2 { text-wrap: balance; }
 .save-support summary span { font-size: 13px; color: var(--muted); }
 .save-support p { font-size: 14px; margin: 10px 0; }
 .save-support .actions { margin-bottom: 8px; }
+.save-connect { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; border: 1px solid var(--line); background: var(--bg); padding: 10px 12px; margin: 0 0 10px; }
+.save-connect p { flex: 1 1 260px; margin: 0; }
 .save-support pre { max-height: 160px; overflow: auto; background: var(--bg); border: 1px solid var(--line); padding: 8px; font-size: 11px; margin: 8px 0 0; }
 
 /* newer progress from another device, and earlier versions on the account page */
