@@ -216,6 +216,24 @@ describe("paths the AI may write", () => {
 
 describe("applying the AI's edits", () => {
   const files = { "index.html": "<head>\n<title>G</title>\n</head>", "a.js": "x = 1;\nx = 1;" };
+  it("matches whole lines when only spaces or indentation differ, and keeps the file's indentation", () => {
+    const code = "function save() {\n    const data = JSON.stringify(state);\n    localStorage.setItem('s', data);\n}\n";
+    const r = applyEdits({ "s.js": code }, [
+      { path: "s.js", search: "  const data = JSON.stringify(state);\n  localStorage.setItem('s',  data);", replace: "  const data = JSON.stringify(state);\n  localStorage.setItem('s', data);\n  toki.save();" },
+    ]);
+    expect(r.errors).toEqual([]);
+    expect(r.changed["s.js"]).toBe("function save() {\n    const data = JSON.stringify(state);\n    localStorage.setItem('s', data);\n    toki.save();\n}\n");
+  });
+
+  it("refuses a loose match that fits in more than one place, and shows the closest part of the file", () => {
+    const r = applyEdits({ "a.js": "  x = 1;\ny = 2;\n  x = 1;" }, [{ path: "a.js", search: "x = 1;", replace: "x = 3;" }]);
+    expect(r.errors[0]).toMatch(/more than once/);
+    const near = applyEdits({ "b.js": "let score = 0;\nfunction endRound(points) {\n  score += points;\n}" }, [
+      { path: "b.js", search: "function endRound(points) {\n  score = score + points;\n}", replace: "x" },
+    ]);
+    expect(near.errors[0]).toMatch(/not found[\s\S]*closest part of the file is:\nlet score = 0;\nfunction endRound/);
+  });
+
   it("replaces exact text and writes new files", () => {
     const r = applyEdits(files, [
       { path: "index.html", search: "<head>", replace: "<head>\n<script>t</script>" },

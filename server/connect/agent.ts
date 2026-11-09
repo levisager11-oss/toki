@@ -125,8 +125,9 @@ export async function step(job: Job, deps: Deps): Promise<StepResult> {
   // The AI's answer couldn't be used: tell it why on the next step, a few times at most.
   const retry = (feedback: string): StepResult => {
     state.badAnswers = (state.badAnswers ?? 0) + 1;
-    if (state.badAnswers > 3) return fail("ai_bad_answer");
-    state.feedback = feedback;
+    if (state.badAnswers > 3) return fail("ai_bad_answer", feedback.slice(0, 500));
+    // Numbered, so the request is never the same twice (some services cache answers).
+    state.feedback = `${feedback}\n(Note ${state.badAnswers} of 3.)`;
     return working();
   };
 
@@ -176,9 +177,9 @@ export async function step(job: Job, deps: Deps): Promise<StepResult> {
       case "change": {
         const { changed, errors } = applyEdits(files, a.edits);
         if (errors.length) {
-          if ((state.fixes ?? 0) >= 2) return fail("ai_bad_edits");
+          if ((state.fixes ?? 0) >= 2) return fail("ai_bad_edits", errors.join("\n").slice(0, 500));
           state.fixes = (state.fixes ?? 0) + 1;
-          return retry(`Your edits could not be applied:\n- ${errors.join("\n- ")}\nFix them and answer again with all edits.`);
+          return retry(`Your edits could not be applied (try ${state.fixes} of 3):\n- ${errors.join("\n- ")}\nFix them and answer again with all edits. Copy each "search" text character by character from the file.`);
         }
         const title = text(a.title, 120) || "Add Toki support";
         const summary = text(a.summary, 4000);
