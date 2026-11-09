@@ -234,3 +234,42 @@ describe("Anthropic as provider", () => {
     expect(await t.service("select name from server_secrets where name = 'anthropic_api_key'")).toEqual([{ name: "anthropic_api_key" }]);
   });
 });
+
+describe("cleanup of old logs", () => {
+  const job = (status: string, daysAgo: number) =>
+    t.service<{ id: string }>(
+      `insert into connect_jobs (user_id, installation_id, repo, features, status, created_at, updated_at)
+       values ($1, 7, 'me/game', '{saves}', $2, now() - make_interval(days => $3), now() - make_interval(days => $3)) returning id`,
+      [dev.id, status, daysAgo],
+    ).then((r) => r[0].id);
+  const usage = (status: string, daysAgo: number) =>
+    t.service<{ id: number }>(
+      `insert into ai_usage (user_id, feature, model, status, input_price, output_price, cost, created_at)
+       values ($1, 'connect', 'm', $2, 1, 2, 0.01, now() - make_interval(days => $3)) returning id`,
+      [dev.id, status, daysAgo],
+    ).then((r) => r[0].id);
+
+  it("deletes finished Connect runs after 90 days and AI cost rows after 400 days", async () => {
+    const oldDone = await job("done", 120);
+    const oldFailed = await job("failed", 95);
+    const newDone = await job("done", 10);
+    const oldOpen = await job("question", 120);
+    const oldUsage = await usage("done", 500);
+    const oldReserved = await usage("reserved", 500);
+    const newUsage = await usage("done", 30);
+
+    await t.service("select cleanup_old_logs()");
+
+    const jobs = (await t.service<{ id: string }>("select id from connect_jobs")).map((r) => r.id);
+    expect(jobs).not.toContain(oldDone);
+    expect(jobs).not.toContain(oldFailed);
+    expect(jobs).toEqual(expect.arrayContaining([newDone, oldOpen]));
+    const rows = (await t.service<{ id: number }>("select id from ai_usage")).map((r) => Number(r.id));
+    expect(rows).not.toContain(Number(oldUsage));
+    expect(rows).toEqual(expect.arrayContaining([Number(oldReserved), Number(newUsage)]));
+  });
+
+  it("can't be run by players", async () => {
+    await expect(t.as(player, "select cleanup_old_logs()")).rejects.toThrow(/permission denied/);
+  });
+});
