@@ -42,6 +42,10 @@ export function SaveSupport({ open, gameId }: { open?: boolean; gameId?: string 
         <span>{t("saveSupport.lead")}</span>
       </summary>
       <p>{t("saveSupport.how")}</p>
+      <ul className="save-points">
+        <li>{t("saveSupport.saves")}</li>
+        <li>{t("saveSupport.scores")}</li>
+      </ul>
       {connect && (
         <div className="save-connect">
           <p>
