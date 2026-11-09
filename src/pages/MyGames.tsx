@@ -7,6 +7,7 @@ import { compact, likes, myGameStats, plays } from "../lib/games";
 import { Cover } from "../components/Cover";
 import { useAiStatus } from "../lib/assist";
 import { HeartIcon, PlayIcon } from "../components/icons";
+import { useTitle } from "../lib/useTitle";
 
 export function MyGames() {
   const { t } = useI18n();
@@ -14,6 +15,7 @@ export function MyGames() {
   const { games, error } = useGames();
   const ai = useAiStatus();
   const [daily, setDaily] = useState<Record<string, number[]>>({});
+  useTitle(profile?.role === "admin" ? t("my.allTitle") : t("my.title"));
 
   useEffect(() => {
     if (profile) myGameStats().then(setDaily).catch(() => {});
@@ -49,6 +51,11 @@ export function MyGames() {
                   {g.featured ? ` · ★ ${t("home.featured")}` : ""}
                 </span>
                 <span className="sub url">{g.play_url}</span>
+                <span className="sub my-links">
+                  <Link to={`/game/${g.slug}/updates?new=1`}>{t("rel.new")}</Link>
+                  {" · "}
+                  <Link to={`/game/${g.slug}/feedback`}>{t("nav.feedback")}</Link>
+                </span>
               </div>
               <div className="stats">
                 <span title={t("stats.plays", { n: plays(g) })}><PlayIcon size={10} /> {compact(plays(g))}</span>

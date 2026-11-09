@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
+import { useTitle } from "../lib/useTitle";
 import { useI18n } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
 import { useMediaQuery } from "../lib/useMediaQuery";
@@ -17,8 +18,10 @@ import { Leaderboard, useScoreBridge } from "../components/Leaderboard";
 import { setPlaying } from "../lib/useBadges";
 import { TranslateToggle, useTranslate } from "../components/AiBits";
 import { GameHelper } from "../components/GameHelper";
+import { Screenshots } from "../components/ShotViewer";
 import { useFreeAi } from "../lib/assist";
-import { CloseIcon, FullscreenIcon, ShareIcon } from "../components/icons";
+import { CloseIcon, FullscreenIcon } from "../components/icons";
+import { ShareButton } from "../components/ShareButton";
 
 const LANDSCAPE_PHONE = "(orientation: landscape) and (pointer: coarse) and (max-height: 600px)";
 // A visit counts as a play after this long on the page (the server counts one per browser per day).
@@ -38,7 +41,6 @@ export function GamePage() {
   const landscapePhone = useMediaQuery(LANDSCAPE_PHONE);
   const fillScreen = pseudoFull || landscapePhone;
   const game = findGame(games, slug);
-  const [shared, setShared] = useState(false);
   const [helper, setHelper] = useState(false);
   const freeAi = useFreeAi();
   const gameId = game?.id;
@@ -66,14 +68,9 @@ export function GamePage() {
   }, [gameId]);
 
   useEffect(() => {
-    if (game) {
-      markPlayed(game.slug);
-      document.title = `${game.title} · Toki`;
-    }
-    return () => {
-      document.title = "Toki";
-    };
+    if (game) markPlayed(game.slug);
   }, [game]);
+  useTitle(game?.title);
 
   useEffect(() => {
     const onChange = () => {
@@ -125,7 +122,10 @@ export function GamePage() {
     return (
       <div className="msg">
         <p>{t("game.notFound")}</p>
-        <Link to="/" className="btn">{t("back")}</Link>
+        <div className="actions">
+          <Link to={`/?q=${encodeURIComponent(slug.replace(/-/g, " "))}`} className="btn primary">{t("game.searchFor", { q: slug.replace(/-/g, " ") })}</Link>
+          <Link to="/" className="btn">{t("back")}</Link>
+        </div>
       </div>
     );
 
@@ -142,19 +142,6 @@ export function GamePage() {
     if (el.requestFullscreen) el.requestFullscreen().catch(() => setPseudoFull(true));
     else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
     else setPseudoFull(true);
-  };
-  const share = async () => {
-    const url = `${location.origin}/game/${game.slug}`;
-    if (navigator.share) {
-      // The share sheet throws when the visitor closes it; nothing to do then.
-      await navigator.share({ title: game.title, url }).catch(() => {});
-      return;
-    }
-    // Only say "copied" when it was.
-    const copied = await navigator.clipboard?.writeText(url).then(() => true, () => false);
-    if (!copied) return void window.prompt(t("game.share"), url);
-    setShared(true);
-    setTimeout(() => setShared(false), 2000);
   };
   const desc = (lang === "de" && game.description_de) || game.description;
   const canEdit = profile && (profile.role === "admin" || profile.id === game.created_by);
@@ -181,6 +168,12 @@ export function GamePage() {
             title={game.title}
             allow={`fullscreen; autoplay; gamepad;${isolated ? " cross-origin-isolated;" : ""} clipboard-write; screen-wake-lock`}
             allowFullScreen
+            // On computers, keys go to the game right away (no click into it first), unless
+            // the visitor is already somewhere else on the page, e.g. typing in the search.
+            onLoad={(e) => {
+              const active = document.activeElement;
+              if (matchMedia("(pointer: fine)").matches && (!active || active === document.body)) e.currentTarget.focus({ preventScroll: true });
+            }}
           />
         </div>
         <div className="player-bar">
@@ -194,7 +187,7 @@ export function GamePage() {
           </div>
           <div className="actions">
             <FavButton game={game} withLabel />
-            <button type="button" className="btn" onClick={share} aria-live="polite"><ShareIcon />{shared ? t("game.copied") : t("game.share")}</button>
+            <ShareButton path={`/game/${game.slug}`} title={game.title} />
             {canEdit && <Link to={`/edit/${game.slug}`} className="btn">{t("game.edit")}</Link>}
             <button type="button" className="btn primary" onClick={fullscreen}><FullscreenIcon />{t("game.fullscreen")}</button>
           </div>
@@ -226,13 +219,7 @@ export function GamePage() {
       {game.screenshots.length > 0 && (
         <section>
           <div className="sechead"><h2>{t("game.screenshots")}</h2></div>
-          <div className="shots">
-            {game.screenshots.map((src, n) => (
-              <a key={src} href={src} target="_blank" rel="noopener noreferrer">
-                <img src={src} alt={t("game.screenshotN", { n: n + 1, title: game.title })} loading="lazy" decoding="async" />
-              </a>
-            ))}
-          </div>
+          <Screenshots shots={game.screenshots} title={game.title} />
         </section>
       )}
 

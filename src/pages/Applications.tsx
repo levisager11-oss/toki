@@ -6,10 +6,12 @@ import { summarizeApplication } from "../lib/assist";
 import {
   APPLICATIONS_CHANGED, developers, linkParts, openApplications, reviewApplication, setDeveloper, type Application,
 } from "../lib/applications";
+import { useTitle } from "../lib/useTitle";
 
 /** Admins: open applications for developer accounts, and who is a developer (/applications). */
 export function Applications() {
   const { t } = useI18n();
+  useTitle(t("apps.title"));
   const [apps, setApps] = useState<Application[] | null>(null);
   const [devs, setDevs] = useState<{ id: string; username: string }[] | null>(null);
   const [error, setError] = useState(false);

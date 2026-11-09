@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
@@ -14,6 +14,8 @@ import { SaveSupport } from "../components/SaveSupport";
 import { AiBox } from "../components/AiBits";
 import { HelperSetup } from "../components/HelperSetup";
 import { assistError, describeGame, useFreeAi } from "../lib/assist";
+import { useTitle } from "../lib/useTitle";
+import { extFor, removeGameImages, shrinkGameImage } from "../lib/gameImages";
 
 const MAX_IMAGE = 2 * 1024 * 1024;
 const MAX_SHOTS = 4;
@@ -25,6 +27,7 @@ export function GameForm() {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const [orig, setOrig] = useState<Game | null>(null);
+  useTitle(editSlug ? t("form.editTitle") : t("form.addTitle"));
   const [missing, setMissing] = useState(false);
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
@@ -48,6 +51,26 @@ export function GameForm() {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Pictures uploaded while this form is open. The ones not saved with the game are deleted again.
+  const uploaded = useRef<string[]>([]);
+  const saved = useRef(false);
+  useEffect(
+    () => () => {
+      if (!saved.current) removeGameImages(uploaded.current);
+    },
+    [],
+  );
+  // Something was typed or picked: closing or reloading the tab asks first.
+  const [dirty, setDirty] = useState(false);
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
 
   useEffect(() => {
     if (!editSlug) return;
@@ -86,37 +109,45 @@ export function GameForm() {
     if (!slugEdited) setSlug(slugify(v));
   };
 
-  /** Uploads an image and returns its public link, or null (with an error shown) if it failed. */
-  const uploadImage = async (file: File): Promise<string | null> => {
+  /**
+   * Shrinks a picture to at most maxSide pixels, uploads it and returns its public link,
+   * or null (with an error shown) if it failed.
+   */
+  const uploadImage = async (file: File, maxSide: number): Promise<string | null> => {
     setErr("");
-    if (file.size > MAX_IMAGE) {
-      setErr(t("form.imageTooBig"));
-      return null;
-    }
-    const ext = (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "");
-    const path = `${profile!.id}/${crypto.randomUUID()}.${ext}`;
     setBusy(true);
-    const { error } = await supabase.storage.from("thumbnails").upload(path, file, { contentType: file.type, upsert: false });
-    setBusy(false);
-    if (error) {
-      setErr(t("form.error"));
-      return null;
+    try {
+      const blob = await shrinkGameImage(file, maxSide);
+      if (blob.size > MAX_IMAGE) {
+        setErr(t("form.imageTooBig"));
+        return null;
+      }
+      const path = `${profile!.id}/${crypto.randomUUID()}.${extFor(blob.type || file.type)}`;
+      const { error } = await supabase.storage.from("thumbnails").upload(path, blob, { contentType: blob.type || file.type, upsert: false });
+      if (error) {
+        setErr(t("form.error"));
+        return null;
+      }
+      const link = supabase.storage.from("thumbnails").getPublicUrl(path).data.publicUrl;
+      uploaded.current.push(link);
+      return link;
+    } finally {
+      setBusy(false);
     }
-    return supabase.storage.from("thumbnails").getPublicUrl(path).data.publicUrl;
   };
   const upload = async (file: File) => {
-    const link = await uploadImage(file);
+    const link = await uploadImage(file, 1200);
     if (link) setImage(link);
   };
   const uploadBanner = async (file: File) => {
-    const link = await uploadImage(file);
+    const link = await uploadImage(file, 2000);
     if (link) {
       setBannerRatio(null);
       setBanner(link);
     }
   };
   const addShot = async (file: File) => {
-    const link = await uploadImage(file);
+    const link = await uploadImage(file, 1920);
     if (link) setShots((s) => [...s, link].slice(0, MAX_SHOTS));
   };
 
@@ -149,6 +180,12 @@ export function GameForm() {
       : await supabase.from("games").insert({ ...row, created_by: profile!.id });
     setBusy(false);
     if (res.error) return setErr(res.error.code === "23505" ? t("form.slugTaken") : t("form.error"));
+    setDirty(false);
+    // Pictures the game had or got here but doesn't use any more: delete them.
+    saved.current = true;
+    const used = new Set([row.thumbnail_url, row.banner_url, ...row.screenshots]);
+    const before = orig ? [orig.thumbnail_url, orig.banner_url, ...(orig.screenshots ?? [])] : [];
+    removeGameImages([...before, ...uploaded.current].filter((u) => u && !used.has(u)));
     invalidateGames();
     navigate(`/game/${row.slug}`);
   };
@@ -159,6 +196,8 @@ export function GameForm() {
     const { error } = await supabase.from("games").delete().eq("id", orig.id);
     setBusy(false);
     if (error) return setErr(t("form.error"));
+    saved.current = true;
+    removeGameImages([orig.thumbnail_url, orig.banner_url, ...(orig.screenshots ?? []), ...uploaded.current]);
     invalidateGames();
     navigate("/my-games");
   };
@@ -166,7 +205,7 @@ export function GameForm() {
   return (
     <section className="panel">
       <h1 className="h">{orig ? t("form.editTitle") : t("form.addTitle")}</h1>
-      <form className="form two" onSubmit={submit}>
+      <form className="form two" onSubmit={submit} onChange={() => setDirty(true)}>
         <div className="col">
           <label htmlFor="title">{t("form.title")}</label>
           <input id="title" required maxLength={60} value={title} onChange={(e) => onTitle(e.target.value)} />

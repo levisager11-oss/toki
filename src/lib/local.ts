@@ -174,3 +174,8 @@ export function useRecent() {
 export function markPlayed(slug: string) {
   write(RECENT_KEY, [slug, ...read(RECENT_KEY).filter((s) => s !== slug)].slice(0, 12));
 }
+
+/** Forgets the recently played games in this browser. */
+export function clearRecent() {
+  write(RECENT_KEY, []);
+}

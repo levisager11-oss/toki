@@ -9,6 +9,7 @@ import {
   ApiError, connectError, githubDisconnect, githubInstallLink, githubRepos, myBudget, myJobs, startJob, usd,
   type Budget, type ConnectJob, type Feature, type GitHubInfo,
 } from "../lib/ai";
+import { useTitle } from "../lib/useTitle";
 
 /** Toki Connect for developers: connect GitHub, start a run, see earlier runs (/connect). */
 export function Connect() {
@@ -69,12 +70,7 @@ export function Connect() {
       });
   }, [reload]);
 
-  useEffect(() => {
-    document.title = `${t("connect.title")} · Toki`;
-    return () => {
-      document.title = "Toki";
-    };
-  }, [t]);
+  useTitle(t("connect.title"));
 
   const mine = useMemo(() => (games ?? []).filter((g) => profile && (profile.role === "admin" || g.created_by === profile.id)), [games, profile]);
   if (error) return <p className="msg">{t("error")}</p>;

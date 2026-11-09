@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation, useNavigate, useNavigationType, useSearchParams } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
 import { canCreate } from "../lib/types";
@@ -8,6 +8,8 @@ import { useBottomBarFix } from "../lib/useBottomBarFix";
 import { APPLICATIONS_CHANGED, openApplicationCount } from "../lib/applications";
 import { BellIcon, BubbleIcon, HeartTabIcon, HomeIcon, KeyIcon, ListIcon, LogoMark, LogoutIcon, PlusIcon, SearchIcon, UserIcon } from "./icons";
 import { useBadges } from "../lib/useBadges";
+import { setTitleCount } from "../lib/useTitle";
+import { useNewUpdate } from "../lib/whatsNew";
 import { Avatar } from "./Avatar";
 import { useAiStatus } from "../lib/assist";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -22,11 +24,16 @@ export function Layout() {
   const { t, lang, setLang } = useI18n();
   const { profile, signOut } = useAuth();
   const badges = useBadges();
+  const newUpdate = useNewUpdate();
+  const offline = useOffline();
+  const unread = profile ? badges.notifications + badges.chats : 0;
+  useEffect(() => setTitleCount(unread), [unread]);
   const ai = useAiStatus();
   const [params] = useSearchParams();
   const [q, setQ] = useState(params.get("q") ?? "");
   const navigate = useNavigate();
   const location = useLocation();
+  const navType = useNavigationType();
   const searchRef = useRef<HTMLInputElement>(null);
   const tabbarRef = useRef<HTMLElement>(null);
   useBottomBarFix(tabbarRef);
@@ -46,11 +53,14 @@ export function Layout() {
   }, [isAdmin, location.pathname]);
 
   useEffect(() => {
-    setQ(params.get("q") ?? "");
+    // Keeps what is being typed (e.g. a space at the end) when it's the same search.
+    const p = params.get("q") ?? "";
+    setQ((cur) => (cur.trim() === p ? cur : p));
   }, [params]);
   useEffect(() => {
     if (!location.hash) {
-      window.scrollTo(0, 0);
+      // Back and forward: leave the browser to go back to where the visitor was.
+      if (navType !== "POP") window.scrollTo(0, 0);
       return;
     }
     // A link to a part of a page (e.g. a game's high scores): wait for it to load, then go there.
@@ -61,6 +71,8 @@ export function Layout() {
       if (el || ++tries > 30) clearInterval(id);
     }, 150);
     return () => clearInterval(id);
+    // Only a new page counts, not e.g. the search text changing on the home page (navType
+    // is read for the change that led here).
   }, [location.pathname, location.hash]);
   useEffect(() => {
     // Only game pages can be isolated (the game page checks its own game).
@@ -78,10 +90,25 @@ export function Layout() {
     return () => document.removeEventListener("keydown", onKey);
   }, []);
 
+  // On the home page the list filters while typing; elsewhere the search starts on Enter.
+  const onType = (v: string) => {
+    setQ(v);
+    if (location.pathname !== "/") return;
+    const next = v.trim();
+    if (next === (params.get("q") ?? "")) return;
+    // Keeps the chosen category.
+    const p = new URLSearchParams(params);
+    if (next) p.set("q", next);
+    else p.delete("q");
+    const query = p.toString();
+    navigate(query ? `/?${query}` : "/", { replace: true });
+  };
+
   const onSearch = (e: FormEvent) => {
     e.preventDefault();
     const v = q.trim();
     searchRef.current?.blur(); // closes the phone keyboard
+    if (location.pathname === "/") return; // already shown while typing
     navigate(v ? `/?q=${encodeURIComponent(v)}` : "/");
   };
 
@@ -94,6 +121,16 @@ export function Layout() {
 
   return (
     <div className="app">
+      <a
+        href="#main"
+        className="skip-link"
+        onClick={(e) => {
+          e.preventDefault();
+          document.getElementById("main")?.focus();
+        }}
+      >
+        {t("nav.skip")}
+      </a>
       <aside className="side">
         <Link to="/" className="logo"><LogoMark />toki</Link>
         <nav className="navgroup" aria-label={t("nav.play")}>
@@ -127,7 +164,7 @@ export function Layout() {
         <div className="side-foot">
           <nav className="navgroup" aria-label="Toki">
             <h4>Toki</h4>
-            <NavLink to="/updates">{t("rel.whatsNew")}</NavLink>
+            <NavLink to="/updates">{t("rel.whatsNew")}{newUpdate && <span className="new-dot" title={t("rel.newSinceVisit")}><span className="sr-only">{t("rel.newSinceVisit")}</span></span>}</NavLink>
             <NavLink to="/feedback" end>{t("nav.feedback")}</NavLink>
           </nav>
           {profile ? (
@@ -157,7 +194,7 @@ export function Layout() {
           <Link to="/" className="logo mobile-only"><LogoMark />toki</Link>
           <form className="search" role="search" onSubmit={onSearch}>
             <SearchIcon />
-            <input ref={searchRef} id="search" type="search" enterKeyHint="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("search.placeholder")} aria-label={t("search.placeholder")} />
+            <input ref={searchRef} id="search" type="search" enterKeyHint="search" value={q} onChange={(e) => onType(e.target.value)} onKeyDown={(e) => e.key === "Escape" && q && (e.preventDefault(), onType(""))} placeholder={t("search.placeholder")} aria-label={t("search.placeholder")} />
             <kbd aria-hidden="true">/</kbd>
           </form>
           <div className="spacer" />
@@ -177,13 +214,14 @@ export function Layout() {
           )}
 
         </header>
-        <main className="content">
+        {offline && <p className="offline-bar" role="status">{t("offline")}</p>}
+        <main className="content" id="main" tabIndex={-1}>
           {/* A new boundary per page, so going to another page clears an error. */}
           <ErrorBoundary key={location.pathname}>
             <Outlet />
           </ErrorBoundary>
           <footer className="foot mobile-only">
-            <Link to="/updates">{t("nav.updates")}</Link>
+            <Link to="/updates">{t("nav.updates")}{newUpdate && <span className="new-dot" title={t("rel.newSinceVisit")}><span className="sr-only">{t("rel.newSinceVisit")}</span></span>}</Link>
             <Link to="/feedback">{t("nav.tokiFeedback")}</Link>
           </footer>
         </main>
@@ -211,4 +249,19 @@ export function Layout() {
       </nav>
     </div>
   );
+}
+
+/** true while the browser has no internet connection. */
+function useOffline() {
+  const [offline, setOffline] = useState(() => typeof navigator !== "undefined" && navigator.onLine === false);
+  useEffect(() => {
+    const update = () => setOffline(!navigator.onLine);
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
+  return offline;
 }

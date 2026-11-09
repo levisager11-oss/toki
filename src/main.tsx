@@ -15,7 +15,7 @@ window.addEventListener("vite:preloadError", (e) => {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <I18nProvider>
         <ErrorBoundary>
           <AuthProvider>

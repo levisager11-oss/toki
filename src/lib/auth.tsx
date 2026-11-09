@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "./supabase";
 import { stopAccountSaves } from "./saves";
 import { syncAccountLikes } from "./local";
@@ -26,6 +27,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [profileRun, setProfileRun] = useState(0);
   const loadedFor = useRef<string | undefined>(undefined);
+  // Kept in a ref: navigate changes with every page, and the login listener should only start once.
+  const nav = useNavigate();
+  const navigate = useRef(nav);
+  navigate.current = nav;
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -33,9 +38,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setReady(true);
       if (!data.session) setLoading(false);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((e, s) => {
       if (!s) stopAccountSaves(); // logged out (also in another tab)
       setSession(s);
+      // Opened the link from a "reset your password" email (wherever it led): choose the new password.
+      if (e === "PASSWORD_RECOVERY" && location.pathname !== "/reset-password") navigate.current("/reset-password", { replace: true });
     });
     return () => sub.subscription.unsubscribe();
   }, []);

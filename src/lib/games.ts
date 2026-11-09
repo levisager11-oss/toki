@@ -53,12 +53,16 @@ export function findGame(games: Game[] | null | undefined, slug: string): Game |
 export const plays = (g: Game) => g.stats?.plays ?? 0;
 export const likes = (g: Game) => g.stats?.likes ?? 0;
 
-/** Lowercase search over title, author, engine and category name. */
+/** Search over title, author, engine, category name and description (both languages). Ignores case and accents; every word must match. */
 export function matches(g: Game, q: string, categoryName: string): boolean {
-  if (!q) return true;
-  const hay = [g.title, g.author?.username ?? "", g.engine ?? "", categoryName].join(" ").toLowerCase();
-  return hay.includes(q.trim().toLowerCase());
+  const words = fold(q).split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  const hay = fold([g.title, g.author?.username ?? "", g.engine ?? "", categoryName, g.description ?? "", g.description_de ?? ""].join(" "));
+  return words.every((w) => hay.includes(w));
 }
+
+/** Lowercase without accents, so "uber" finds "Über". */
+const fold = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
 
 /** Short number: 950, 1.2k, 12k, 1.3M. */
 export function compact(n: number): string {
@@ -77,3 +81,22 @@ export function slugify(title: string): string {
     .slice(0, 40)
     .replace(/-+$/, "");
 }
+
+// ---------- sorting the game list ----------
+export const SORTS = ["new", "popular", "liked", "updated"] as const;
+export type Sort = (typeof SORTS)[number];
+
+/**
+ * The game list in the chosen order. The list from the server is newest first.
+ * "Recently updated" goes by the last posted update; games without one count from when they were added.
+ */
+export function sortGames(games: Game[], sort: Sort, updates: Map<string, string> = new Map()): Game[] {
+  if (sort === "popular") return [...games].sort((a, b) => plays(b) - plays(a));
+  if (sort === "liked") return [...games].sort((a, b) => likes(b) - likes(a) || plays(b) - plays(a));
+  if (sort === "updated") {
+    const at = (g: Game) => Date.parse(updates.get(g.id) ?? g.created_at) || 0;
+    return [...games].sort((a, b) => at(b) - at(a));
+  }
+  return games;
+}
+

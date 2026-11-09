@@ -1,11 +1,15 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useI18n } from "../lib/i18n";
 import { safeNext } from "../lib/nav";
+import { useTitle } from "../lib/useTitle";
+import { useAuth } from "../lib/auth";
+import { passwordError } from "../components/PasswordForm";
 
 export function Signup() {
   const { t } = useI18n();
+  useTitle(t("signup.title"));
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [invite, setInvite] = useState(params.get("invite") ?? "");
@@ -15,6 +19,9 @@ export function Signup() {
   const [err, setErr] = useState("");
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
+  const { session, ready } = useAuth();
+  // Already logged in: nothing to do here.
+  if (ready && session && !busy && !done) return <Navigate to={safeNext(params.get("next"))} replace />;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -35,7 +42,11 @@ export function Signup() {
         options: { data: { invite: code, username: name }, emailRedirectTo: `${window.location.origin}/login` },
       });
       if (error) {
-        if (!error.message.includes("Database error")) return setErr(error.message);
+        if (/already (registered|exists)/i.test(error.message)) return setErr(t("signup.emailTaken"));
+        if (!error.message.includes("Database error")) {
+          const key = passwordError(error.message);
+          return setErr(key === "error" && /email/i.test(error.message) ? t("signup.badEmail") : t(key));
+        }
         // The account couldn't be made: someone took the name just now, or the invite is used up.
         const { data: takenNow } = await supabase.from("profiles").select("id").eq("username", name).maybeSingle();
         return setErr(takenNow || !code ? t("signup.usernameTaken") : t("signup.badInvite"));
@@ -66,7 +77,7 @@ export function Signup() {
       <p className="lead">{t("signup.subtitle")}</p>
       <form className="form" onSubmit={submit}>
         <label htmlFor="username">{t("signup.username")}</label>
-        <input id="username" required pattern="[a-z0-9_]{3,20}" value={username} onChange={(e) => setUsername(e.target.value.toLowerCase())} autoComplete="username" aria-describedby="username-help" />
+        <input id="username" required pattern="[a-z0-9_]{3,20}" value={username} onChange={(e) => setUsername(e.target.value.toLowerCase())} autoComplete="username" autoCapitalize="none" spellCheck={false} aria-describedby="username-help" />
         <small id="username-help">{t("signup.usernameHelp")}</small>
         <label htmlFor="email">{t("login.email")}</label>
         <input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
@@ -76,7 +87,12 @@ export function Signup() {
         <label htmlFor="invite">{t("signup.invite")}</label>
         <input id="invite" value={invite} onChange={(e) => setInvite(e.target.value)} autoComplete="off" spellCheck={false} aria-describedby="invite-help" />
         <small id="invite-help">{t("signup.inviteHelp")}</small>
-        {err && <p className="error" role="alert">{err}</p>}
+        {err && (
+          <p className="error" role="alert">
+            {err}
+            {err === t("signup.emailTaken") && <> <Link to="/login?forgot=1">{t("login.forgot")}</Link></>}
+          </p>
+        )}
         <button className="btn primary" disabled={busy}>{busy ? t("loading") : t("signup.submit")}</button>
       </form>
       <p className="alt">{t("signup.haveAccount")} <Link to={`/login${location.search}`}>{t("nav.login")}</Link></p>

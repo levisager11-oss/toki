@@ -7,6 +7,8 @@ import { findGame } from "../lib/games";
 import { deleteRelease, groupReleases, listReleases, nextSmallVersion, nextVersion, type Release } from "../lib/releases";
 import { ReleaseCard } from "../components/ReleaseCard";
 import { ReleaseForm } from "../components/ReleaseForm";
+import { useTitle } from "../lib/useTitle";
+import { markUpdatesSeen } from "../lib/whatsNew";
 
 /** Release notes of one game (/game/:slug/updates) or of Toki itself (/updates). */
 export function Releases() {
@@ -38,18 +40,18 @@ export function Releases() {
     };
   }, [gameId, reload]);
 
+  // Toki's own updates page: everything on it now counts as seen (the "What's new" dot goes away).
+  useEffect(() => {
+    if (gameId === null && releases?.length) markUpdatesSeen(releases[0].published_at);
+  }, [gameId, releases]);
+
   // Links like "Fixed in 1.2" point at one update: scroll to it once the list is there.
   useEffect(() => {
     if (releases && target) document.getElementById(`r-${target}`)?.scrollIntoView({ block: "start" });
   }, [releases, target]);
 
   const title = game ? t("rel.title.game", { title: game.title }) : t("rel.title.toki");
-  useEffect(() => {
-    document.title = `${title} · Toki`;
-    return () => {
-      document.title = "Toki";
-    };
-  }, [title]);
+  useTitle(title);
 
   const setWriting = (on: boolean) =>
     setParams((p) => {

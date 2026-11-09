@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
@@ -11,30 +11,51 @@ import {
 } from "../lib/social";
 import { TranslateToggle, useTranslate } from "./AiBits";
 import { Avatar } from "./Avatar";
+import { Linkify } from "./Linkify";
+import { useDraft } from "../lib/useDraft";
 
 /**
  * The messages of one chat with a box to write. New messages arrive live (Supabase Realtime),
  * only while this is on screen. Deleted messages disappear on the next visit: listening for
  * deletes would send every deleted message (also the daily cleanup) to everyone online.
  */
-export function ChatView({ chatId, kind, compact }: { chatId: string; kind: ChatKind; compact?: boolean }) {
+export function ChatView({ chatId, kind, compact, unread }: {
+  chatId: string;
+  kind: ChatKind;
+  compact?: boolean;
+  /** Unread messages when the chat was opened (undefined while not known yet). */
+  unread?: number;
+}) {
   const { t, lang } = useI18n();
   const { session, profile } = useAuth();
   const location = useLocation();
   const [messages, setMessages] = useState<Message[] | null>(null);
+  // The first message that was unread when the chat opened: a "New messages" line goes above it.
+  // Decided once, so it stays put after the chat is marked as read.
+  const [firstNew, setFirstNew] = useState<number | null | undefined>(undefined);
   const [more, setMore] = useState(false);
-  const [text, setText] = useState("");
+  const [text, setText] = useDraft(`chat.${chatId}`);
   const [err, setErr] = useState("");
   const [sending, setSending] = useState(false);
   const [reporting, setReporting] = useState<number | null>(null);
   const [reason, setReason] = useState("");
   const [reported, setReported] = useState<Set<number>>(new Set());
+  // Deleting takes two taps: the first asks "Sure?".
+  const [deleting, setDeleting] = useState<number | null>(null);
   const list = useRef<HTMLDivElement>(null);
+  const box = useRef<HTMLTextAreaElement>(null);
   const stick = useRef(true); // keep showing the newest message while the list is scrolled to the bottom
   const people = useRef(new Map<string, Person>());
   const me = session?.user.id;
   const isAdmin = profile?.role === "admin";
   const remember = (ms: Message[]) => ms.forEach((m) => m.author && people.current.set(m.author_id, m.author));
+
+  // Re-draws once a minute, so "now" becomes "1 minute ago" while the chat stays open.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => document.visibilityState === "visible" && setTick((n) => n + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   const markRead = () => {
     if ((kind === "dm" || kind === "group") && document.visibilityState === "visible") markChatRead(chatId).then(refreshBadges, () => {});
@@ -70,11 +91,49 @@ export function ChatView({ chatId, kind, compact }: { chatId: string; kind: Chat
         markRead();
       })
       .subscribe();
+    // Back from the background (e.g. a phone that slept): the live connection may have
+    // missed messages, so fetch the newest ones once and add what's missing.
+    let hiddenAt = 0;
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return void (hiddenAt = Date.now());
+      // A quick look at another tab: the live connection is still there.
+      if (!hiddenAt || Date.now() - hiddenAt < 30_000) return;
+      listMessages(chatId).then(
+        (ms) => {
+          if (!alive) return;
+          remember(ms);
+          setMessages((list) => {
+            if (!list) return list;
+            const have = new Set(list.map((x) => x.id));
+            const added = ms.filter((x) => !have.has(x.id));
+            return added.length ? [...list, ...added].sort((a, b) => a.id - b.id) : list;
+          });
+          markRead();
+        },
+        () => {},
+      );
+    };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       alive = false;
+      document.removeEventListener("visibilitychange", onVisible);
       supabase.removeChannel(channel);
     };
   }, [chatId, me]);
+
+  // The box grows with the message (up to a few lines), and shrinks again after sending.
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight + 2, 140)}px`;
+  }, [text]);
+
+  useEffect(() => {
+    if (firstNew !== undefined || !messages || unread === undefined) return;
+    const theirs = messages.filter((m) => m.author_id !== me);
+    setFirstNew(unread > 0 && unread <= theirs.length ? theirs[theirs.length - unread].id : null);
+  }, [messages, unread, firstNew, me]);
 
   useLayoutEffect(() => {
     const el = list.current;
@@ -167,12 +226,14 @@ export function ChatView({ chatId, kind, compact }: { chatId: string; kind: Chat
         {messages?.length === 0 && <p className="msg empty">{t(kind === "public" || kind === "game" ? "chat.emptyRoom" : "chat.empty")}</p>}
         {messages?.map((m, i) => {
           const prev = messages[i - 1];
-          const grouped = prev && prev.author_id === m.author_id && new Date(m.created_at).getTime() - new Date(prev.created_at).getTime() < 5 * 60_000;
+          const grouped = m.id !== firstNew && prev && prev.author_id === m.author_id && new Date(m.created_at).getTime() - new Date(prev.created_at).getTime() < 5 * 60_000;
           const mine = m.author_id === me;
           const who = m.author ?? people.current.get(m.author_id);
           return (
             // Focusable, so on phones a tap shows the message's Delete and Report links.
-            <div key={m.id} className={`msg-row ${mine ? "mine" : ""} ${grouped ? "grouped" : ""}`} tabIndex={-1}>
+            <Fragment key={m.id}>
+            {m.id === firstNew && i > 0 && <div className="new-line" role="separator"><span>{t("chat.newMessages")}</span></div>}
+            <div className={`msg-row ${mine ? "mine" : ""} ${grouped ? "grouped" : ""}`} tabIndex={-1}>
               {!grouped && (
                 <div className="msg-head">
                   <Link to={`/u/${who?.username ?? ""}`} className="person"><Avatar person={who} size={24} /><b>@{who?.username ?? "…"}</b></Link>
@@ -182,7 +243,16 @@ export function ChatView({ chatId, kind, compact }: { chatId: string; kind: Chat
               )}
               <MessageText id={m.id} body={m.body} />
               <div className="msg-tools">
-                {(mine || isAdmin) && <button type="button" className="linkish" onClick={() => remove(m.id)}>{t("chat.delete")}</button>}
+                {(mine || isAdmin) && (
+                  <button
+                    type="button"
+                    className={`linkish ${deleting === m.id ? "danger-text" : ""}`}
+                    onClick={() => (deleting === m.id ? (setDeleting(null), remove(m.id)) : setDeleting(m.id))}
+                    onBlur={() => setDeleting((cur) => (cur === m.id ? null : cur))}
+                  >
+                    {deleting === m.id ? t("chat.deleteSure") : t("chat.delete")}
+                  </button>
+                )}
                 {!mine && (reported.has(m.id)
                   ? <span className="sub">{t("chat.reported")}</span>
                   : <button type="button" className="linkish" onClick={() => setReporting(m.id)}>{t("chat.report")}</button>)}
@@ -195,12 +265,13 @@ export function ChatView({ chatId, kind, compact }: { chatId: string; kind: Chat
                 </form>
               )}
             </div>
+            </Fragment>
           );
         })}
       </div>
       {err && <p className="error" role="alert">{err}</p>}
       <form className="composer" onSubmit={send}>
-        <textarea rows={1} maxLength={LIMITS.message} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={onKey}
+        <textarea ref={box} rows={1} maxLength={LIMITS.message} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={onKey}
           placeholder={t("chat.placeholder")} aria-label={t("chat.placeholder")} enterKeyHint="send" />
         <button className="btn primary" disabled={sending || !text.trim()}>{t("chat.send")}</button>
       </form>
@@ -213,7 +284,7 @@ function MessageText({ id, body }: { id: number; body: string }) {
   const tr = useTranslate("message", id, body);
   return (
     <>
-      <p className="body">{tr.texts?.[0] ?? body}</p>
+      <p className="body"><Linkify text={tr.texts?.[0] ?? body} /></p>
       <TranslateToggle tr={tr} />
     </>
   );

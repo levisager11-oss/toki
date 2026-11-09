@@ -5,8 +5,13 @@ import { compact, plays } from "../lib/games";
 import { Cover } from "./Cover";
 import { FavButton } from "./FavButton";
 import { PlayIcon } from "./icons";
+import { recentlyUpdated, useLatestUpdates } from "../lib/releases";
 
 const by = (g: Game) => (g.author ? `@${g.author.username}` : "Toki");
+
+const NEW_FOR_MS = 14 * 24 * 3600_000;
+/** Added in the last two weeks. */
+export const isNew = (g: Game, now = Date.now()) => !!g.created_at && now - Date.parse(g.created_at) < NEW_FOR_MS;
 
 /** Play count with a small play icon; nothing while a game has no plays yet. */
 export function Plays({ game }: { game: Game }) {
@@ -24,11 +29,13 @@ export function Plays({ game }: { game: Game }) {
 
 export function GameCard({ game }: { game: Game }) {
   const { t } = useI18n();
+  const updated = recentlyUpdated(useLatestUpdates().get(game.id));
   return (
     <article className="card">
       <Link to={`/game/${game.slug}`} className="thumb" tabIndex={-1} aria-hidden="true">
         <Cover slug={game.slug} cover={game.cover} image={game.thumbnail_url} animate="hover" />
         <span className="tag">{t(`cat.${game.category}`)}</span>
+        {isNew(game) ? <span className="tag new">{t("game.new")}</span> : updated && <span className="tag new">{t("game.updated")}</span>}
       </Link>
       <div className="row">
         <div className="info">

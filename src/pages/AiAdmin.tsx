@@ -8,12 +8,14 @@ import {
   ApiError, connectError, developersWithQuotas, getAiSettings, monthOverview, recentUsage, saveAiSettings, setQuota, testAi, usd,
   THINKING, type AiSettings, type Overview, type Provider, type TestResult, type Thinking, type UsageRow,
 } from "../lib/ai";
+import { useTitle } from "../lib/useTitle";
 
 type Form = { enabled: boolean; provider: Provider; base_url: string; model: string; input_price: string; output_price: string; monthly_cap: string; default_quota: string; thinking: Thinking; agent_enabled: boolean; agent_budget: string };
 
 /** Admins: AI settings, this month's spending against the cap, and quotas per developer (/admin/ai). */
 export function AiAdmin() {
   const { t, lang } = useI18n();
+  useTitle(t("ai.title"));
   const [form, setForm] = useState<Form | null>(null);
   const [settings, setSettings] = useState<AiSettings | null>(null);
   const [overview, setOverview] = useState<Overview | null>(null);

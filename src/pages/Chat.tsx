@@ -12,6 +12,7 @@ import {
 import { Avatar } from "../components/Avatar";
 import { ChatView } from "../components/ChatView";
 import { useBadges } from "../lib/useBadges";
+import { useTitle } from "../lib/useTitle";
 
 /** /chat: the list of chats. /chat/toki: the public room. /chat/:id: one chat. /chat/new: a new group. */
 export function Chat() {
@@ -48,13 +49,6 @@ export function Chat() {
     };
   }, [id, t]);
 
-  useEffect(() => {
-    document.title = `${t("nav.chat")} · Toki`;
-    return () => {
-      document.title = "Toki";
-    };
-  }, [t]);
-
   const title = (c: { kind: string; title: string | null; game_id: string | null; other_username?: string | null }) =>
     c.kind === "public" ? t("chat.toki")
       : c.kind === "game" ? games?.find((g) => g.id === c.game_id)?.title ?? t("chat.gameRoom")
@@ -62,6 +56,7 @@ export function Chat() {
       : c.title ?? "";
   const summary = chat ? list?.find((c) => c.id === chat.id) : undefined;
   const open = !!id;
+  useTitle(chat ? title({ ...chat, other_username: summary?.other_username }) || t("nav.chat") : t("nav.chat"));
 
   return (
     <section className={`chat-layout ${open ? "has-chat" : ""}`}>
@@ -117,7 +112,7 @@ export function Chat() {
           <>
             <ChatHeader chat={chat} summary={summary} title={title({ ...chat, other_username: summary?.other_username })}
               onRenamed={(name) => setChat({ ...chat, title: name })} onLeft={() => { refreshBadges(); navigate("/chat"); }} />
-            <ChatView key={chat.id} chatId={chat.id} kind={chat.kind} />
+            <ChatView key={chat.id} chatId={chat.id} kind={chat.kind} unread={list ? summary?.unread ?? 0 : undefined} />
           </>
         )}
       </div>

@@ -31,6 +31,7 @@ const AiAdmin = lazy(loadPage(() => import("./pages/AiAdmin").then((m) => ({ def
 const Connect = lazy(loadPage(() => import("./pages/Connect").then((m) => ({ default: m.Connect }))));
 const ConnectJob = lazy(loadPage(() => import("./pages/ConnectJob").then((m) => ({ default: m.ConnectJob }))));
 const ConnectGitHub = lazy(loadPage(() => import("./pages/ConnectGitHub").then((m) => ({ default: m.ConnectGitHub }))));
+const ResetPassword = lazy(loadPage(() => import("./pages/ResetPassword").then((m) => ({ default: m.ResetPassword }))));
 const Invites = lazy(loadPage(() => import("./pages/Invites").then((m) => ({ default: m.Invites }))));
 
 const Later = ({ children }: { children: ReactNode }) => <Suspense fallback={null}>{children}</Suspense>;
@@ -51,6 +52,7 @@ export function App() {
           <Route path="feedback/:id" element={<Later><FeedbackPost /></Later>} />
           <Route path="login" element={<Later><Login /></Later>} />
           <Route path="signup" element={<Later><Signup /></Later>} />
+          <Route path="reset-password" element={<Later><ResetPassword /></Later>} />
           <Route path="my-games" element={<RequireMember><Later><MyGames /></Later></RequireMember>} />
           <Route path="add" element={<RequireMember><Later><GameForm key="add" /></Later></RequireMember>} />
           <Route path="edit/:slug" element={<RequireMember><Later><GameForm /></Later></RequireMember>} />

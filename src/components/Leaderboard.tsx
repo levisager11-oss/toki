@@ -6,6 +6,7 @@ import { canManage } from "../lib/feedback";
 import { formatScore, leaderboard, removeScore, submitScore, validScore, type ScoreRow } from "../lib/social";
 import type { Game } from "../lib/types";
 import { Avatar } from "./Avatar";
+import { ShareButton } from "./ShareButton";
 
 export type ScoreEvent = { score: number; best?: number; isNew?: boolean; guest?: boolean };
 
@@ -85,6 +86,8 @@ export function Leaderboard({ game, version, last }: { game: Game; version: numb
   const location = useLocation();
   const [rows, setRows] = useState<ScoreRow[] | null>(null);
   const [reload, setReload] = useState(0);
+  // Removing a score takes two taps: the first asks "Sure?".
+  const [removing, setRemoving] = useState<string | null>(null);
   const me = session?.user.id;
   const manager = canManage({ game: { slug: game.slug, title: game.title, created_by: game.created_by } }, profile);
 
@@ -108,7 +111,12 @@ export function Leaderboard({ game, version, last }: { game: Game; version: numb
         <p className={`check ${last.isNew ? "good" : ""}`} role="status">
           {last.guest ? (
             <>{t("score.guest", { score: fmt(last.score) })} <Link to={`/login?next=${encodeURIComponent(location.pathname)}`}>{t("nav.login")}</Link></>
-          ) : last.isNew ? t("score.newBest", { score: fmt(last.score) }) : t("score.notBest", { score: fmt(last.score), best: fmt(last.best ?? last.score) })}
+          ) : last.isNew ? (
+            <>
+              {t("score.newBest", { score: fmt(last.score) })}{" "}
+              <ShareButton className="linkish" path={`/game/${game.slug}#scores`} title={game.title} text={t("score.shareText", { score: fmt(last.score), title: game.title })} />
+            </>
+          ) : t("score.notBest", { score: fmt(last.score), best: fmt(last.best ?? last.score) })}
         </p>
       )}
       {top.length === 0 ? <p className="msg">{t("score.none")}</p> : (
@@ -119,7 +127,18 @@ export function Leaderboard({ game, version, last }: { game: Game; version: numb
               <Link to={`/u/${r.username}`} className="person"><Avatar person={r} size={24} /><b>@{r.username}</b></Link>
               <b className="score">{fmt(r.score)}</b>
               {manager && r.user_id !== me && (
-                <button type="button" className="linkish" onClick={() => removeScore(game.id, r.user_id).then(() => setReload((n) => n + 1), () => {})}>{t("score.remove")}</button>
+                <button
+                  type="button"
+                  className={`linkish ${removing === r.user_id ? "danger-text" : ""}`}
+                  onClick={() => {
+                    if (removing !== r.user_id) return setRemoving(r.user_id);
+                    setRemoving(null);
+                    removeScore(game.id, r.user_id).then(() => setReload((n) => n + 1), () => {});
+                  }}
+                  onBlur={() => setRemoving((cur) => (cur === r.user_id ? null : cur))}
+                >
+                  {removing === r.user_id ? t("score.removeSure") : t("score.remove")}
+                </button>
               )}
             </li>
           ))}

@@ -10,6 +10,10 @@ import {
 import { FixedIn, PostMeta, useStatusLabel, VoteButton } from "../components/FeedbackBits";
 import { useAiStatus } from "../lib/assist";
 import { TranslateToggle, useTranslate } from "../components/AiBits";
+import { useTitle } from "../lib/useTitle";
+import { Linkify } from "../components/Linkify";
+import { useDraft } from "../lib/useDraft";
+import { ShareButton } from "../components/ShareButton";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -54,12 +58,7 @@ export function FeedbackPost() {
     // Reload when logging in or out: what the account may see changes.
   }, [id, session?.user.id]);
 
-  useEffect(() => {
-    if (post) document.title = `${post.title} · Toki`;
-    return () => {
-      document.title = "Toki";
-    };
-  }, [post]);
+  useTitle(post?.title);
 
   if (post === undefined)
     return (
@@ -122,13 +121,14 @@ export function FeedbackPost() {
           {post.release && <p className="check good fb-fixed-note"><FixedIn post={post} /></p>}
           {post.private && <p className="check">{t("fb.post.privateNote")}</p>}
           {post.hidden && <p className="check warn">{t("fb.post.hiddenNote")}</p>}
-          {post.body && <p className="fb-body">{tr.texts?.[1] ?? post.body}</p>}
+          {post.body && <p className="fb-body"><Linkify text={tr.texts?.[1] ?? post.body} /></p>}
           <TranslateToggle tr={tr} />
           <p className="sub fb-dates">
             {post.edited_at && <>{t("fb.post.edited")} {ago(post.edited_at, lang)} · </>}
             {post.status !== "open" && t("fb.post.statusChanged", { when: ago(post.status_at, lang) })}
           </p>
           {post.device && <p className="sub"><span className="label">{t("fb.post.device")}</span> {post.device}</p>}
+          {!post.private && <p className="sub fb-share"><ShareButton className="linkish" path={`/feedback/${post.id}`} title={post.title} /></p>}
           {isAuthor && (
             <div className="actions">
               <button type="button" className="btn" onClick={() => setEditing(true)}>{t("fb.post.edit")}</button>
@@ -227,11 +227,13 @@ function Replies({ post, replies, setReplies, manager, onReplied }: {
   const { t, lang } = useI18n();
   const { session, profile } = useAuth();
   const location = useLocation();
-  const [body, setBody] = useState("");
+  const [body, setBody] = useDraft(`reply.${post.id}`);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  // Deleting a reply takes two taps: the first asks "Sure?".
+  const [deletingReply, setDeletingReply] = useState<string | null>(null);
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -302,7 +304,15 @@ function Replies({ post, replies, setReplies, manager, onReplied }: {
               {(mine || manager) && editing !== r.id && (
                 <div className="fb-reply-actions">
                   {mine && <button type="button" className="linkish" onClick={() => { setEditing(r.id); setDraft(r.body); }}>{t("fb.post.edit")}</button>}
-                  <button type="button" className="linkish" disabled={busy} onClick={() => remove(r.id)}>{t("fb.reply.delete")}</button>
+                  <button
+                    type="button"
+                    className={`linkish ${deletingReply === r.id ? "danger-text" : ""}`}
+                    disabled={busy}
+                    onClick={() => (deletingReply === r.id ? (setDeletingReply(null), remove(r.id)) : setDeletingReply(r.id))}
+                    onBlur={() => setDeletingReply((cur) => (cur === r.id ? null : cur))}
+                  >
+                    {deletingReply === r.id ? t("chat.deleteSure") : t("fb.reply.delete")}
+                  </button>
                 </div>
               )}
             </li>
@@ -327,7 +337,7 @@ function ReplyBody({ reply }: { reply: FeedbackReply }) {
   const tr = useTranslate("reply", reply.id, reply.body);
   return (
     <>
-      <p className="fb-body">{tr.texts?.[0] ?? reply.body}</p>
+      <p className="fb-body"><Linkify text={tr.texts?.[0] ?? reply.body} /></p>
       <TranslateToggle tr={tr} />
     </>
   );

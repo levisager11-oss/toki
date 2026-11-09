@@ -1,5 +1,6 @@
 // Release notes: what changed in each version of a game (or of Toki itself), and which
 // feedback posts the update fixed. Rules: supabase/migrations/20261109150000_release_notes.sql
+import { useEffect, useState } from "react";
 import { supabase } from "./supabase";
 import type { FeedbackKind, FeedbackStatus } from "./feedback";
 
@@ -158,4 +159,38 @@ export function nextSmallVersion(list: Release[]): string {
 export function nextVersion(last: string | undefined): string {
   const m = last ? /^(.*?)(\d+)(\D*)$/.exec(last.trim()) : null;
   return m ? `${m[1]}${Number(m[2]) + 1}${m[3]}` : "";
+}
+
+// When each game last posted an update (newest first), for the "Updated" tag on game cards
+// and for sorting by "Recently updated". Asked once per page load and shared by all cards.
+const UPDATED_DAYS = 7;
+let latest: Promise<Map<string, string>> | null = null;
+
+export function latestUpdates(): Promise<Map<string, string>> {
+  latest ??= Promise.resolve(
+    supabase.from("game_releases").select("game_id, published_at").not("game_id", "is", null).order("published_at", { ascending: false }).limit(500),
+  ).then(
+    ({ data }) => {
+      const map = new Map<string, string>();
+      for (const r of (data ?? []) as { game_id: string; published_at: string }[]) if (!map.has(r.game_id)) map.set(r.game_id, r.published_at);
+      return map;
+    },
+    () => new Map<string, string>(),
+  );
+  return latest;
+}
+
+/** Posted an update in the last 7 days. */
+export const recentlyUpdated = (at: string | undefined, now = Date.now()) => !!at && now - Date.parse(at) < UPDATED_DAYS * 86_400_000;
+
+export function useLatestUpdates(): Map<string, string> {
+  const [map, setMap] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    let alive = true;
+    latestUpdates().then((m) => alive && setMap(m));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return map;
 }
