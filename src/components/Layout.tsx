@@ -99,8 +99,10 @@ export function Layout() {
             <NavLink to="/my-games">{t("nav.myGames")}</NavLink>
             <NavLink to="/add">{t("nav.addGame")}</NavLink>
             <NavLink to="/feedback/inbox">{t("fb.inbox.title")}</NavLink>
+            <NavLink to="/connect">{t("nav.connect")}</NavLink>
             {profile.role === "admin" && (
               <>
+                <NavLink to="/admin/ai">{t("nav.ai")}</NavLink>
                 <NavLink to="/applications">
                   {t("nav.applications")}
                   {openApps > 0 && <span className="count-pill">{openApps}</span>}
