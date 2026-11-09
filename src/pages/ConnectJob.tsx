@@ -87,7 +87,12 @@ export function ConnectJob() {
           <a className="btn primary" href={job.pr_url} target="_blank" rel="noopener noreferrer"><GitHubMark />{t("connect.openPr")} ↗</a>
         </div>
       )}
-      {job.status === "failed" && <p className="check warn" role="alert">{t(`connect.err.${connectError(job.error)}`)}</p>}
+      {job.status === "failed" && (
+        <p className="check warn" role="alert">
+          {t(`connect.err.${connectError(job.error)}`)}
+          {job.error_detail && <small className="model-error-detail">{job.error_detail}</small>}
+        </p>
+      )}
 
       {(job.status === "working" || job.status === "question") && (
         <div className="actions">

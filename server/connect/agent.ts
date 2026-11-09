@@ -76,6 +76,8 @@ export interface StepResult {
   state: JobState;
   pr_url?: string;
   error?: string | null;
+  /** What the AI service or GitHub answered, when that's why the run failed. */
+  error_detail?: string | null;
 }
 
 export const MAX_AI_CALLS = 8;
@@ -89,6 +91,12 @@ export function errorCode(e: unknown): string {
   if (e instanceof AiError) return `ai_${e.code}`;
   if (e instanceof GitHubError) return e.status === 404 ? "github_not_found" : "github_error";
   return "error";
+}
+
+/** The AI service's or GitHub's own words about an error, for the run's page. */
+export function errorDetail(e: unknown): string | null {
+  if ((e instanceof AiError || e instanceof GitHubError) && e.message && e.message !== (e as AiError).code) return e.message.slice(0, 500);
+  return null;
 }
 
 const text = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
@@ -110,9 +118,9 @@ export async function step(job: Job, deps: Deps): Promise<StepResult> {
   const messages: Message[] = [...job.messages];
   const at = (deps.now?.() ?? new Date()).toISOString();
   const working = (): StepResult => ({ status: "working", messages, state, error: null });
-  const fail = (code: string): StepResult => {
+  const fail = (code: string, detail: string | null = null): StepResult => {
     state.files = {}; // the code isn't needed any more
-    return { status: "failed", messages, state, error: code };
+    return { status: "failed", messages, state, error: code, error_detail: detail };
   };
   // The AI's answer couldn't be used: tell it why on the next step, a few times at most.
   const retry = (feedback: string): StepResult => {
@@ -193,7 +201,7 @@ export async function step(job: Job, deps: Deps): Promise<StepResult> {
         return retry('Unknown "action". Use "read", "ask", "change" or "impossible".');
     }
   } catch (e) {
-    return fail(errorCode(e));
+    return fail(errorCode(e), errorDetail(e));
   }
 }
 

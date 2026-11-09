@@ -259,12 +259,14 @@ export interface ConnectJob {
   messages: JobMessage[];
   pr_url: string | null;
   error: string | null;
+  /** What the AI service or GitHub answered */
+  error_detail: string | null;
   game_id: string | null;
   created_at: string;
   updated_at: string;
 }
 
-const JOB = "id, repo, features, notes, status, messages, pr_url, error, game_id, created_at, updated_at";
+const JOB = "id, repo, features, notes, status, messages, pr_url, error, error_detail, game_id, created_at, updated_at";
 
 export async function myJobs(): Promise<ConnectJob[]> {
   const { data, error } = await supabase.from("connect_jobs").select(JOB).order("created_at", { ascending: false }).limit(20);
