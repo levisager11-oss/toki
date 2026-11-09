@@ -104,6 +104,11 @@ describe("Toki Connect with Managed Agents", () => {
     expect(await agentStep(newJob({ state: { session: "sesn_1" } }), f.deps)).toMatchObject({ status: "failed", error: "agent_budget", cost: 1.01 });
   });
 
+  it("ends the run when the agent stopped for another reason", async () => {
+    const f = fake({ status: "idle", events: [{ type: "idle", stop: "retries_exhausted" }] });
+    expect(await agentStep(newJob({ state: { session: "sesn_1" } }), f.deps)).toMatchObject({ status: "failed", error: "ai_provider_error" });
+  });
+
   it("reminds the agent once when it stops without finishing", async () => {
     const f = fake({ status: "idle", events: [{ type: "idle", stop: "end_turn" }] });
     const r1 = await agentStep(newJob({ state: { session: "sesn_1" } }), f.deps);

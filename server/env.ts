@@ -7,6 +7,8 @@ export interface ServerEnv {
   aiKey: string;
   /** Key for Anthropic's API. */
   anthropicKey: string;
+  /** Key for the free AI's endpoint, when it isn't the strong AI's OpenAI-compatible endpoint. */
+  freeAiKey: string;
   /** Supabase secret key (sb_secret_…) or the older service_role key: skips row level security. */
   serviceKey: string;
   github: { appId: string; slug: string; privateKey: string; clientId: string; clientSecret: string };
@@ -17,6 +19,7 @@ export function serverEnv(): ServerEnv {
   return {
     aiKey: e.AI_API_KEY ?? "",
     anthropicKey: e.ANTHROPIC_API_KEY ?? "",
+    freeAiKey: e.FREE_AI_API_KEY ?? "",
     serviceKey: e.SUPABASE_SECRET_KEY || e.SUPABASE_SERVICE_ROLE_KEY || "",
     github: {
       appId: e.GITHUB_APP_ID ?? "",

@@ -109,9 +109,23 @@ describe("reading web pages", () => {
       calls.push(url);
       return new Response(null, { status: 302, headers: { location: "https://127.0.0.1/admin" } });
     }) as unknown as typeof fetch;
-    expect(await readPage("https://localhost/x", f)).toMatchObject({ ok: false });
-    expect(await readPage("https://game.example/", f)).toMatchObject({ ok: false });
+    const publicDns = async () => ["93.184.216.34"];
+    expect(await readPage("https://localhost/x", f, publicDns)).toMatchObject({ ok: false });
+    expect(await readPage("https://game.example/", f, publicDns)).toMatchObject({ ok: false });
     expect(calls).toEqual(["https://game.example/"]);
+  });
+
+  it("never opens a name that leads to a private address", async () => {
+    const calls: string[] = [];
+    const f = (async (url: string) => {
+      calls.push(url);
+      return new Response("<title>x</title>", { status: 200, headers: { "content-type": "text/html" } });
+    }) as unknown as typeof fetch;
+    for (const ip of ["127.0.0.1", "10.1.2.3", "192.168.0.1", "169.254.169.254", "::1", "fd00::1", "::ffff:127.0.0.1"]) {
+      expect(await readPage("https://127.0.0.1.nip.io/", f, async () => [ip])).toMatchObject({ ok: false });
+    }
+    expect(calls).toEqual([]);
+    expect(await readPage("https://game.example/", f, async () => ["93.184.216.34"])).toMatchObject({ ok: true, title: "x" });
   });
 });
 
@@ -144,4 +158,16 @@ describe("game helper", async () => {
     const tree = ["src/game.js", "README.md", "docs/levels.md", "node_modules/x/README.md", "assets/logo.png"].map((path) => ({ path, type: "blob" as const, size: 100 }));
     expect(guideFiles(tree, ["index.html", "src/game.js"])).toEqual(["README.md", "docs/levels.md", "index.html", "src/game.js"]);
   });
+});
+
+describe("the free AI's key", async () => {
+  const { freeKey } = await import("../server/ai/free");
+  const keys = { free: "", openai: "strong-key" };
+  it("is its own key when it has one", () => expect(freeKey({ free: "own", openai: "x" }, { provider: "openai_compatible", base_url: "https://a.example/v1", free_base_url: "https://b.example/v1" })).toBe("own"));
+  it("borrows the OpenAI-compatible key for the same endpoint, or when the strong AI is Anthropic", () => {
+    expect(freeKey(keys, { provider: "openai_compatible", base_url: "https://a.example/v1", free_base_url: "https://a.example/api" })).toBe("strong-key");
+    expect(freeKey(keys, { provider: "anthropic", base_url: "", free_base_url: "https://b.example/v1" })).toBe("strong-key");
+  });
+  it("never sends the strong AI's key to another endpoint", () =>
+    expect(freeKey(keys, { provider: "openai_compatible", base_url: "https://paid.example/v1", free_base_url: "https://free.example/v1" })).toBe(""));
 });

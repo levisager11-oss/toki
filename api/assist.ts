@@ -75,7 +75,7 @@ const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice
 
 /** One call to the free AI, without a token limit (tokens cost nothing there). */
 async function ask(ctx: Ctx, feature: FreeFeature, messages: ChatMessage[], temperature = 0.2, timeoutMs = TIMEOUT_MS): Promise<string> {
-  const c = await freeCompletion({ db: ctx.db, apiKey: ctx.env.aiKey, userId: ctx.user.id, feature, messages, temperature, timeoutMs });
+  const c = await freeCompletion({ db: ctx.db, keys: { free: ctx.env.freeAiKey, openai: ctx.env.aiKey }, userId: ctx.user.id, feature, messages, temperature, timeoutMs });
   return c.text;
 }
 
@@ -390,7 +390,7 @@ async function test(ctx: Ctx) {
   try {
     const c = await freeCompletion({
       db: ctx.db,
-      apiKey: ctx.env.aiKey,
+      keys: { free: ctx.env.freeAiKey, openai: ctx.env.aiKey },
       userId: ctx.user.id,
       feature: "test",
       messages: [{ role: "user", content: "Reply with the single word OK." }],

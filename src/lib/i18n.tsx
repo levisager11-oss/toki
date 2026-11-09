@@ -817,6 +817,11 @@ const en = {
   "ai.agent.budgetHelp": "A hard cap, enforced by Anthropic: when a run reaches it, the agent stops. The whole amount is held back from the developer's quota while the run works, then only what it really cost counts. $1 is enough for most runs.",
   "connect.progress.agent": "A Claude agent is working in a copy of your code. This can take a few minutes.",
   "connect.err.agent_budget": "The agent used up the most a run may cost, before it was done. Try again with clearer notes, or ask an admin to raise the limit per run.",
+  "ai.free.key": "Own key (optional)",
+  "ai.free.keyHelp": "Only needed when the free AI is a different endpoint than the strong AI. Without its own key, it uses the OpenAI-compatible key above, but only if the strong AI is Anthropic or the same endpoint, so that key never goes to another service.",
+  "ai.free.keySet": "Its own key is saved.",
+  "ai.free.keyEnv": "Its own key is set in Vercel (FREE_AI_API_KEY).",
+  "ai.free.keyRemove": "Remove",
 };
 
 type Key = keyof typeof en;
@@ -1638,6 +1643,11 @@ const de: Record<Key, string> = {
   "ai.agent.budgetHelp": "Eine feste Grenze, die Anthropic durchsetzt: Erreicht ein Durchlauf sie, hört der Agent auf. Der ganze Betrag wird vom Kontingent des Entwicklers zurückgehalten, solange der Durchlauf läuft; danach zählt nur, was er wirklich gekostet hat. 1 $ reicht für die meisten Durchläufe.",
   "connect.progress.agent": "Ein Claude-Agent arbeitet in einer Kopie deines Codes. Das kann ein paar Minuten dauern.",
   "connect.err.agent_budget": "Der Agent hat das Maximum für einen Durchlauf aufgebraucht, bevor er fertig war. Versuch es nochmals mit klareren Notizen, oder bitte einen Admin, die Grenze pro Durchlauf zu erhöhen.",
+  "ai.free.key": "Eigener Schlüssel (optional)",
+  "ai.free.keyHelp": "Nur nötig, wenn die Gratis-KI ein anderer Endpunkt ist als die starke KI. Ohne eigenen Schlüssel verwendet sie den OpenAI-kompatiblen Schlüssel oben, aber nur, wenn die starke KI Anthropic oder derselbe Endpunkt ist, damit dieser Schlüssel nie an einen anderen Dienst geht.",
+  "ai.free.keySet": "Ihr eigener Schlüssel ist gespeichert.",
+  "ai.free.keyEnv": "Ihr eigener Schlüssel ist in Vercel gesetzt (FREE_AI_API_KEY).",
+  "ai.free.keyRemove": "Entfernen",
 };
 
 export type Lang = "en" | "de";

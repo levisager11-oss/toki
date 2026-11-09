@@ -523,7 +523,7 @@ describe("error codes", () => {
 describe("stored secrets", async () => {
   const { decrypt, encrypt, githubFromManifestCode, githubManifest, withSecrets } = await import("../server/secrets");
   const env = (over: Partial<import("../server/env").ServerEnv> = {}) => ({
-    aiKey: "", anthropicKey: "", serviceKey: "sb_secret_one",
+    aiKey: "", anthropicKey: "", freeAiKey: "", serviceKey: "sb_secret_one",
     github: { appId: "", slug: "", privateKey: "", clientId: "", clientSecret: "" }, ...over,
   });
   const dbWith = (rows: { name: string; value: string }[]) => ({ select: async () => rows }) as unknown as Db;
@@ -545,7 +545,7 @@ describe("stored secrets", async () => {
     const r = await withSecrets(db, env());
     expect(r.env.aiKey).toBe("stored-key");
     expect(r.env.github).toEqual(app);
-    expect(r.sources).toEqual({ aiKey: "toki", anthropicKey: null, github: "toki" });
+    expect(r.sources).toEqual({ aiKey: "toki", anthropicKey: null, freeAiKey: null, github: "toki" });
   });
 
   it("let Vercel's settings win", async () => {

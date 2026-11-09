@@ -1,15 +1,41 @@
 // Reading a little of a public web page (its title and some text) for the free AI: a game's page
 // for its description, or the links in a developer application. Only public https sites, never
 // local or private addresses, short time limits, and at most 200 KB of each page.
+import { lookup } from "node:dns/promises";
 import { isCheckableUrl } from "../embed-check.js";
 import type { PageInfo } from "./prompts.js";
 
 const MAX_BYTES = 200_000;
 
-async function fetchPublic(url: string, fetchImpl: typeof fetch): Promise<Response | null> {
+/** Addresses of local or private networks (also IPv4 inside IPv6). */
+export function privateAddress(ip: string): boolean {
+  const v4 = /^(?:::ffff:)?(\d+)\.(\d+)\.(\d+)\.(\d+)$/i.exec(ip);
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    return a === 0 || a === 10 || a === 127 || a >= 224 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+  }
+  const v6 = ip.toLowerCase();
+  return v6 === "::" || v6 === "::1" || /^f[cd]/.test(v6) || /^fe[89ab]/.test(v6) || v6.startsWith("::ffff:");
+}
+
+export type Lookup = (host: string) => Promise<string[]>;
+const dnsLookup: Lookup = async (host) => (await lookup(host, { all: true })).map((a) => a.address);
+
+/** A public https address whose name leads only to public addresses (not to a local or private network). */
+async function publicUrl(url: string, resolve: Lookup): Promise<boolean> {
+  if (!isCheckableUrl(url)) return false;
+  try {
+    const addresses = await resolve(new URL(url).hostname);
+    return addresses.length > 0 && !addresses.some(privateAddress);
+  } catch {
+    return false;
+  }
+}
+
+async function fetchPublic(url: string, fetchImpl: typeof fetch, resolve: Lookup): Promise<Response | null> {
   const signal = AbortSignal.timeout(8000);
   for (let hops = 0; hops <= 5; hops++) {
-    if (!isCheckableUrl(url)) return null;
+    if (!(await publicUrl(url, resolve))) return null;
     const res = await fetchImpl(url, { redirect: "manual", headers: { "user-agent": "TokiAssist/1.0", accept: "text/html" }, signal });
     const next = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
     if (!next) return res;
@@ -56,9 +82,9 @@ export function pageText(html: string): { title: string; text: string } {
   return { title, text: [description, body].filter(Boolean).join("\n").slice(0, 1500) };
 }
 
-export async function readPage(url: string, fetchImpl: typeof fetch = fetch): Promise<PageInfo> {
+export async function readPage(url: string, fetchImpl: typeof fetch = fetch, resolve: Lookup = dnsLookup): Promise<PageInfo> {
   try {
-    const res = await fetchPublic(url, fetchImpl);
+    const res = await fetchPublic(url, fetchImpl, resolve);
     if (!res || !res.ok || !/html|text/i.test(res.headers.get("content-type") ?? "text/html")) {
       await res?.body?.cancel().catch(() => {});
       return { url, ok: false, title: "", text: "" };
