@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from "reac
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
 import { useGames } from "../lib/useGames";
+import { findGame } from "../lib/games";
 import { useVotes } from "../lib/useVotes";
 import { KINDS, listPosts, PAGE, type FeedbackKind, type FeedbackPost, type Sort, type StatusFilter } from "../lib/feedback";
 import { FeedbackForm } from "../components/FeedbackForm";
@@ -25,7 +26,7 @@ export function FeedbackBoard() {
   const sort: Sort = params.get("sort") === "new" ? "new" : "top";
   const writing = asKind(params.get("new"));
 
-  const game = slug ? games?.find((g) => g.slug === slug) : undefined;
+  const game = slug ? findGame(games, slug) : undefined;
   // undefined while the game is still loading; null for Toki itself
   const gameId = slug ? game?.id : null;
   const [posts, setPosts] = useState<FeedbackPost[] | null>(null);

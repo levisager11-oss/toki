@@ -1,14 +1,20 @@
-/* Toki save support v2. Put this in the game's HTML <head>, before the game's own scripts.
+/* Toki save support v3. Put this in the game's HTML <head>, before the game's own scripts.
    Inside Toki, it keeps a copy of everything the game stores in localStorage, so progress
    survives closing the app (iPhone deletes storage of games shown inside other sites) and
-   follows logged-in players to other devices. Outside Toki it does nothing. */
+   follows logged-in players to other devices. Outside Toki it does nothing.
+   High scores: call toki.score(points) when a round ends (for times: milliseconds). */
 (function () {
   var top = window.parent;
-  if (top === window) return;
-  var ls, MARK = "__toki_t";
-  try { ls = window.localStorage; ls.getItem(MARK); } catch (e) { return; }
+  var inToki = top !== window;
   var origin = (location.ancestorOrigins && location.ancestorOrigins[0]) ||
     (document.referrer ? new URL(document.referrer).origin : "*");
+  window.toki = window.toki || {};
+  window.toki.score = function (n) {
+    if (inToki && typeof n === "number" && isFinite(n)) top.postMessage({ toki: 1, type: "score", data: n }, origin);
+  };
+  if (!inToki) return;
+  var ls, MARK = "__toki_t";
+  try { ls = window.localStorage; ls.getItem(MARK); } catch (e) { return; }
   var P = Storage.prototype, raw = { set: P.setItem, clear: P.clear };
   var ready = false, answered = false, restoring = false, timer = null;
 
