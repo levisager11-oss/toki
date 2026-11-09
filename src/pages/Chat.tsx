@@ -49,8 +49,6 @@ export function Chat() {
     };
   }, [id, t]);
 
-  useTitle(t("nav.chat"));
-
   const title = (c: { kind: string; title: string | null; game_id: string | null; other_username?: string | null }) =>
     c.kind === "public" ? t("chat.toki")
       : c.kind === "game" ? games?.find((g) => g.id === c.game_id)?.title ?? t("chat.gameRoom")
@@ -58,6 +56,7 @@ export function Chat() {
       : c.title ?? "";
   const summary = chat ? list?.find((c) => c.id === chat.id) : undefined;
   const open = !!id;
+  useTitle(chat ? title({ ...chat, other_username: summary?.other_username }) || t("nav.chat") : t("nav.chat"));
 
   return (
     <section className={`chat-layout ${open ? "has-chat" : ""}`}>
