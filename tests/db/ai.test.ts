@@ -196,3 +196,14 @@ describe("Toki Connect", () => {
     expect(await t.as(dev, "delete from github_installations where installation_id = 1 returning installation_id")).toHaveLength(1);
   });
 });
+
+describe("server secrets", () => {
+  it("can only be read and written by the server", async () => {
+    await t.service("insert into server_secrets (name, value) values ('ai_api_key', 'v1:abc') on conflict (name) do update set value = excluded.value");
+    expect(await t.service("select value from server_secrets where name = 'ai_api_key'")).toEqual([{ value: "v1:abc" }]);
+    await expect(t.as(admin, "select value from server_secrets")).rejects.toThrow(/permission denied/);
+    await expect(t.as(admin, "insert into server_secrets (name, value) values ('github_app', 'x')")).rejects.toThrow(/permission denied/);
+    await expect(t.as(null, "select value from server_secrets")).rejects.toThrow(/permission denied/);
+    await expect(t.service("insert into server_secrets (name, value) values ('other', 'x')")).rejects.toThrow(/check/);
+  });
+});

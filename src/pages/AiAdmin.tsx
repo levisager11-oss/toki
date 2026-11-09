@@ -1,9 +1,10 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useI18n } from "../lib/i18n";
 import { ago } from "../lib/feedback";
+import { AiSetup } from "../components/AiSetup";
 import {
-  aiStatus, developersWithQuotas, getAiSettings, monthOverview, recentUsage, saveAiSettings, setQuota, testAi, usd,
-  type AiStatus, type Overview, type TestResult, type UsageRow,
+  developersWithQuotas, getAiSettings, monthOverview, recentUsage, saveAiSettings, setQuota, testAi, usd,
+  type Overview, type TestResult, type UsageRow,
 } from "../lib/ai";
 
 type Form = { enabled: boolean; base_url: string; model: string; input_price: string; output_price: string; monthly_cap: string; default_quota: string };
@@ -12,7 +13,6 @@ type Form = { enabled: boolean; base_url: string; model: string; input_price: st
 export function AiAdmin() {
   const { t, lang } = useI18n();
   const [form, setForm] = useState<Form | null>(null);
-  const [status, setStatus] = useState<AiStatus | "unknown" | null>(null);
   const [overview, setOverview] = useState<Overview | null>(null);
   const [devs, setDevs] = useState<{ id: string; username: string; quota: number | null }[]>([]);
   const [usage, setUsage] = useState<UsageRow[]>([]);
@@ -36,7 +36,6 @@ export function AiAdmin() {
         }),
       )
       .catch(() => setError(true));
-    aiStatus().then(setStatus).catch(() => setStatus("unknown"));
   }, []);
   useEffect(() => {
     monthOverview().then(setOverview).catch(() => setError(true));
@@ -93,12 +92,6 @@ export function AiAdmin() {
       .map((u) => ({ id: u.user_id, username: u.username, admin: u.role === "admin", quota: null, spent: u.spent, calls: u.calls })),
   ].sort((a, b) => b.spent - a.spent || (a.username ?? "").localeCompare(b.username ?? ""));
 
-  const statusRow = (ok: boolean | undefined, label: string) => (
-    <li>
-      <span className={`st ${ok ? "st-done" : "st-declined"}`}>{ok ? t("ai.status.set") : t("ai.status.missing")}</span> {label}
-    </li>
-  );
-
   return (
     <section className="fb-board ai-admin">
       <h1 className="h">{t("ai.title")}</h1>
@@ -117,21 +110,7 @@ export function AiAdmin() {
         <p className="hint">{t("ai.capNote")}</p>
       </section>
 
-      <section className="ai-card" aria-labelledby="ai-setup-h">
-        <h2 id="ai-setup-h">{t("ai.setup")}</h2>
-        {status === "unknown" ? (
-          <p className="check warn">{t("ai.status.unknown")}</p>
-        ) : status ? (
-          <ul className="ai-status">
-            {statusRow(status.aiKey, t("ai.status.aiKey"))}
-            {statusRow(status.serviceKey, t("ai.status.serviceKey"))}
-            {statusRow(status.github, t("ai.status.github"))}
-          </ul>
-        ) : (
-          <p className="hint">{t("loading")}</p>
-        )}
-        <p className="hint">{t("ai.status.help")}</p>
-      </section>
+      <AiSetup />
 
       <form className="form ai-card" onSubmit={save} aria-labelledby="ai-settings-h">
         <h2 id="ai-settings-h">{t("ai.settings")}</h2>

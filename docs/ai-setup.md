@@ -3,59 +3,53 @@
 Toki Connect lets developers have an AI add Toki saves and high scores to their game: it reads the
 game's GitHub repository, may ask the developer questions, and opens a pull request.
 
-You need three things: an AI endpoint, a Supabase secret key, and a GitHub App. Keys go into
-Vercel's environment variables, never into the code or the database.
+Almost everything is set up on Toki itself, on the **AI** page (`/admin/ai`, admins only). Do it on
+the real site (`https://www.playtoki.app`), not on a preview, because the GitHub App remembers the
+address it was created from.
 
-## 1. Supabase secret key
+## 1. Supabase key in Vercel (once, the only step outside Toki)
 
-Supabase → project **toki** → Project Settings → API Keys → create or copy a **secret key**
-(`sb_secret_…`). It lets the server write AI costs and Connect runs; it skips row level security,
-so keep it secret.
+The server needs it to use the database, and to keep the other keys encrypted.
 
-## 2. GitHub App
+1. Supabase → project **toki** → Project Settings → **API Keys**. Under "Secret keys", copy the key
+   (or click "New secret key" and copy that one). It starts with `sb_secret_`.
+2. Vercel → project **toki** → Settings → **Environment Variables** → Add New.
+   Name: `SUPABASE_SECRET_KEY`, value: the key, environments: Production and Preview. Save.
+3. Vercel → Deployments → newest deployment → … → **Redeploy**.
 
-GitHub → Settings → Developer settings → GitHub Apps → **New GitHub App**:
+The AI page shows these steps with direct links, and a "Check again" button.
 
-| Field | Value |
-| --- | --- |
-| GitHub App name | e.g. `Toki Connect` (the address name, e.g. `toki-connect`, is the "slug") |
-| Homepage URL | `https://www.playtoki.app` |
-| Callback URL | `https://www.playtoki.app/connect/github` |
-| Request user authorization (OAuth) during installation | **on** (Toki uses this to check which installations belong to whom) |
-| Webhook → Active | **off** |
-| Repository permissions | **Contents: Read and write**, **Pull requests: Read and write**, Metadata: Read-only. Nothing else (no Workflows). |
-| Where can this GitHub App be installed? | **Any account** |
+## 2. AI key (on Toki)
 
-After creating it: note the **App ID** and **Client ID**, generate a **client secret**, and
-generate a **private key** (a `.pem` file).
+Paste the key of your OpenAI-compatible endpoint on the AI page and save. The server stores it
+encrypted (AES-256-GCM, with a key derived from the Supabase secret key), and nobody can read it
+back, not even admins. If you ever change the Supabase secret key, save the AI key again.
 
-## 3. Vercel environment variables
+## 3. GitHub App (on Toki)
 
-Vercel → project **toki** → Settings → Environment Variables (Production, and Preview if you want
-to try it there):
+Click **Create the GitHub App**. Toki sends GitHub a filled-in app description (a "manifest"):
+read and write access to code and pull requests only, no webhooks, callback
+`https://www.playtoki.app/connect/github`, "request user authorization during installation" on.
+On GitHub's page, click **Create GitHub App** (change the name there if it's taken). GitHub sends
+you back to Toki with a one-time code; the server exchanges it for the app's credentials and stores
+them encrypted.
 
-| Name | Value |
-| --- | --- |
-| `AI_API_KEY` | the key of your OpenAI-compatible endpoint |
-| `SUPABASE_SECRET_KEY` | the secret key from step 1 |
-| `GITHUB_APP_ID` | the App ID |
-| `GITHUB_APP_SLUG` | the app's address name, e.g. `toki-connect` |
-| `GITHUB_APP_CLIENT_ID` | the Client ID |
-| `GITHUB_APP_CLIENT_SECRET` | the client secret |
-| `GITHUB_APP_PRIVATE_KEY` | the whole content of the `.pem` file |
+## 4. AI settings (on Toki)
 
-Then redeploy (Deployments → … → Redeploy), so the functions see the new values.
+Fill in the endpoint address (the part before `/chat/completions`, e.g.
+`https://api.example.com/v1`), the model, and the prices per million tokens from your provider's
+price list. Toki counts costs with these prices; without them the AI can't be turned on. Check the
+monthly cap ($20) and the quota per developer ($5), turn the AI on, save, and **Test the
+connection** (it costs a tiny amount and shows up in the list of calls).
 
-## 4. On Toki
+## Using Vercel's settings instead
 
-Open **AI** in the admin menu (`/admin/ai`):
-
-1. *Setup* should show all three keys as set.
-2. Fill in the endpoint address (the part before `/chat/completions`, e.g. `https://api.example.com/v1`),
-   the model, and the prices per million tokens from your provider's price list. Toki counts costs
-   with these prices; without them the AI can't be turned on.
-3. Check the monthly cap ($20) and the quota per developer ($5), turn the AI on, save.
-4. **Test the connection.** The test call costs a tiny amount and shows up in the list of calls.
+Every key can also be set as an environment variable in Vercel; those win over what is stored on
+Toki: `AI_API_KEY`, and for a GitHub App made by hand `GITHUB_APP_ID`, `GITHUB_APP_SLUG`,
+`GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY` (the whole `.pem`).
+A GitHub App made by hand needs: callback URL `https://www.playtoki.app/connect/github`, "Request
+user authorization (OAuth) during installation" on, webhook off, repository permissions Contents
+and Pull requests read and write, installable by any account.
 
 ## How the limits work
 
@@ -71,5 +65,5 @@ Open **AI** in the admin menu (`/admin/ai`):
 ## Adding Anthropic later
 
 `server/ai/provider.ts` has one `complete()` function for all providers. Adding Anthropic means
-another case there (and its own key variable), and allowing `'anthropic'` in the `provider` column
-of `ai_settings` with a migration.
+another case there (and its own key, stored like the AI key), and allowing `'anthropic'` in the
+`provider` column of `ai_settings` with a migration.

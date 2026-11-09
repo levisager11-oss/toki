@@ -285,3 +285,60 @@ describe("error codes", () => {
     expect(errorCode(new GitHubError("x", 500))).toBe("github_error");
   });
 });
+
+describe("stored secrets", async () => {
+  const { decrypt, encrypt, githubFromManifestCode, githubManifest, withSecrets } = await import("../server/secrets");
+  const env = (over: Partial<import("../server/env").ServerEnv> = {}) => ({
+    aiKey: "", serviceKey: "sb_secret_one",
+    github: { appId: "", slug: "", privateKey: "", clientId: "", clientSecret: "" }, ...over,
+  });
+  const dbWith = (rows: { name: string; value: string }[]) => ({ select: async () => rows }) as unknown as Db;
+  const app = { appId: "1", slug: "toki-connect", privateKey: "PEM", clientId: "cid", clientSecret: "cs" };
+
+  it("are encrypted, and only the same Supabase key opens them", () => {
+    const stored = encrypt("my-ai-key", "sb_secret_one");
+    expect(stored).toMatch(/^v1:/);
+    expect(stored).not.toContain("my-ai-key");
+    expect(encrypt("my-ai-key", "sb_secret_one")).not.toBe(stored); // a new random start each time
+    expect(decrypt(stored, "sb_secret_one")).toBe("my-ai-key");
+    expect(decrypt(stored, "sb_secret_two")).toBeNull();
+    expect(decrypt(stored.slice(0, -4) + "AAAA", "sb_secret_one")).toBeNull();
+    expect(decrypt("garbage", "sb_secret_one")).toBeNull();
+  });
+
+  it("fill in what Vercel doesn't have, and say where it came from", async () => {
+    const db = dbWith([{ name: "ai_api_key", value: encrypt("stored-key", "sb_secret_one") }, { name: "github_app", value: encrypt(JSON.stringify(app), "sb_secret_one") }]);
+    const r = await withSecrets(db, env());
+    expect(r.env.aiKey).toBe("stored-key");
+    expect(r.env.github).toEqual(app);
+    expect(r.sources).toEqual({ aiKey: "toki", github: "toki" });
+  });
+
+  it("let Vercel's settings win", async () => {
+    const db = dbWith([{ name: "ai_api_key", value: encrypt("stored-key", "sb_secret_one") }]);
+    const r = await withSecrets(db, env({ aiKey: "env-key" }));
+    expect(r.env.aiKey).toBe("env-key");
+    expect(r.sources.aiKey).toBe("env");
+  });
+
+  it("count as not set up when they can't be opened", async () => {
+    const db = dbWith([{ name: "ai_api_key", value: encrypt("stored-key", "an_old_key") }]);
+    expect((await withSecrets(db, env())).sources.aiKey).toBeNull();
+  });
+
+  it("ask GitHub for an app that only reads code and opens pull requests", () => {
+    const m = githubManifest("https://www.playtoki.app");
+    expect(m.default_permissions).toEqual({ contents: "write", pull_requests: "write", metadata: "read" });
+    expect(m.callback_urls).toEqual(["https://www.playtoki.app/connect/github"]);
+    expect(m.redirect_url).toBe("https://www.playtoki.app/admin/ai");
+    expect(m.request_oauth_on_install).toBe(true);
+    expect(m.hook_attributes.active).toBe(false);
+  });
+
+  it("take over the new app's credentials from GitHub", async () => {
+    const f = reply({ id: 42, slug: "toki-connect", client_id: "cid", client_secret: "cs", pem: "PEM", html_url: "https://github.com/apps/toki-connect" });
+    expect(await githubFromManifestCode("abc", f)).toEqual({ appId: "42", slug: "toki-connect", clientId: "cid", clientSecret: "cs", privateKey: "PEM", htmlUrl: "https://github.com/apps/toki-connect" });
+    expect(((f as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [string])[0]).toBe("https://api.github.com/app-manifests/abc/conversions");
+    await expect(githubFromManifestCode("old", reply({ message: "Not Found" }, 404))).rejects.toThrow(/404/);
+  });
+});

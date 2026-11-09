@@ -740,3 +740,24 @@ a.author:hover { text-decoration: underline; color: var(--fg); }
   .dots-anim i { animation: none; }
 }
 .fb-check input[type="radio"] { flex: none; width: 18px; height: 18px; margin: 1px 0 0; accent-color: var(--fg); }
+
+/* AI setup steps */
+.setup-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.setup-steps > li { padding: 12px 0; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+.setup-head { display: flex; align-items: center; gap: 10px; }
+.setup-num { width: 26px; height: 26px; flex: none; display: grid; place-items: center; border: 1px solid var(--fg); font-weight: 800; font-size: 13px; }
+.setup-num.done { background: #2f9e5b; border-color: #2f9e5b; color: #fff; font-family: var(--f-ui); font-weight: 700; }
+.setup-steps .sub, .setup-how, .setup-row, .setup-key { margin-left: 36px; }
+.setup-how { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; font-size: 14px; }
+.setup-how ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.setup-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; }
+.setup-key { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.setup-key input { flex: 1 1 260px; min-width: 0; background: var(--surface); border: 1px solid var(--line); padding: 9px 11px; }
+.setup-key input:focus { border-color: var(--fg); outline: none; }
+.setup-key small { flex-basis: 100%; color: var(--muted); font-size: 13px; }
+.copy-name { display: inline-flex; align-items: center; gap: 8px; }
+.copy-name code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; font-size: 13px; }
+@media (max-width: 860px) {
+  .setup-steps .sub, .setup-how, .setup-row, .setup-key { margin-left: 0; }
+  .setup-how .btn, .setup-key .btn { align-self: stretch; padding-block: 11px; }
+}

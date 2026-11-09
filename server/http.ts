@@ -2,6 +2,7 @@
 import { SUPABASE_KEY, SUPABASE_URL } from "./config.js";
 import { serviceDb, type Db } from "./db.js";
 import { serverEnv, type ServerEnv } from "./env.js";
+import { withSecrets, type Sources } from "./secrets.js";
 
 export const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
@@ -11,6 +12,8 @@ export interface Ctx {
   env: ServerEnv;
   db: Db;
   user: { id: string; username: string; role: Role };
+  /** Where the AI key and the GitHub App come from: Vercel's settings, or set up on Toki. */
+  sources: Sources;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -29,7 +32,8 @@ export async function context(request: Request, roles: Role[], fetchImpl: typeof
   const db = serviceDb(env.serviceKey, fetchImpl);
   const [profile] = await db.select<Ctx["user"]>("profiles", `id=eq.${u.id}&select=id,username,role`);
   if (!profile || !roles.includes(profile.role)) return json({ error: "not_allowed" }, 403);
-  return { env, db, user: profile };
+  const full = await withSecrets(db, env);
+  return { env: full.env, db, user: profile, sources: full.sources };
 }
 
 export async function body(request: Request): Promise<Record<string, unknown>> {

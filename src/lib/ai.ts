@@ -53,8 +53,11 @@ export async function saveAiSettings(change: SettingsChange): Promise<void> {
 
 export interface AiStatus {
   aiKey: boolean;
+  /** "env": set in Vercel's settings; "toki": set up on this page */
+  aiKeySource: "env" | "toki" | null;
   serviceKey: boolean;
   github: boolean;
+  githubSource: "env" | "toki" | null;
   githubSlug: string | null;
 }
 
@@ -70,6 +73,43 @@ export interface TestResult {
   cost?: number;
   error?: string;
   message?: string;
+}
+
+const aiAction = <T = { ok: boolean }>(body: Record<string, unknown>) => api<T>("/api/ai", { method: "POST", body: JSON.stringify(body) });
+/** Stored encrypted on the server; it can't be read back. */
+export const setAiKey = (key: string) => aiAction({ action: "set_ai_key", key });
+export const clearAiKey = () => aiAction({ action: "clear_ai_key" });
+export const githubFromManifest = (code: string) => aiAction<{ ok: boolean; slug: string; htmlUrl: string }>({ action: "github_manifest", code });
+export const clearGithubApp = () => aiAction({ action: "clear_github" });
+
+const APP_STATE = "toki.githubAppState";
+/** Sends the admin to GitHub with the app already filled in; GitHub sends them back with a code. */
+export function createGithubApp(manifest: object) {
+  const state = crypto.randomUUID();
+  try {
+    sessionStorage.setItem(APP_STATE, state);
+  } catch {
+    /* the check on return then fails and asks to try again */
+  }
+  const form = document.createElement("form");
+  form.method = "post";
+  form.action = `https://github.com/settings/apps/new?state=${encodeURIComponent(state)}`;
+  const input = document.createElement("input");
+  input.type = "hidden";
+  input.name = "manifest";
+  input.value = JSON.stringify(manifest);
+  form.appendChild(input);
+  document.body.appendChild(form);
+  form.submit();
+}
+export function githubAppStateMatches(state: string | null): boolean {
+  try {
+    const saved = sessionStorage.getItem(APP_STATE);
+    sessionStorage.removeItem(APP_STATE);
+    return !!state && state === saved;
+  } catch {
+    return false;
+  }
 }
 
 export const testAi = () => api<TestResult>("/api/ai", { method: "POST", body: JSON.stringify({ action: "test" }) });
