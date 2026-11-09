@@ -281,6 +281,17 @@ function Suggested({ games, recentSlugs }: { games: Game[]; recentSlugs: string[
   );
 }
 
+// Asked at most once a minute, so going back and forth to the home page doesn't ask every time.
+const FRIENDS_MS = 60_000;
+let friendsCache: { user: string; at: number; rows: Promise<FriendRow[]> } | null = null;
+function friendsNow(userId: string): Promise<FriendRow[]> {
+  if (!friendsCache || friendsCache.user !== userId || Date.now() - friendsCache.at > FRIENDS_MS) {
+    friendsCache = { user: userId, at: Date.now(), rows: myFriends() };
+    friendsCache.rows.catch(() => (friendsCache = null));
+  }
+  return friendsCache.rows;
+}
+
 /** Friends who are playing something right now, with a link to join in. Only for logged-in players. */
 function FriendsPlaying({ games }: { games: Game[] }) {
   const { t } = useI18n();
@@ -291,7 +302,7 @@ function FriendsPlaying({ games }: { games: Game[] }) {
   useEffect(() => {
     if (!userId) return setRows([]);
     let alive = true;
-    myFriends().then((r) => alive && setRows(r), () => {});
+    friendsNow(userId).then((r) => alive && setRows(r), () => {});
     return () => {
       alive = false;
     };
