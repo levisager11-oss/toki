@@ -18,6 +18,7 @@ import { Leaderboard, useScoreBridge } from "../components/Leaderboard";
 import { setPlaying } from "../lib/useBadges";
 import { TranslateToggle, useTranslate } from "../components/AiBits";
 import { GameHelper } from "../components/GameHelper";
+import { Screenshots } from "../components/ShotViewer";
 import { useFreeAi } from "../lib/assist";
 import { CloseIcon, FullscreenIcon, ShareIcon } from "../components/icons";
 
@@ -222,13 +223,7 @@ export function GamePage() {
       {game.screenshots.length > 0 && (
         <section>
           <div className="sechead"><h2>{t("game.screenshots")}</h2></div>
-          <div className="shots">
-            {game.screenshots.map((src, n) => (
-              <a key={src} href={src} target="_blank" rel="noopener noreferrer">
-                <img src={src} alt={t("game.screenshotN", { n: n + 1, title: game.title })} loading="lazy" decoding="async" />
-              </a>
-            ))}
-          </div>
+          <Screenshots shots={game.screenshots} title={game.title} />
         </section>
       )}
 

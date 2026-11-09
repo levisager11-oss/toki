@@ -283,6 +283,16 @@ h1, h2 { text-wrap: balance; }
 .shots a { display: block; border: 1px solid var(--line); }
 .shots a:hover { border-color: var(--fg); }
 .shots img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: var(--line); }
+.shot-viewer { border: 0; padding: 0; margin: 0; width: 100vw; height: 100dvh; max-width: none; max-height: none; background: rgb(8, 9, 11); display: flex; align-items: center; justify-content: center; }
+.shot-viewer::backdrop { background: rgba(0, 0, 0, .6); }
+.shot-viewer img { max-width: min(100vw - 32px, 1400px); max-height: calc(100dvh - 96px); object-fit: contain; image-rendering: auto; }
+.shot-viewer button { position: absolute; background: rgba(0, 0, 0, .5); color: #fff; border: 1px solid rgba(255, 255, 255, .3); cursor: pointer; display: grid; place-items: center; }
+.shot-viewer button:hover, .shot-viewer button:focus-visible { background: rgba(255, 255, 255, .15); }
+.shot-close { top: max(12px, env(safe-area-inset-top)); right: 12px; width: 44px; height: 44px; }
+.shot-nav { top: 50%; transform: translateY(-50%); width: 44px; height: 64px; font-size: 32px; line-height: 1; }
+.shot-nav.prev { left: 12px; }
+.shot-nav.next { right: 12px; }
+.shot-count { position: absolute; bottom: max(16px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); color: #fff; font-size: 13px; opacity: .8; }
 .shot-pick { list-style: none; margin: 6px 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .shot-pick:empty { display: none; }
 .shot-pick li { position: relative; border: 1px solid var(--line); }
