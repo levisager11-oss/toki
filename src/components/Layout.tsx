@@ -9,6 +9,7 @@ import { APPLICATIONS_CHANGED, openApplicationCount } from "../lib/applications"
 import { BellIcon, BubbleIcon, HeartTabIcon, HomeIcon, KeyIcon, ListIcon, LogoMark, LogoutIcon, PlusIcon, SearchIcon, UserIcon } from "./icons";
 import { useBadges } from "../lib/useBadges";
 import { setTitleCount } from "../lib/useTitle";
+import { useNewUpdate } from "../lib/whatsNew";
 import { Avatar } from "./Avatar";
 import { useAiStatus } from "../lib/assist";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -23,6 +24,7 @@ export function Layout() {
   const { t, lang, setLang } = useI18n();
   const { profile, signOut } = useAuth();
   const badges = useBadges();
+  const newUpdate = useNewUpdate();
   const unread = profile ? badges.notifications + badges.chats : 0;
   useEffect(() => setTitleCount(unread), [unread]);
   const ai = useAiStatus();
@@ -150,7 +152,7 @@ export function Layout() {
         <div className="side-foot">
           <nav className="navgroup" aria-label="Toki">
             <h4>Toki</h4>
-            <NavLink to="/updates">{t("rel.whatsNew")}</NavLink>
+            <NavLink to="/updates">{t("rel.whatsNew")}{newUpdate && <span className="new-dot" title={t("rel.newSinceVisit")}><span className="sr-only">{t("rel.newSinceVisit")}</span></span>}</NavLink>
             <NavLink to="/feedback" end>{t("nav.feedback")}</NavLink>
           </nav>
           {profile ? (
@@ -206,7 +208,7 @@ export function Layout() {
             <Outlet />
           </ErrorBoundary>
           <footer className="foot mobile-only">
-            <Link to="/updates">{t("nav.updates")}</Link>
+            <Link to="/updates">{t("nav.updates")}{newUpdate && <span className="new-dot" title={t("rel.newSinceVisit")}><span className="sr-only">{t("rel.newSinceVisit")}</span></span>}</Link>
             <Link to="/feedback">{t("nav.tokiFeedback")}</Link>
           </footer>
         </main>

@@ -3,6 +3,7 @@ import { format } from "../src/lib/i18n";
 import { compact, matches, slugify } from "../src/lib/games";
 import type { Game } from "../src/lib/types";
 import { isNew } from "../src/components/GameCard";
+import { isUnseen } from "../src/lib/whatsNew";
 
 const game = (over: Partial<Game> = {}): Game => ({
   id: "1", slug: "deep-sub", title: "Deep Sub", description: "", description_de: null, controls: "",
@@ -64,4 +65,13 @@ describe("isNew", () => {
     expect(isNew(game({ created_at: "2026-11-01T12:00:00Z" }), now)).toBe(false);
   });
   it("is not new without a date", () => expect(isNew(game({ created_at: "" }), now)).toBe(false));
+});
+
+describe("isUnseen", () => {
+  it("is only new when newer than what was seen", () => {
+    expect(isUnseen("2026-11-09T12:00:00Z", "2026-11-08T12:00:00Z")).toBe(true);
+    expect(isUnseen("2026-11-09T12:00:00Z", "2026-11-09T12:00:00Z")).toBe(false);
+    expect(isUnseen("2026-11-09T12:00:00Z", null)).toBe(false);
+    expect(isUnseen(null, "2026-11-09T12:00:00Z")).toBe(false);
+  });
 });

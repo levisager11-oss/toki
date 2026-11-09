@@ -864,3 +864,6 @@ a.author:hover { text-decoration: underline; color: var(--fg); }
 .pw-change { margin-top: 32px; border-top: 1px solid var(--line); padding-top: 16px; }
 .pw-change summary { cursor: pointer; font-weight: 700; }
 .pw-change .form { margin-top: 12px; }
+
+/* "What's new" has an update this browser hasn't seen */
+.new-dot { display: inline-block; width: 8px; height: 8px; margin-left: 6px; background: var(--danger); vertical-align: middle; }
