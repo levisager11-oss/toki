@@ -6,11 +6,12 @@ A small website for free browser games, in English and German.
 - **Plays and likes:** a visit counts as a play after 10 seconds on a game's page (once per browser per game per day). Tapping the heart saves a game to Favorites and adds a public like. Members see plays per day on *My games*.
 - **Add games:** only invited members can add games. A game is added **by link**: paste the address where the game runs (for example a Vercel or GitHub Pages site). When the game is updated there, Toki shows the new version automatically.
 - **Invites:** admins create invite codes on the *Invites* page. Each code works once.
+- **Feedback:** every game has a feedback board (`/game/<slug>/feedback`), and Toki has its own (`/feedback`). Logged-in players post bug reports, ideas and other notes, reply, and vote. A bug report can be private: then only the reporter, the game's developer and admins see it. The developer (for Toki's board: admins) sets the status (open, planned, in progress, done, declined), replies with a *Developer* badge, and can hide posts. Developers see all feedback for their games in the *Feedback inbox* (`/feedback/inbox`); players see their own posts and replies on their account page. Posting is limited to 5 posts an hour and 20 a day per account, replies to 30 an hour (developers have no reply limit).
 
 ## Tech
 
 - Vite + React + TypeScript, hosted on Vercel (`vercel.json`)
-- Supabase for logins, the games list and cover images (`supabase/schema.sql`)
+- Supabase for logins, the games list, feedback and cover images. `supabase/schema.sql` holds everything up to the feedback system; newer changes are in `supabase/migrations/` (one file per change, applied in name order)
 - Pixel-art covers are drawn in the browser (`src/pixel/scenes.ts`) when a game has no uploaded image
 - `middleware.ts` fills in the title, description and image for link previews (WhatsApp, Discord, …). `api/og.ts` draws the preview image from the pixel cover
 - `api/check.ts` tells members, while they fill in the game form, whether a game link can be shown inside Toki
@@ -18,9 +19,11 @@ A small website for free browser games, in English and German.
 ## Checks
 
 ```sh
-npm test          # unit tests
+npm test          # unit tests and database tests
 npm run typecheck
 ```
+
+The database tests (`tests/db/`) run `supabase/schema.sql` and every migration in a real Postgres that runs inside the test process ([PGlite](https://pglite.dev)), then check the row level security rules as visitors, players, developers and admins. They need no Docker or Supabase account.
 
 They also run on every pull request (`.github/workflows/ci.yml`).
 

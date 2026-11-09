@@ -45,3 +45,9 @@ export const ShareIcon = () => (
 export const UserIcon = () => (
   <svg {...tab}><path d="M10 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM3.5 17.5c.8-3.3 3.3-5 6.5-5s5.7 1.7 6.5 5" strokeLinejoin="round" /></svg>
 );
+export const ChatIcon = () => (
+  <svg viewBox="0 0 16 16" aria-hidden="true" width="13" height="13"><path d="M2 3h12v8H7l-3 3v-3H2z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" /></svg>
+);
+export const LockIcon = () => (
+  <svg viewBox="0 0 16 16" aria-hidden="true" width="11" height="11"><path d="M4 7V5a4 4 0 0 1 8 0v2M3 7h10v7H3z" fill="none" stroke="currentColor" strokeWidth="1.6" /></svg>
+);

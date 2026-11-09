@@ -10,6 +10,7 @@ import { useSaveBridge } from "../lib/saves";
 import { matchIsolation } from "../lib/isolation";
 import { GameGrid, Plays } from "../components/GameCard";
 import { FavButton } from "../components/FavButton";
+import { GameFeedback } from "../components/GameFeedback";
 import { CloseIcon, FullscreenIcon, ShareIcon } from "../components/icons";
 
 const LANDSCAPE_PHONE = "(orientation: landscape) and (pointer: coarse) and (max-height: 600px)";
@@ -224,6 +225,8 @@ export function GamePage() {
           )}
         </section>
       )}
+
+      <GameFeedback game={game} />
 
       {more.length > 0 && (
         <section>

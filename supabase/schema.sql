@@ -1,5 +1,6 @@
 -- Toki database schema (already applied to the Supabase project "toki").
 -- Kept here for reference and for setting up a fresh project.
+-- Newer changes are in supabase/migrations/: for a fresh project, run this file, then those in name order.
 
 create type public.user_role as enum ('admin', 'creator');
 
