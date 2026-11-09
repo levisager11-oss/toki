@@ -81,8 +81,29 @@ export function ChatView({ chatId, kind, compact }: { chatId: string; kind: Chat
         markRead();
       })
       .subscribe();
+    // Back from the background (e.g. a phone that slept): the live connection may have
+    // missed messages, so fetch the newest ones once and add what's missing.
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      listMessages(chatId).then(
+        (ms) => {
+          if (!alive) return;
+          remember(ms);
+          setMessages((list) => {
+            if (!list) return list;
+            const have = new Set(list.map((x) => x.id));
+            const added = ms.filter((x) => !have.has(x.id));
+            return added.length ? [...list, ...added].sort((a, b) => a.id - b.id) : list;
+          });
+          markRead();
+        },
+        () => {},
+      );
+    };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       alive = false;
+      document.removeEventListener("visibilitychange", onVisible);
       supabase.removeChannel(channel);
     };
   }, [chatId, me]);
