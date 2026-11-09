@@ -11,6 +11,28 @@ const CFG = { provider: "openai_compatible" as const, baseUrl: "https://ai.examp
 const reply = (body: unknown, status = 200) => vi.fn(async () => new Response(JSON.stringify(body), { status })) as unknown as typeof fetch & ReturnType<typeof vi.fn>;
 
 describe("OpenAI-compatible provider", () => {
+  it("asks again with min_p 0 when the server refuses its own default min_p, and remembers that", async () => {
+    const cfg = { ...CFG, baseUrl: "https://vllm.example/api", model: "ask-base-nx" };
+    const f = vi.fn(async (_url: string, init: RequestInit) =>
+      "min_p" in JSON.parse(String(init.body))
+        ? new Response(JSON.stringify({ choices: [{ message: { content: "OK" } }], usage: { prompt_tokens: 3, completion_tokens: 1 } }), { status: 200 })
+        : new Response(JSON.stringify({ error: { message: "The min_p and logit_bias sampling parameters are not yet supported with speculative decoding." } }), { status: 400 }),
+    ) as unknown as typeof fetch & ReturnType<typeof vi.fn>;
+    expect((await complete(cfg, { messages: [{ role: "user", content: "hi" }], maxTokens: 16 }, f)).text).toBe("OK");
+    expect(f).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(String((f.mock.calls[1] as [string, RequestInit])[1].body)).min_p).toBe(0);
+    // Next time it's sent right away.
+    await complete(cfg, { messages: [{ role: "user", content: "hi" }], maxTokens: 16 }, f);
+    expect(f).toHaveBeenCalledTimes(3);
+  });
+
+  it("doesn't send min_p to other endpoints, and doesn't retry other errors", async () => {
+    const f = reply({ error: { message: "bad model" } }, 400);
+    await expect(complete(CFG, { messages: [{ role: "user", content: "hi" }], maxTokens: 16 }, f)).rejects.toMatchObject({ code: "provider_error" });
+    expect(f).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String((f.mock.calls[0] as [string, RequestInit])[1].body)).min_p).toBeUndefined();
+  });
+
   it("sends the chat request and reads the answer and token counts", async () => {
     const f = reply({ choices: [{ message: { content: "OK" } }], usage: { prompt_tokens: 12, completion_tokens: 1 } });
     const c = await complete(CFG, { messages: [{ role: "user", content: "hi" }], maxTokens: 16 }, f);
