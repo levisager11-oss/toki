@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
@@ -9,6 +9,7 @@ import { DeveloperCard } from "../components/DeveloperCard";
 import { MyFeedback } from "../components/MyFeedback";
 import { EditProfile } from "../components/EditProfile";
 import { useTitle } from "../lib/useTitle";
+import { PasswordForm } from "../components/PasswordForm";
 
 export function Account() {
   const { t } = useI18n();
@@ -18,6 +19,10 @@ export function Account() {
   const [code, setCode] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [params] = useSearchParams();
+  // Just set a new password (from a reset email, or below).
+  const [pwSaved, setPwSaved] = useState(params.get("pw") === "1");
+  const [pwOpen, setPwOpen] = useState(false);
   if (!profile) return null;
 
   const redeem = async (e: FormEvent) => {
@@ -35,6 +40,7 @@ export function Account() {
     <section className="panel narrow">
       <h1 className="h">@{profile.username}</h1>
       <p className="lead">{t(`account.role.${profile.role}`)}</p>
+      {pwSaved && <p className="check good" role="status">{t("pw.saved")}</p>}
       <p>{t("account.saves")}</p>
       <div className="actions">
         <Link to={`/u/${profile.username}`} className="btn">{t("soc.viewProfile")}</Link>
@@ -65,6 +71,19 @@ export function Account() {
 
       <SaveHistory />
       <MyFeedback />
+
+      <details className="pw-change" open={pwOpen} onToggle={(e) => setPwOpen(e.currentTarget.open)}>
+        <summary>{t("pw.title")}</summary>
+        {pwOpen && (
+          <PasswordForm
+            onDone={() => {
+              setPwOpen(false);
+              setPwSaved(true);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+          />
+        )}
+      </details>
 
       <div className="actions" style={{ marginTop: 32 }}>
         <button type="button" className="btn" onClick={() => signOut().then(() => navigate("/"))}>{t("nav.logout")}</button>
