@@ -50,6 +50,17 @@ export function GameForm() {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Something was typed or picked: closing or reloading the tab asks first.
+  const [dirty, setDirty] = useState(false);
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
 
   useEffect(() => {
     if (!editSlug) return;
@@ -151,6 +162,7 @@ export function GameForm() {
       : await supabase.from("games").insert({ ...row, created_by: profile!.id });
     setBusy(false);
     if (res.error) return setErr(res.error.code === "23505" ? t("form.slugTaken") : t("form.error"));
+    setDirty(false);
     invalidateGames();
     navigate(`/game/${row.slug}`);
   };
@@ -168,7 +180,7 @@ export function GameForm() {
   return (
     <section className="panel">
       <h1 className="h">{orig ? t("form.editTitle") : t("form.addTitle")}</h1>
-      <form className="form two" onSubmit={submit}>
+      <form className="form two" onSubmit={submit} onChange={() => setDirty(true)}>
         <div className="col">
           <label htmlFor="title">{t("form.title")}</label>
           <input id="title" required maxLength={60} value={title} onChange={(e) => onTitle(e.target.value)} />
