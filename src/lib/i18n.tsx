@@ -811,6 +811,12 @@ const en = {
   "ai.thinkingHelp": "How much the AI thinks before it answers. More is better for hard code changes, but slower and uses more tokens (which cost money here).",
   "ai.thinkingHelpAnthropic": "Sent to Claude as “effort”. More thinks harder on code changes, but is slower and uses more tokens (which cost money). Claude can't turn thinking off; “Low” is the least. “Extra high” and “Max” only work on newer models.",
   "ai.free.thinkingHelp": "How much the AI thinks before it answers. Less is faster: try “Off” or “Low” if answers or “Learn from GitHub” take too long. Endpoints that don't support it ignore it.",
+  "ai.agent.enabled": "Toki Connect with Claude Managed Agents",
+  "ai.agent.help": "Instead of sending files to the AI step by step, a Claude agent works in its own copy of the game's code on Anthropic's servers: it finds what it needs itself and can try things, so changes and bug fixes get better. It can only read the repository; Toki checks its changes and opens the pull request. Off: Toki Connect works step by step as before.",
+  "ai.agent.budget": "Most per run (US dollars)",
+  "ai.agent.budgetHelp": "A hard cap, enforced by Anthropic: when a run reaches it, the agent stops. The whole amount is held back from the developer's quota while the run works, then only what it really cost counts. $1 is enough for most runs.",
+  "connect.progress.agent": "A Claude agent is working in a copy of your code. This can take a few minutes.",
+  "connect.err.agent_budget": "The agent used up the most a run may cost, before it was done. Try again with clearer notes, or ask an admin to raise the limit per run.",
 };
 
 type Key = keyof typeof en;
@@ -1626,6 +1632,12 @@ const de: Record<Key, string> = {
   "ai.thinkingHelp": "Wie viel die KI nachdenkt, bevor sie antwortet. Mehr ist besser für schwierige Codeänderungen, aber langsamer und braucht mehr Tokens (die hier Geld kosten).",
   "ai.thinkingHelpAnthropic": "Wird an Claude als „Effort“ gesendet. Mehr denkt bei Codeänderungen gründlicher nach, ist aber langsamer und braucht mehr Tokens (die Geld kosten). Claude kann das Nachdenken nicht ausschalten; „Wenig“ ist das Minimum. „Sehr viel“ und „Maximal“ gehen nur bei neueren Modellen.",
   "ai.free.thinkingHelp": "Wie viel die KI nachdenkt, bevor sie antwortet. Weniger ist schneller: Probier „Aus“ oder „Wenig“, wenn Antworten oder „Von GitHub lernen“ zu lange dauern. Endpunkte, die das nicht kennen, ignorieren es.",
+  "ai.agent.enabled": "Toki Connect mit Claude Managed Agents",
+  "ai.agent.help": "Statt der KI Schritt für Schritt Dateien zu schicken, arbeitet ein Claude-Agent in einer eigenen Kopie des Spielcodes auf Anthropics Servern: Er sucht selbst, was er braucht, und kann Dinge ausprobieren, so werden Änderungen und Fehlerbehebungen besser. Er kann das Repository nur lesen; Toki prüft seine Änderungen und öffnet den Pull Request. Aus: Toki Connect arbeitet wie bisher Schritt für Schritt.",
+  "ai.agent.budget": "Höchstens pro Durchlauf (US-Dollar)",
+  "ai.agent.budgetHelp": "Eine feste Grenze, die Anthropic durchsetzt: Erreicht ein Durchlauf sie, hört der Agent auf. Der ganze Betrag wird vom Kontingent des Entwicklers zurückgehalten, solange der Durchlauf läuft; danach zählt nur, was er wirklich gekostet hat. 1 $ reicht für die meisten Durchläufe.",
+  "connect.progress.agent": "Ein Claude-Agent arbeitet in einer Kopie deines Codes. Das kann ein paar Minuten dauern.",
+  "connect.err.agent_budget": "Der Agent hat das Maximum für einen Durchlauf aufgebraucht, bevor er fertig war. Versuch es nochmals mit klareren Notizen, oder bitte einen Admin, die Grenze pro Durchlauf zu erhöhen.",
 };
 
 export type Lang = "en" | "de";

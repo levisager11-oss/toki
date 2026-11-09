@@ -9,7 +9,7 @@ import {
   THINKING, type AiSettings, type Overview, type Provider, type TestResult, type Thinking, type UsageRow,
 } from "../lib/ai";
 
-type Form = { enabled: boolean; provider: Provider; base_url: string; model: string; input_price: string; output_price: string; monthly_cap: string; default_quota: string; thinking: Thinking };
+type Form = { enabled: boolean; provider: Provider; base_url: string; model: string; input_price: string; output_price: string; monthly_cap: string; default_quota: string; thinking: Thinking; agent_enabled: boolean; agent_budget: string };
 
 /** Admins: AI settings, this month's spending against the cap, and quotas per developer (/admin/ai). */
 export function AiAdmin() {
@@ -45,6 +45,8 @@ export function AiAdmin() {
           monthly_cap: String(s.monthly_cap),
           default_quota: String(s.default_quota),
           thinking: s.thinking ?? "default",
+          agent_enabled: s.agent_enabled ?? false,
+          agent_budget: String(s.agent_budget ?? 1),
         };
         setForm(f);
         setSavedForm(JSON.stringify(f));
@@ -71,7 +73,7 @@ export function AiAdmin() {
   const pct = cap > 0 ? Math.min(100, (spent / cap) * 100) : 100;
   const dirty = JSON.stringify(form) !== savedForm;
   const set = (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm({ ...form, [k]: k === "enabled" ? e.target.checked : e.target.value });
+    setForm({ ...form, [k]: k === "enabled" || k === "agent_enabled" ? e.target.checked : e.target.value });
 
   const save = async (e: FormEvent) => {
     e.preventDefault();
@@ -90,6 +92,9 @@ export function AiAdmin() {
         default_quota: defaultQuota,
         // Anthropic can't turn thinking off; "off" means the least there.
         thinking: form.provider === "anthropic" && form.thinking === "off" ? "low" : form.thinking,
+        // Managed Agents only work with Anthropic.
+        agent_enabled: form.provider === "anthropic" && form.agent_enabled,
+        agent_budget: Math.min(50, Math.max(0.1, Number(form.agent_budget) || 1)),
       });
       setSaveMsg("saved");
       setSavedForm(sent);
@@ -200,6 +205,18 @@ export function AiAdmin() {
           {THINKING.filter((v) => !(form.provider === "anthropic" && v === "off")).map((v) => <option key={v} value={v}>{t(`ai.free.thinking.${v}`)}</option>)}
         </select>
         <small id="ai-thinking-help">{t(form.provider === "anthropic" ? "ai.thinkingHelpAnthropic" : "ai.thinkingHelp")}</small>
+        {form.provider === "anthropic" && (
+          <div className="ai-panel">
+            <label className="fb-check">
+              <input type="checkbox" checked={form.agent_enabled} onChange={set("agent_enabled")} />
+              <span><b>{t("ai.agent.enabled")}</b></span>
+            </label>
+            <small>{t("ai.agent.help")}</small>
+            <label htmlFor="ai-agent-budget">{t("ai.agent.budget")}</label>
+            <input id="ai-agent-budget" type="number" min="0.1" max="50" step="0.1" inputMode="decimal" value={form.agent_budget} onChange={set("agent_budget")} aria-describedby="ai-agent-budget-help" />
+            <small id="ai-agent-budget-help">{t("ai.agent.budgetHelp")}</small>
+          </div>
+        )}
         {pricesFrom && <p className="check" role="status">{t("ai.models.pricesFilled", { model: pricesFrom })}</p>}
         <div className="pair">
           <div>

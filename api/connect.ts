@@ -2,17 +2,23 @@
 // Every action checks that the run (and the GitHub installation) belongs to the logged-in account.
 import { budgetedCompletion } from "../server/ai/budget.js";
 import { freeCompletion, freeSettings } from "../server/ai/free.js";
-import { step, type Bug, type Feature, type Job, type Message } from "../server/connect/agent.js";
+import { errorCode, errorDetail, step, type Bug, type Feature, type Job, type Message, type StepResult } from "../server/connect/agent.js";
+import { agentStep } from "../server/connect/managed.js";
+import {
+  AGENT_SETTINGS, agentClient, changesFile, ensureAgent, interrupt, replyTool, sendMessage, sessionEvents, sessionStatus, startSession, type AgentSettings,
+} from "../server/connect/managedClient.js";
+import Anthropic from "@anthropic-ai/sdk";
 import { DbError } from "../server/db.js";
 import { githubConfigured } from "../server/env.js";
 import { github } from "../server/github.js";
 import { body, context, isUuid, json, type Ctx } from "../server/http.js";
 
-const PUBLIC = "id,repo,features,notes,status,messages,pr_url,error,error_detail,game_id,feedback_id,created_at,updated_at";
+const PUBLIC = "id,repo,features,notes,status,messages,pr_url,error,error_detail,game_id,feedback_id,engine,created_at,updated_at";
 // A step holds the run this long at most; a crashed step frees it again after that.
 const LEASE_MS = 290_000;
 
 interface Row extends Omit<Job, "game" | "bug"> {
+  engine: "steps" | "agent";
   user_id: string;
   installation_id: number;
   game_id: string | null;
@@ -66,8 +72,10 @@ async function start(ctx: Ctx, b: Record<string, unknown>) {
   if (!Number.isSafeInteger(installation) || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo) || !features.length) return json({ error: "bad_request" }, 400);
   if (!ctx.env.aiKey && !ctx.env.anthropicKey) return json({ error: "ai_not_configured" }, 503);
   if (!githubConfigured(ctx.env.github)) return json({ error: "github_not_configured" }, 503);
-  const [settings] = await ctx.db.select<{ enabled: boolean }>("ai_settings", "id=eq.1&select=enabled");
+  const [settings] = await ctx.db.select<{ enabled: boolean; provider: string; agent_enabled: boolean }>("ai_settings", "id=eq.1&select=enabled,provider,agent_enabled");
   if (!settings?.enabled) return json({ error: "ai_disabled" }, 503);
+  // Claude Managed Agents when the admin turned it on (Anthropic only); otherwise step by step.
+  const engine = settings.agent_enabled && settings.provider === "anthropic" && ctx.env.anthropicKey ? "agent" : "steps";
 
   // The installation must be one GitHub confirmed for this account, and the repository one it can use.
   const [owned] = await ctx.db.select("github_installations", `user_id=eq.${ctx.user.id}&installation_id=eq.${installation}&select=installation_id`);
@@ -87,6 +95,7 @@ async function start(ctx: Ctx, b: Record<string, unknown>) {
       notes,
       game_id: gameId,
       feedback_id: feedbackId,
+      engine,
       state: { lang: b.lang === "de" ? "de" : "en" },
     });
     return view(ctx, job.id);
@@ -118,6 +127,11 @@ async function run(ctx: Ctx, b: Record<string, unknown>, origin: string) {
     const replies = await ctx.db.select<{ body: string }>("feedback_replies", `post_id=eq.${job.feedback_id}&select=body&order=created_at&limit=20`);
     if (post) bug = { title: post.title, body: post.body, device: post.device, replies: replies.map((r) => r.body.slice(0, 1000)) };
   }
+  if (job.engine === "agent") {
+    const result = await runAgent(ctx, job, { ...job, game, bug }, origin);
+    await saveStep(ctx, job, result);
+    return view(ctx, job.id);
+  }
   // The free AI does the easy steps, when it's set up and the admin allows it.
   const [opts] = await ctx.db.select<{ connect_free_steps: boolean }>("ai_settings", "id=eq.1&select=connect_free_steps");
   const freeAi = opts?.connect_free_steps && ctx.env.aiKey ? await freeSettings(ctx.db) : null;
@@ -148,6 +162,11 @@ async function run(ctx: Ctx, b: Record<string, unknown>, origin: string) {
       return res.text();
     },
   });
+  await saveStep(ctx, job, result);
+  return view(ctx, job.id);
+}
+
+async function saveStep(ctx: Ctx, job: Row, result: StepResult) {
   // Only if it wasn't cancelled meanwhile.
   await ctx.db.update("connect_jobs", `id=eq.${job.id}&status=eq.working`, {
     status: result.status,
@@ -159,7 +178,80 @@ async function run(ctx: Ctx, b: Record<string, unknown>, origin: string) {
     lease_until: null,
     updated_at: new Date().toISOString(),
   });
-  return view(ctx, job.id);
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * One step of a Managed Agents run. Before the session starts, the run's whole cap is reserved in
+ * the AI budget (so quotas and Toki's monthly cap hold); when it ends, its real cost replaces that.
+ */
+async function runAgent(ctx: Ctx, row: Row, job: Job, origin: string): Promise<StepResult> {
+  const [s] = await ctx.db.select<AgentSettings & { output_price: string }>("ai_settings", `id=eq.1&select=${AGENT_SETTINGS},output_price`);
+  const client = agentClient(ctx.env.anthropicKey, s.base_url);
+  const budget = Number(s.agent_budget);
+  const state = { ...(job.state ?? {}) };
+  const settle = async (cost: number, ok: boolean) => {
+    if (state.reservation) await ctx.db.rpc("ai_settle_amount", { p_id: state.reservation, p_cost: cost, p_ok: ok }).catch(() => {});
+  };
+  try {
+    if (!state.session) {
+      // The cap in tokens of the model's output price, so ai_reserve can check it against the limits.
+      const r = await ctx.db.rpc<{ id: number }>("ai_reserve", {
+        p_user: ctx.user.id,
+        p_feature: "connect",
+        p_job: row.id,
+        p_input_tokens: 0,
+        p_max_output_tokens: Math.ceil((budget * 1_000_000) / Math.max(Number(s.output_price), 0.0001)),
+      });
+      state.reservation = r.id;
+    }
+    const gh = github(ctx.env.github);
+    const result = await agentStep({ ...job, state }, {
+      origin,
+      script: async () => {
+        const res = await fetch(new URL("/toki-save.js", origin));
+        if (!res.ok) throw new Error("toki-save.js not found");
+        return res.text();
+      },
+      async start(text) {
+        const [owned] = await ctx.db.select("github_installations", `user_id=eq.${ctx.user.id}&installation_id=eq.${row.installation_id}&select=installation_id`);
+        if (!owned) throw new DbError("not_allowed", 403);
+        const a = await ensureAgent(client, ctx.db, s);
+        const branch = await (await gh.repo(row.installation_id, row.repo)).defaultBranch();
+        const token = await gh.readOnlyToken(row.installation_id, row.repo);
+        return startSession(client, { ...a, repo: row.repo, token, branch, budgetUsd: budget, text, jobId: row.id });
+      },
+      status: (id) => sessionStatus(client, id),
+      events: (id) => sessionEvents(client, id),
+      reply: (id, toolUseId, text) => replyTool(client, id, toolUseId, text),
+      message: (id, text) => sendMessage(client, id, text),
+      interrupt: (id) => interrupt(client, id),
+      changes: (id) => changesFile(client, id),
+      async openPullRequest(p) {
+        const repo = await gh.repo(row.installation_id, row.repo);
+        return repo.openPullRequest({ ...p, base: await repo.defaultBranch(), branch: `toki-connect/${row.id.slice(0, 8)}`, message: p.title });
+      },
+      async wait() {
+        // Up to about 20 seconds while the agent works, so the page doesn't ask every few seconds.
+        for (let i = 0; i < 5; i++) {
+          await sleep(4000);
+          const st = await sessionStatus(client, state.session!);
+          if (st.status !== "running" && st.status !== "rescheduling") return;
+        }
+      },
+    });
+    if (result.status === "done" || result.status === "failed") await settle(result.cost ?? 0, result.status === "done");
+    return result;
+  } catch (e) {
+    // What it cost so far, if a session was started.
+    const cost = state.session ? await sessionStatus(client, state.session).then((x) => x.cost, () => budget) : 0;
+    if (state.session) await interrupt(client, state.session).catch(() => {});
+    await settle(cost, false);
+    const code = e instanceof Anthropic.APIError ? "ai_provider_error" : errorCode(e);
+    const detail = e instanceof Anthropic.APIError ? `${e.status ?? ""}: ${e.message}`.slice(0, 500) : errorDetail(e);
+    return { status: "failed", messages: job.messages, state, error: code, error_detail: detail };
+  }
 }
 
 async function answer(ctx: Ctx, b: Record<string, unknown>) {
@@ -179,11 +271,19 @@ async function answer(ctx: Ctx, b: Record<string, unknown>) {
 
 async function cancel(ctx: Ctx, b: Record<string, unknown>) {
   if (!isUuid(b.id)) return json({ error: "bad_request" }, 400);
-  await ctx.db.update("connect_jobs", `id=eq.${b.id}&user_id=eq.${ctx.user.id}&status=in.(working,question)`, {
+  const [job] = await ctx.db.update<Row>("connect_jobs", `id=eq.${b.id}&user_id=eq.${ctx.user.id}&status=in.(working,question)&select=engine,state`, {
     status: "failed",
     error: "cancelled",
     lease_until: null,
     updated_at: new Date().toISOString(),
   });
+  // An agent run: stop the agent, and count what it cost so far instead of the whole cap.
+  if (job?.engine === "agent" && job.state?.session) {
+    const [s] = await ctx.db.select<{ base_url: string }>("ai_settings", "id=eq.1&select=base_url");
+    const client = agentClient(ctx.env.anthropicKey, s?.base_url ?? "");
+    await interrupt(client, job.state.session).catch(() => {});
+    const cost = await sessionStatus(client, job.state.session).then((x) => x.cost, () => null);
+    if (job.state.reservation && cost !== null) await ctx.db.rpc("ai_settle_amount", { p_id: job.state.reservation, p_cost: cost, p_ok: false }).catch(() => {});
+  }
   return view(ctx, b.id);
 }

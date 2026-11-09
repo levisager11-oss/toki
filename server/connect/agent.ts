@@ -25,7 +25,7 @@ export interface Question {
 }
 
 export type Message =
-  | { from: "toki"; kind: "progress"; step: "read" | "more"; count: number; at: string }
+  | { from: "toki"; kind: "progress"; step: "read" | "more" | "agent"; count: number; at: string }
   | { from: "ai"; kind: "question"; text: string; questions: Question[]; at: string }
   | { from: "developer"; kind: "answer"; answers: { id: string; question: string; answer: string }[]; at: string }
   | { from: "ai"; kind: "done"; text: string; files: string[]; at: string }
@@ -47,6 +47,19 @@ export interface JobState {
   phase?: "explore" | "decide";
   freeCalls?: number;
   exploreReads?: number;
+  // Managed Agents runs (engine "agent")
+  /** the agent's session on Anthropic */
+  session?: string;
+  /** the reservation in the AI budget for this run */
+  reservation?: number;
+  /** custom tool calls already answered */
+  handled?: string[];
+  /** the ask_developer call waiting for the developer's answer */
+  pendingAsk?: string;
+  /** times the agent was reminded to call finish */
+  nudges?: number;
+  /** how many times the session had stopped when Toki last looked */
+  idleSeen?: number;
 }
 
 export type Status = "working" | "question" | "done" | "failed";
@@ -127,7 +140,7 @@ export function errorDetail(e: unknown): string | null {
 
 const text = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
-function questions(v: unknown): Question[] {
+export function questions(v: unknown): Question[] {
   if (!Array.isArray(v)) return [];
   return v
     .slice(0, 3)
@@ -289,7 +302,7 @@ const FEATURES: Record<Feature, string> = {
   fix: "a bug fix",
 };
 
-function task(job: Job, script: string): string {
+export function task(job: Job, script: string): string {
   if (job.features.includes("fix")) {
     const b = job.bug;
     return `You fix bugs in the source code of a web game. Your changes are committed and opened as a pull request in the developer's GitHub repository, so make them correct and small.

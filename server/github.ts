@@ -62,6 +62,15 @@ export function github(cfg: ServerEnv["github"], fetchImpl: typeof fetch = fetch
   }
 
   return {
+    /** A token that can only read one repository (for an agent's copy; it can't push). */
+    async readOnlyToken(installationId: number, repo: string): Promise<string> {
+      const r = await call<{ token: string }>(`/app/installations/${installationId}/access_tokens`, appJwt(cfg.appId, cfg.privateKey), {
+        method: "POST",
+        body: JSON.stringify({ repositories: [repo.split("/")[1]], permissions: { contents: "read", metadata: "read" } }),
+      });
+      return r.token;
+    },
+
     installUrl: (state: string) => `https://github.com/apps/${encodeURIComponent(cfg.slug)}/installations/new?state=${encodeURIComponent(state)}`,
 
     /**
