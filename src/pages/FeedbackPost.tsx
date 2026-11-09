@@ -13,6 +13,7 @@ import { TranslateToggle, useTranslate } from "../components/AiBits";
 import { useTitle } from "../lib/useTitle";
 import { Linkify } from "../components/Linkify";
 import { useDraft } from "../lib/useDraft";
+import { ShareButton } from "../components/ShareButton";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -127,6 +128,7 @@ export function FeedbackPost() {
             {post.status !== "open" && t("fb.post.statusChanged", { when: ago(post.status_at, lang) })}
           </p>
           {post.device && <p className="sub"><span className="label">{t("fb.post.device")}</span> {post.device}</p>}
+          {!post.private && <p className="sub fb-share"><ShareButton className="linkish" path={`/feedback/${post.id}`} title={post.title} /></p>}
           {isAuthor && (
             <div className="actions">
               <button type="button" className="btn" onClick={() => setEditing(true)}>{t("fb.post.edit")}</button>
