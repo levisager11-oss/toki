@@ -5,6 +5,8 @@ const env = () => (globalThis as { process?: { env?: Record<string, string | und
 export interface ServerEnv {
   /** Key for the OpenAI-compatible endpoint set in the admin dashboard. */
   aiKey: string;
+  /** Key for Anthropic's API. */
+  anthropicKey: string;
   /** Supabase secret key (sb_secret_…) or the older service_role key: skips row level security. */
   serviceKey: string;
   github: { appId: string; slug: string; privateKey: string; clientId: string; clientSecret: string };
@@ -14,6 +16,7 @@ export function serverEnv(): ServerEnv {
   const e = env();
   return {
     aiKey: e.AI_API_KEY ?? "",
+    anthropicKey: e.ANTHROPIC_API_KEY ?? "",
     serviceKey: e.SUPABASE_SECRET_KEY || e.SUPABASE_SERVICE_ROLE_KEY || "",
     github: {
       appId: e.GITHUB_APP_ID ?? "",

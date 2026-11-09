@@ -60,7 +60,7 @@ describe("budgeted AI calls", () => {
   it("reserves first, then settles the real token counts", async () => {
     const { db, calls } = fakeDb();
     const c = await budgetedCompletion({
-      db, apiKey: "k", userId: "u", feature: "connect", jobId: "j", maxTokens: 100,
+      db, keys: { openai_compatible: "k", anthropic: "" }, userId: "u", feature: "connect", jobId: "j", maxTokens: 100,
       messages: [{ role: "user", content: "x".repeat(30) }],
       fetchImpl: reply({ choices: [{ message: { content: "done" } }], usage: { prompt_tokens: 9, completion_tokens: 3 } }),
     });
@@ -72,19 +72,19 @@ describe("budgeted AI calls", () => {
   it("doesn't call the AI when the budget says no", async () => {
     const { db } = fakeDb({ refuse: "quota_reached" });
     const f = reply({});
-    await expect(budgetedCompletion({ db, apiKey: "k", userId: "u", feature: "connect", messages: [], maxTokens: 1, fetchImpl: f })).rejects.toThrow("quota_reached");
+    await expect(budgetedCompletion({ db, keys: { openai_compatible: "k", anthropic: "" }, userId: "u", feature: "connect", messages: [], maxTokens: 1, fetchImpl: f })).rejects.toThrow("quota_reached");
     expect(f).not.toHaveBeenCalled();
   });
 
   it("settles a failed call as failed, counting what was sent", async () => {
     const { db, calls } = fakeDb();
-    await expect(budgetedCompletion({ db, apiKey: "k", userId: "u", feature: "connect", messages: [{ role: "user", content: "abc" }], maxTokens: 1, fetchImpl: reply({}, 500) })).rejects.toBeInstanceOf(AiError);
+    await expect(budgetedCompletion({ db, keys: { openai_compatible: "k", anthropic: "" }, userId: "u", feature: "connect", messages: [{ role: "user", content: "abc" }], maxTokens: 1, fetchImpl: reply({}, 500) })).rejects.toBeInstanceOf(AiError);
     expect(calls[1].args).toMatchObject({ p_ok: false, p_output_tokens: 0, p_input_tokens: 11 });
   });
 
   it("needs the API key", async () => {
     const { db, calls } = fakeDb();
-    await expect(budgetedCompletion({ db, apiKey: "", userId: "u", feature: "test", messages: [], maxTokens: 1 })).rejects.toMatchObject({ code: "not_configured" });
+    await expect(budgetedCompletion({ db, keys: { openai_compatible: "", anthropic: "" }, userId: "u", feature: "test", messages: [], maxTokens: 1 })).rejects.toMatchObject({ code: "not_configured" });
     expect(calls).toEqual([]);
   });
 });
@@ -289,7 +289,7 @@ describe("error codes", () => {
 describe("stored secrets", async () => {
   const { decrypt, encrypt, githubFromManifestCode, githubManifest, withSecrets } = await import("../server/secrets");
   const env = (over: Partial<import("../server/env").ServerEnv> = {}) => ({
-    aiKey: "", serviceKey: "sb_secret_one",
+    aiKey: "", anthropicKey: "", serviceKey: "sb_secret_one",
     github: { appId: "", slug: "", privateKey: "", clientId: "", clientSecret: "" }, ...over,
   });
   const dbWith = (rows: { name: string; value: string }[]) => ({ select: async () => rows }) as unknown as Db;
@@ -311,7 +311,7 @@ describe("stored secrets", async () => {
     const r = await withSecrets(db, env());
     expect(r.env.aiKey).toBe("stored-key");
     expect(r.env.github).toEqual(app);
-    expect(r.sources).toEqual({ aiKey: "toki", github: "toki" });
+    expect(r.sources).toEqual({ aiKey: "toki", anthropicKey: null, github: "toki" });
   });
 
   it("let Vercel's settings win", async () => {
@@ -340,5 +340,117 @@ describe("stored secrets", async () => {
     expect(await githubFromManifestCode("abc", f)).toEqual({ appId: "42", slug: "toki-connect", clientId: "cid", clientSecret: "cs", privateKey: "PEM", htmlUrl: "https://github.com/apps/toki-connect" });
     expect(((f as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [string])[0]).toBe("https://api.github.com/app-manifests/abc/conversions");
     await expect(githubFromManifestCode("old", reply({ message: "Not Found" }, 404))).rejects.toThrow(/404/);
+  });
+});
+
+describe("finding models", async () => {
+  const { listModels } = await import("../server/ai/provider");
+  const { searchModels, tokensShort } = await import("../src/lib/ai");
+  const cfg = { provider: "openai_compatible" as const, baseUrl: "https://ai.example/v1/", apiKey: "k" };
+
+  it("reads the OpenAI-style list", async () => {
+    const f = reply({ object: "list", data: [{ id: "gpt-b", object: "model" }, { id: "gpt-a", object: "model" }, { id: "" }, { nope: 1 }] });
+    expect(await listModels(cfg, f)).toEqual([
+      { id: "gpt-a", name: undefined, context: undefined, inputPrice: undefined, outputPrice: undefined },
+      { id: "gpt-b", name: undefined, context: undefined, inputPrice: undefined, outputPrice: undefined },
+    ]);
+    const [url, init] = (f as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://ai.example/v1/models");
+    expect((init.headers as Record<string, string>).authorization).toBe("Bearer k");
+  });
+
+  it("takes names, context sizes and prices per million tokens when given (OpenRouter)", async () => {
+    const f = reply({ data: [{ id: "anthropic/claude-sonnet", name: "Anthropic: Claude Sonnet", context_length: 200000, pricing: { prompt: "0.000003", completion: "0.000015" } }] });
+    expect(await listModels(cfg, f)).toEqual([{ id: "anthropic/claude-sonnet", name: "Anthropic: Claude Sonnet", context: 200000, inputPrice: 3, outputPrice: 15 }]);
+  });
+
+  it("reports errors and needs a key", async () => {
+    await expect(listModels(cfg, reply({ error: { message: "bad key" } }, 401))).rejects.toMatchObject({ code: "provider_error" });
+    await expect(listModels({ ...cfg, apiKey: "" })).rejects.toMatchObject({ code: "not_configured" });
+  });
+
+  it("finds models by every word of the search, in any order", () => {
+    const models = [{ id: "anthropic/claude-3.7-sonnet" }, { id: "anthropic/claude-3-haiku" }, { id: "openai/gpt-4o", name: "OpenAI: GPT-4o" }];
+    expect(searchModels(models, "sonnet claude").map((m) => m.id)).toEqual(["anthropic/claude-3.7-sonnet"]);
+    expect(searchModels(models, "CLAUDE").length).toBe(2);
+    expect(searchModels(models, "openai gpt").map((m) => m.id)).toEqual(["openai/gpt-4o"]);
+    expect(searchModels(models, "  ").length).toBe(3);
+    expect(searchModels(models, "llama")).toEqual([]);
+  });
+
+  it("writes context sizes short", () => {
+    expect(tokensShort(128000)).toBe("128k");
+    expect(tokensShort(1_000_000)).toBe("1M");
+    expect(tokensShort(1_050_000)).toBe("1.1M");
+  });
+});
+
+describe("Anthropic provider", () => {
+  const cfg = { provider: "anthropic" as const, baseUrl: "", model: "claude-opus-5-5", apiKey: "sk-ant-test" };
+  // A streamed answer, as the Messages API sends it.
+  const sse = (text: string, stop = "end_turn") => {
+    const events: [string, unknown][] = [
+      ["message_start", { type: "message_start", message: { id: "msg_1", type: "message", role: "assistant", model: cfg.model, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 12, output_tokens: 0, cache_read_input_tokens: 3 } } }],
+      ["content_block_start", { type: "content_block_start", index: 0, content_block: { type: "text", text: "" } }],
+      ["content_block_delta", { type: "content_block_delta", index: 0, delta: { type: "text_delta", text } }],
+      ["content_block_stop", { type: "content_block_stop", index: 0 }],
+      ["message_delta", { type: "message_delta", delta: { stop_reason: stop, stop_sequence: null }, usage: { output_tokens: 5 } }],
+      ["message_stop", { type: "message_stop" }],
+    ];
+    const body = events.map(([e, d]) => `event: ${e}\ndata: ${JSON.stringify(d)}\n\n`).join("");
+    return vi.fn(async () => new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } })) as unknown as typeof fetch & ReturnType<typeof vi.fn>;
+  };
+  const json = (body: unknown) =>
+    vi.fn(async () => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } })) as unknown as typeof fetch & ReturnType<typeof vi.fn>;
+  const sent = (f: ReturnType<typeof vi.fn>) => {
+    const [url, init] = f.mock.calls[0] as [string | URL | Request, RequestInit];
+    return { url: String(url instanceof Request ? url.url : url), body: init.body ? JSON.parse(String(init.body)) : null, headers: new Headers(init.headers) };
+  };
+
+  it("sends the system text separately, streams, and counts all input tokens", async () => {
+    const f = sse("OK");
+    const c = await complete(cfg, { messages: [{ role: "system", content: "Be brief." }, { role: "user", content: "hi" }], maxTokens: 64 }, f);
+    expect(c).toEqual({ text: "OK", inputTokens: 15, outputTokens: 5, estimated: false });
+    const { url, body, headers } = sent(f);
+    expect(url).toContain("https://api.anthropic.com/v1/messages");
+    expect(headers.get("authorization") ?? headers.get("x-api-key")).toContain("sk-ant-test");
+    expect(body).toMatchObject({ model: "claude-opus-5-5", max_tokens: 64, system: "Be brief.", stream: true, messages: [{ role: "user", content: "hi" }] });
+    // This model gets the server-side fallback.
+    expect(body.fallbacks).toBe("default");
+    expect(headers.get("anthropic-beta")).toContain("server-side-fallback-2026-07-01");
+  });
+
+  it("leaves the fallback out for other models and uses a custom address", async () => {
+    const f = sse("OK");
+    await complete({ ...cfg, model: "claude-haiku-4-5", baseUrl: "https://proxy.example" }, { messages: [{ role: "user", content: "hi" }], maxTokens: 64 }, f);
+    const { url, body, headers } = sent(f);
+    expect(url).toContain("https://proxy.example/v1/messages");
+    expect(body.fallbacks).toBeUndefined();
+    expect(headers.get("anthropic-beta")).toBeNull();
+  });
+
+  it("reports refusals and errors", async () => {
+    await expect(complete(cfg, { messages: [{ role: "user", content: "hi" }], maxTokens: 64 }, sse("", "refusal"))).rejects.toMatchObject({ code: "refused" });
+    const bad = reply({ type: "error", error: { type: "invalid_request_error", message: "bad model" } }, 400);
+    await expect(complete(cfg, { messages: [{ role: "user", content: "hi" }], maxTokens: 64 }, bad)).rejects.toMatchObject({ code: "provider_error" });
+    await expect(complete({ ...cfg, apiKey: "" }, { messages: [], maxTokens: 1 })).rejects.toMatchObject({ code: "not_configured" });
+  });
+
+  it("lists the models with names, context sizes and known prices", async () => {
+    const { listModels } = await import("../server/ai/provider");
+    const f = json({
+      data: [
+        { type: "model", id: "claude-opus-5-5", display_name: "Claude Opus 5.5", created_at: "2026-09-01T00:00:00Z", max_input_tokens: 1000000 },
+        { type: "model", id: "claude-unknown-9", display_name: "claude-unknown-9", created_at: "2026-09-01T00:00:00Z" },
+      ],
+      has_more: false,
+      first_id: "claude-opus-5-5",
+      last_id: "claude-unknown-9",
+    });
+    expect(await listModels({ provider: "anthropic", baseUrl: "", apiKey: "k" }, f)).toEqual([
+      { id: "claude-opus-5-5", name: "Claude Opus 5.5", context: 1000000, inputPrice: 4, outputPrice: 20 },
+      { id: "claude-unknown-9", name: undefined, context: undefined, inputPrice: undefined, outputPrice: undefined },
+    ]);
+    expect(sent(f).url).toContain("https://api.anthropic.com/v1/models");
   });
 });

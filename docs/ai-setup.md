@@ -21,9 +21,11 @@ The AI page shows these steps with direct links, and a "Check again" button.
 
 ## 2. AI key (on Toki)
 
-Paste the key of your OpenAI-compatible endpoint on the AI page and save. The server stores it
-encrypted (AES-256-GCM, with a key derived from the Supabase secret key), and nobody can read it
-back, not even admins. If you ever change the Supabase secret key, save the AI key again.
+Pick the provider in the AI settings first (an OpenAI-compatible endpoint, or Anthropic), then
+paste its key on the AI page and save. Each provider has its own key, so you can switch between
+them. The server stores keys encrypted (AES-256-GCM, with a key derived from the Supabase secret
+key), and nobody can read them back, not even admins. If you ever change the Supabase secret key,
+save the keys again.
 
 ## 3. GitHub App (on Toki)
 
@@ -37,15 +39,17 @@ them encrypted.
 ## 4. AI settings (on Toki)
 
 Fill in the endpoint address (the part before `/chat/completions`, e.g.
-`https://api.example.com/v1`), the model, and the prices per million tokens from your provider's
-price list. Toki counts costs with these prices; without them the AI can't be turned on. Check the
+`https://api.example.com/v1`; for Anthropic leave it empty), the model, and the prices per million
+tokens from your provider's price list. **Find models** asks the provider which models it offers, so
+you can search them; when the provider tells the prices (OpenRouter does, and for Claude models Toki
+knows the list prices), they are filled in, but check them. Toki counts costs with these prices; without them the AI can't be turned on. Check the
 monthly cap ($20) and the quota per developer ($5), turn the AI on, save, and **Test the
 connection** (it costs a tiny amount and shows up in the list of calls).
 
 ## Using Vercel's settings instead
 
 Every key can also be set as an environment variable in Vercel; those win over what is stored on
-Toki: `AI_API_KEY`, and for a GitHub App made by hand `GITHUB_APP_ID`, `GITHUB_APP_SLUG`,
+Toki: `AI_API_KEY`, `ANTHROPIC_API_KEY`, and for a GitHub App made by hand `GITHUB_APP_ID`, `GITHUB_APP_SLUG`,
 `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY` (the whole `.pem`).
 A GitHub App made by hand needs: callback URL `https://www.playtoki.app/connect/github`, "Request
 user authorization (OAuth) during installation" on, webhook off, repository permissions Contents
@@ -62,8 +66,13 @@ and Pull requests read and write, installable by any account.
 - One run makes at most 8 AI calls and can only change the requested features. Changes to
   `.github/` are refused, and the app has no permission for workflows anyway.
 
-## Adding Anthropic later
+## Anthropic
 
-`server/ai/provider.ts` has one `complete()` function for all providers. Adding Anthropic means
-another case there (and its own key, stored like the AI key), and allowing `'anthropic'` in the
-`provider` column of `ai_settings` with a migration.
+`server/ai/anthropic.ts` calls Claude through the official SDK, streamed. On the newest Claude
+models it turns on Anthropic's server-side fallback: if Anthropic's safety checks decline a
+request, Anthropic answers it with another fitting model in the same call, instead of failing.
+To turn that off, empty the `WITH_FALLBACK` list there. A refused request that isn't answered shows
+up as `ai_refused`.
+
+One Connect call may answer with up to 32,000 tokens (enough for whole files). Only what the model
+really writes is paid for; the budget only holds back the most a call could cost until it's done.

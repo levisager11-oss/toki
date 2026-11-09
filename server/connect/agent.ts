@@ -79,7 +79,9 @@ export interface StepResult {
 }
 
 export const MAX_AI_CALLS = 8;
-export const MAX_OUTPUT_TOKENS = 8000;
+// Room for whole files in one answer. Only what the model really writes is paid for; the
+// budget just holds back the most one call could cost until it is done.
+export const MAX_OUTPUT_TOKENS = 32000;
 
 /** Error codes the page explains to the developer. */
 export function errorCode(e: unknown): string {

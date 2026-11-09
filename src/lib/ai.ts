@@ -23,9 +23,11 @@ export function usd(n: number): string {
 
 // ---------- admins ----------
 
+export type Provider = "openai_compatible" | "anthropic";
+
 export interface AiSettings {
   enabled: boolean;
-  provider: "openai_compatible";
+  provider: Provider;
   base_url: string;
   model: string;
   input_price: number;
@@ -44,7 +46,7 @@ export async function getAiSettings(): Promise<AiSettings> {
   return s as unknown as AiSettings;
 }
 
-export type SettingsChange = Partial<Pick<AiSettings, "enabled" | "base_url" | "model" | "input_price" | "output_price" | "monthly_cap" | "default_quota">>;
+export type SettingsChange = Partial<Pick<AiSettings, "enabled" | "provider" | "base_url" | "model" | "input_price" | "output_price" | "monthly_cap" | "default_quota">>;
 
 export async function saveAiSettings(change: SettingsChange): Promise<void> {
   const { error } = await supabase.from("ai_settings").update(change).eq("id", 1);
@@ -55,6 +57,8 @@ export interface AiStatus {
   aiKey: boolean;
   /** "env": set in Vercel's settings; "toki": set up on this page */
   aiKeySource: "env" | "toki" | null;
+  anthropicKey: boolean;
+  anthropicKeySource: "env" | "toki" | null;
   serviceKey: boolean;
   github: boolean;
   githubSource: "env" | "toki" | null;
@@ -77,8 +81,8 @@ export interface TestResult {
 
 const aiAction = <T = { ok: boolean }>(body: Record<string, unknown>) => api<T>("/api/ai", { method: "POST", body: JSON.stringify(body) });
 /** Stored encrypted on the server; it can't be read back. */
-export const setAiKey = (key: string) => aiAction({ action: "set_ai_key", key });
-export const clearAiKey = () => aiAction({ action: "clear_ai_key" });
+export const setAiKey = (key: string, provider: Provider) => aiAction({ action: "set_ai_key", key, provider });
+export const clearAiKey = (provider: Provider) => aiAction({ action: "clear_ai_key", provider });
 export const githubFromManifest = (code: string) => aiAction<{ ok: boolean; slug: string; htmlUrl: string }>({ action: "github_manifest", code });
 export const clearGithubApp = () => aiAction({ action: "clear_github" });
 
@@ -293,7 +297,7 @@ export const answerJob = (id: string, answers: { id: string; answer: string }[])
 export const cancelJob = (id: string) => connect({ action: "cancel", id });
 
 const KNOWN_ERRORS = [
-  "ai_disabled", "not_allowed", "cap_reached", "quota_reached", "ai_not_configured", "ai_provider_error", "ai_timeout", "ai_empty_answer",
+  "ai_disabled", "not_allowed", "cap_reached", "quota_reached", "ai_not_configured", "ai_provider_error", "ai_timeout", "ai_refused", "ai_empty_answer",
   "ai_bad_answer", "ai_bad_edits", "github_not_found", "github_error", "github_not_configured", "too_many_steps", "impossible", "cancelled", "busy",
 ] as const;
 export type ConnectError = (typeof KNOWN_ERRORS)[number] | "error";
@@ -301,3 +305,32 @@ export type ConnectError = (typeof KNOWN_ERRORS)[number] | "error";
 /** An error code the page has a text for. */
 export const connectError = (code: string | null | undefined): ConnectError =>
   (KNOWN_ERRORS as readonly string[]).includes(code ?? "") ? (code as ConnectError) : "error";
+
+export interface ModelInfo {
+  id: string;
+  name?: string;
+  context?: number;
+  /** US dollars per million tokens, when the endpoint says */
+  inputPrice?: number;
+  outputPrice?: number;
+}
+
+/** The models the provider offers, at the address in the form (empty: Anthropic itself). */
+export const findModels = (provider: Provider, baseUrl: string) =>
+  aiAction<{ models: ModelInfo[] }>({ action: "models", provider, base_url: baseUrl.trim() }).then((r) => r.models);
+
+/** Models whose id or name contains every word of the search, in any order. */
+export function searchModels(models: ModelInfo[], query: string): ModelInfo[] {
+  const words = query.toLowerCase().split(/[\s/:_-]+/).filter(Boolean);
+  if (!words.length) return models;
+  return models.filter((m) => {
+    const hay = `${m.id} ${m.name ?? ""}`.toLowerCase();
+    return words.every((w) => hay.includes(w));
+  });
+}
+
+/** "128k", "1M" for a context size in tokens. */
+export function tokensShort(n: number): string {
+  if (n >= 1_000_000) return `${Math.round(n / 100_000) / 10}M`.replace(".0M", "M");
+  return `${Math.round(n / 1000)}k`;
+}

@@ -1,5 +1,6 @@
-// Talking to the AI. One function for every provider, so another one (Anthropic) can be added
-// next to the OpenAI-compatible one without changing the code that uses it.
+// Talking to the AI. One function for every provider (OpenAI-compatible endpoints here, Anthropic in
+// anthropic.ts), so the code that uses it doesn't change with the provider.
+import { anthropicComplete, anthropicModels } from "./anthropic.js";
 
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -14,7 +15,7 @@ export interface Completion {
   estimated: boolean;
 }
 
-export type ProviderName = "openai_compatible";
+export type ProviderName = "openai_compatible" | "anthropic";
 
 export interface ProviderConfig {
   provider: ProviderName;
@@ -24,7 +25,7 @@ export interface ProviderConfig {
 }
 
 export class AiError extends Error {
-  constructor(readonly code: "not_configured" | "provider_error" | "timeout" | "empty_answer", message: string = code) {
+  constructor(readonly code: "not_configured" | "provider_error" | "timeout" | "empty_answer" | "refused", message: string = code) {
     super(message);
   }
 }
@@ -39,10 +40,12 @@ export async function complete(
   req: { messages: ChatMessage[]; maxTokens: number; temperature?: number },
   fetchImpl: typeof fetch = fetch,
 ): Promise<Completion> {
-  if (!config.apiKey || !config.baseUrl || !config.model) throw new AiError("not_configured");
+  if (!config.apiKey || !config.model || (!config.baseUrl && config.provider !== "anthropic")) throw new AiError("not_configured");
   switch (config.provider) {
     case "openai_compatible":
       return openaiCompatible(config, req, fetchImpl);
+    case "anthropic":
+      return anthropicComplete(config, req, fetchImpl);
     default:
       throw new AiError("not_configured", `unknown provider ${String(config.provider)}`);
   }
@@ -86,4 +89,59 @@ async function openaiCompatible(
     outputTokens: known ? body.usage!.completion_tokens! : estimateTokens(text),
     estimated: !known,
   };
+}
+
+export interface ModelInfo {
+  id: string;
+  name?: string;
+  /** most tokens the model can take in at once */
+  context?: number;
+  /** US dollars per million tokens, when the endpoint says (e.g. OpenRouter) */
+  inputPrice?: number;
+  outputPrice?: number;
+}
+
+/** Per-token price as text or number ("0.000003") → dollars per million tokens. */
+function perMillion(v: unknown): number | undefined {
+  const n = typeof v === "string" ? Number(v) : typeof v === "number" ? v : NaN;
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 1_000_000 * 10_000) / 10_000 : undefined;
+}
+
+/** The models an endpoint offers (GET /models), sorted by name. */
+export async function listModels(config: Omit<ProviderConfig, "model">, fetchImpl: typeof fetch = fetch): Promise<ModelInfo[]> {
+  if (!config.apiKey) throw new AiError("not_configured");
+  if (config.provider === "anthropic") return anthropicModels(config, fetchImpl);
+  if (!config.baseUrl) throw new AiError("not_configured");
+  let res: Response;
+  try {
+    res = await fetchImpl(`${config.baseUrl.replace(/\/+$/, "")}/models`, {
+      headers: { authorization: `Bearer ${config.apiKey}` },
+      signal: AbortSignal.timeout(30_000),
+    });
+  } catch {
+    throw new AiError("provider_error", "couldn't reach the AI endpoint");
+  }
+  const raw = await res.text();
+  let body: { data?: unknown; error?: { message?: string } } = {};
+  try {
+    body = raw ? JSON.parse(raw) : {};
+  } catch {
+    /* not JSON: reported below */
+  }
+  if (!res.ok) throw new AiError("provider_error", `${res.status}: ${(body.error?.message ?? raw).slice(0, 200)}`);
+  const list = Array.isArray(body.data) ? body.data : Array.isArray(body) ? (body as unknown[]) : [];
+  const models: ModelInfo[] = [];
+  for (const m of list.slice(0, 5000) as Record<string, unknown>[]) {
+    if (!m || typeof m.id !== "string" || !m.id || m.id.length > 200) continue;
+    const pricing = (m.pricing ?? {}) as Record<string, unknown>;
+    const context = Number(m.context_length ?? m.context_window);
+    models.push({
+      id: m.id,
+      name: typeof m.name === "string" && m.name !== m.id ? m.name.slice(0, 200) : undefined,
+      context: Number.isFinite(context) && context > 0 ? context : undefined,
+      inputPrice: perMillion(pricing.prompt ?? pricing.input),
+      outputPrice: perMillion(pricing.completion ?? pricing.output),
+    });
+  }
+  return models.sort((a, b) => a.id.localeCompare(b.id));
 }
