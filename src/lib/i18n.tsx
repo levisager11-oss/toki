@@ -311,6 +311,14 @@ const en = {
   "rel.err.versionTaken": "This version already has an update.",
   "rel.more": "Show more",
   "rel.less": "Show less",
+  "form.banner": "Banner for the home page (optional)",
+  "form.bannerHelp": "A wide picture (2:1, e.g. 1600×800 px), shown when your game is featured on the home page. Without one, the cover picture is shown there in its own shape.",
+  "form.bannerShape": "This picture isn't 2:1, so part of it is cut off in the banner.",
+  "form.uploadBanner": "Upload banner",
+  "form.removeBanner": "Remove banner",
+  "role.admin": "Admin",
+  "role.creator": "Creator",
+  "role.player": "Player",
 };
 
 type Key = keyof typeof en;
@@ -626,6 +634,14 @@ const de: Record<Key, string> = {
   "rel.err.versionTaken": "Für diese Version gibt es schon ein Update.",
   "rel.more": "Mehr anzeigen",
   "rel.less": "Weniger anzeigen",
+  "form.banner": "Banner für die Startseite (optional)",
+  "form.bannerHelp": "Ein breites Bild (2:1, z. B. 1600×800 px), das gezeigt wird, wenn dein Spiel auf der Startseite vorgestellt wird. Ohne Banner wird dort das Titelbild in seiner eigenen Form gezeigt.",
+  "form.bannerShape": "Dieses Bild ist nicht 2:1, deshalb wird im Banner ein Teil davon abgeschnitten.",
+  "form.uploadBanner": "Banner hochladen",
+  "form.removeBanner": "Banner entfernen",
+  "role.admin": "Admin",
+  "role.creator": "Creator",
+  "role.player": "Spieler",
 };
 
 export type Lang = "en" | "de";

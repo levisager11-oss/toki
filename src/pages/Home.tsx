@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
 import { useRecent } from "../lib/local";
@@ -85,6 +85,9 @@ function Featured({ slides }: { slides: Game[] }) {
   const [i, setI] = useState(0);
   const [paused, setPaused] = useState(false);
   const game = slides[i % slides.length];
+  const ratios = useImageRatios(slides.map((s) => (s.banner_url ? null : s.thumbnail_url)));
+  // Shape (width / height) of the cover shown in the banner. Pixel covers are 2:1.
+  const ratio = (game.thumbnail_url && ratios[game.thumbnail_url]) || (game.thumbnail_url ? 4 / 3 : 2);
 
   useEffect(() => {
     if (slides.length < 2 || paused || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -95,7 +98,9 @@ function Featured({ slides }: { slides: Game[] }) {
   const desc = (lang === "de" && game.description_de) || game.description;
   return (
     <section
-      className="feature"
+      // With a banner picture: the wide layout. Without: the cover keeps its own shape.
+      className={`feature ${game.banner_url ? "" : "fitted"}`}
+      style={{ "--r": ratio } as CSSProperties}
       aria-roledescription="carousel"
       aria-label={t("home.featured")}
       onPointerEnter={() => setPaused(true)}
@@ -104,7 +109,11 @@ function Featured({ slides }: { slides: Game[] }) {
       onBlur={() => setPaused(false)}
     >
       <Link to={`/game/${game.slug}`} className="feature-cover" tabIndex={-1} aria-hidden="true">
-        <Cover key={game.id} slug={game.slug} cover={game.cover} image={game.thumbnail_url} wide fit animate="always" />
+        {game.banner_url ? (
+          <img key={game.id} className="cover" src={game.banner_url} alt="" decoding="async" />
+        ) : (
+          <Cover key={game.id} slug={game.slug} cover={game.cover} image={game.thumbnail_url} wide eager animate="always" />
+        )}
       </Link>
       <div className="txt" key={game.id}>
         <span className="label">{game.featured ? t("home.featured") : t("home.popular")}</span>
@@ -128,4 +137,22 @@ function Featured({ slides }: { slides: Game[] }) {
       </div>
     </section>
   );
+}
+
+/** Width / height of each picture, once it has loaded (loaded ahead, so slides don't jump). */
+function useImageRatios(urls: (string | null)[]) {
+  const [ratios, setRatios] = useState<Record<string, number>>({});
+  const key = urls.join("|");
+  useEffect(() => {
+    let alive = true;
+    for (const url of key.split("|").filter(Boolean)) {
+      const img = new Image();
+      img.onload = () => alive && img.naturalHeight && setRatios((r) => ({ ...r, [url]: img.naturalWidth / img.naturalHeight }));
+      img.src = url;
+    }
+    return () => {
+      alive = false;
+    };
+  }, [key]);
+  return ratios;
 }
