@@ -4,7 +4,7 @@ import { useTitle } from "../lib/useTitle";
 
 export function NotFound() {
   const { t } = useI18n();
-  useTitle(t("notFound"));
+  useTitle(t("notFound").replace(/\.$/, ""));
   return (
     <section className="lost">
       <span className="lost-code" aria-hidden="true">404</span>

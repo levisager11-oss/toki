@@ -8,7 +8,6 @@ import { useAuth } from "../lib/auth";
 
 export function Login() {
   const { t } = useI18n();
-  useTitle(t("login.title"));
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [email, setEmail] = useState("");
@@ -19,6 +18,7 @@ export function Login() {
   // "Forgot your password?": the same page asks for the email and sends a reset link.
   const [forgot, setForgot] = useState(params.get("forgot") === "1");
   const [sent, setSent] = useState(false);
+  useTitle(forgot ? t("login.resetTitle") : t("login.title"));
   // Already logged in: nothing to do here.
   if (ready && session && !busy) return <Navigate to={safeNext(params.get("next"))} replace />;
 
