@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { format } from "../src/lib/i18n";
 import { compact, matches, slugify } from "../src/lib/games";
 import type { Game } from "../src/lib/types";
+import { isNew } from "../src/components/GameCard";
 
 const game = (over: Partial<Game> = {}): Game => ({
   id: "1", slug: "deep-sub", title: "Deep Sub", description: "", description_de: null, controls: "",
@@ -54,4 +55,13 @@ describe("slugify", () => {
     expect(slugify("  --a  b--  ")).toBe("a-b");
     expect(slugify("x".repeat(50))).toHaveLength(40);
   });
+});
+
+describe("isNew", () => {
+  const now = Date.parse("2026-11-20T12:00:00Z");
+  it("is new for two weeks", () => {
+    expect(isNew(game({ created_at: "2026-11-10T12:00:00Z" }), now)).toBe(true);
+    expect(isNew(game({ created_at: "2026-11-01T12:00:00Z" }), now)).toBe(false);
+  });
+  it("is not new without a date", () => expect(isNew(game({ created_at: "" }), now)).toBe(false));
 });

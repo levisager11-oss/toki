@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
 import { useFavorites } from "../lib/local";
 import { useGames } from "../lib/useGames";
@@ -15,7 +16,12 @@ export function Favorites() {
   return (
     <section>
       <div className="sechead"><h1 className="h">{t("favs.title")}</h1></div>
-      {list.length ? <GameGrid games={list as NonNullable<(typeof list)[number]>[]} /> : <p className="msg">{t("favs.empty")}</p>}
+      {list.length ? <GameGrid games={list as NonNullable<(typeof list)[number]>[]} /> : (
+        <div className="msg">
+          <p>{t("favs.empty")}</p>
+          <Link to="/" className="btn primary">{t("favs.discover")}</Link>
+        </div>
+      )}
       <p className="note">{t("favs.note")}</p>
     </section>
   );

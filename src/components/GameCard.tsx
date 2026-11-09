@@ -8,6 +8,10 @@ import { PlayIcon } from "./icons";
 
 const by = (g: Game) => (g.author ? `@${g.author.username}` : "Toki");
 
+const NEW_FOR_MS = 14 * 24 * 3600_000;
+/** Added in the last two weeks. */
+export const isNew = (g: Game, now = Date.now()) => !!g.created_at && now - Date.parse(g.created_at) < NEW_FOR_MS;
+
 /** Play count with a small play icon; nothing while a game has no plays yet. */
 export function Plays({ game }: { game: Game }) {
   const { t } = useI18n();
@@ -29,6 +33,7 @@ export function GameCard({ game }: { game: Game }) {
       <Link to={`/game/${game.slug}`} className="thumb" tabIndex={-1} aria-hidden="true">
         <Cover slug={game.slug} cover={game.cover} image={game.thumbnail_url} animate="hover" />
         <span className="tag">{t(`cat.${game.category}`)}</span>
+        {isNew(game) && <span className="tag new">{t("game.new")}</span>}
       </Link>
       <div className="row">
         <div className="info">

@@ -85,6 +85,8 @@ export function Leaderboard({ game, version, last }: { game: Game; version: numb
   const location = useLocation();
   const [rows, setRows] = useState<ScoreRow[] | null>(null);
   const [reload, setReload] = useState(0);
+  // Removing a score takes two taps: the first asks "Sure?".
+  const [removing, setRemoving] = useState<string | null>(null);
   const me = session?.user.id;
   const manager = canManage({ game: { slug: game.slug, title: game.title, created_by: game.created_by } }, profile);
 
@@ -119,7 +121,18 @@ export function Leaderboard({ game, version, last }: { game: Game; version: numb
               <Link to={`/u/${r.username}`} className="person"><Avatar person={r} size={24} /><b>@{r.username}</b></Link>
               <b className="score">{fmt(r.score)}</b>
               {manager && r.user_id !== me && (
-                <button type="button" className="linkish" onClick={() => removeScore(game.id, r.user_id).then(() => setReload((n) => n + 1), () => {})}>{t("score.remove")}</button>
+                <button
+                  type="button"
+                  className={`linkish ${removing === r.user_id ? "danger-text" : ""}`}
+                  onClick={() => {
+                    if (removing !== r.user_id) return setRemoving(r.user_id);
+                    setRemoving(null);
+                    removeScore(game.id, r.user_id).then(() => setReload((n) => n + 1), () => {});
+                  }}
+                  onBlur={() => setRemoving((cur) => (cur === r.user_id ? null : cur))}
+                >
+                  {removing === r.user_id ? t("score.removeSure") : t("score.remove")}
+                </button>
               )}
             </li>
           ))}

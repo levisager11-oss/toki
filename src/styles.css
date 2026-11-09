@@ -65,6 +65,7 @@ h1, h2 { text-wrap: balance; }
 .btn.primary:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--fg); }
 .btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
 .btn.ghost-danger { border-color: var(--line); color: var(--danger); }
+.linkish.danger-text { color: var(--danger); }
 .btn.fav-btn[aria-pressed="true"] { color: var(--danger); }
 .btn.fav-btn[aria-pressed="true"] path, .fav[aria-pressed="true"] path { fill: currentColor; }
 
@@ -122,6 +123,7 @@ h1, h2 { text-wrap: balance; }
   .card:hover .thumb .cover { transform: scale(1.04); }
 }
 .thumb .tag { position: absolute; left: 8px; top: 8px; font-family: var(--f-px); font-size: 10px; background: var(--surface); color: var(--fg); padding: 1px 6px; border: 1px solid var(--fg); }
+.thumb .tag.new { left: auto; right: 8px; background: var(--accent); color: var(--accent-ink); border-color: var(--accent-ink); }
 .row { display: flex; justify-content: space-between; gap: 8px; align-items: start; }
 .info { display: flex; flex-direction: column; min-width: 0; }
 .info .title { font-weight: 700; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
