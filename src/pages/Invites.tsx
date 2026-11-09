@@ -28,6 +28,8 @@ export function Invites() {
   const [copied, setCopied] = useState("");
   const [err, setErr] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Deleting a code takes two taps: the first asks "Sure?".
+  const [deleting, setDeleting] = useState("");
 
   const load = () =>
     supabase
@@ -97,7 +99,14 @@ export function Invites() {
               {!i.used_at && (
                 <div className="actions">
                   <button type="button" className="btn" onClick={() => copy(i.code)}>{copied === i.code ? t("invites.copied") : t("invites.copy")}</button>
-                  <button type="button" className="btn ghost-danger" onClick={() => remove(i.code)}>{t("invites.delete")}</button>
+                  <button
+                    type="button"
+                    className={`btn ${deleting === i.code ? "danger" : "ghost-danger"}`}
+                    onClick={() => (deleting === i.code ? (setDeleting(""), remove(i.code)) : setDeleting(i.code))}
+                    onBlur={() => setDeleting((cur) => (cur === i.code ? "" : cur))}
+                  >
+                    {deleting === i.code ? t("chat.deleteSure") : t("invites.delete")}
+                  </button>
                 </div>
               )}
             </li>
