@@ -5,7 +5,7 @@ import { SUPABASE_KEY, SUPABASE_URL } from "../server/config.js";
 import { serviceDb, type Db } from "../server/db.js";
 import { serverEnv } from "../server/env.js";
 import {
-  finishUpload, hashKey, HostingError, hostingDeps, isUploadKey, KEY_PREFIX, MAX_KEYS, newKey, r2Config, rollBack, startUpload, sweep, type HostUser,
+  BUCKET_BYTES, finishUpload, hashKey, HostingError, hostingDeps, isUploadKey, KEY_PREFIX, MAX_KEYS, newKey, r2Config, rollBack, startUpload, sweep, type HostUser,
 } from "../server/hosting.js";
 import { body, isUuid, json } from "../server/http.js";
 import { r2, r2Configured, R2Error, type R2Config } from "../server/r2.js";
@@ -83,6 +83,16 @@ export async function GET(request: Request) {
     out.source = source;
     out.accountId = config?.accountId ?? null;
     out.bucket = config?.bucket ?? null;
+    // At a glance: space used (of the free 10 GB), hosted games, and GitHub auto-updates.
+    const builds = await w.db.select<{ bytes: number; game_id: string; status: string }>("game_builds", "status=in.(uploading,live,previous)&select=bytes,game_id,status");
+    out.usedBytes = builds.reduce((n, b) => n + Number(b.bytes), 0);
+    out.limitBytes = BUCKET_BYTES;
+    out.hostedGames = new Set(builds.filter((b) => b.status === "live").map((b) => b.game_id)).size;
+    const followed = await w.db.select<{ game_id: string }>("game_git", "select=game_id");
+    out.followingGames = followed.length;
+    const { env, sources } = await withSecrets(w.db, { ...serverEnv(), serviceKey: w.serviceKey });
+    out.github = sources.github;
+    out.webhook = !!env.github.webhookSecret;
   }
   return json(out);
 }
