@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
 import { useRecent } from "../lib/local";
@@ -143,6 +143,7 @@ function Featured({ slides }: { slides: Game[] }) {
   const { t, lang } = useI18n();
   const [i, setI] = useState(0);
   const [paused, setPaused] = useState(false);
+  const touch = useRef<{ x: number; y: number } | null>(null);
   const game = slides[i % slides.length];
   const ratios = useImageRatios(slides.map((s) => (s.banner_url ? null : s.thumbnail_url)));
   // Shape (width / height) of the cover shown in the banner. Pixel covers are 2:1.
@@ -166,6 +167,16 @@ function Featured({ slides }: { slides: Game[] }) {
       onPointerLeave={() => setPaused(false)}
       onFocus={() => setPaused(true)}
       onBlur={() => setPaused(false)}
+      // On phones, swiping sideways shows the next or previous game.
+      onTouchStart={(e) => (touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY })}
+      onTouchEnd={(e) => {
+        const from = touch.current;
+        touch.current = null;
+        if (!from || slides.length < 2) return;
+        const dx = e.changedTouches[0].clientX - from.x;
+        const dy = e.changedTouches[0].clientY - from.y;
+        if (Math.abs(dx) > 50 && Math.abs(dx) > 1.5 * Math.abs(dy)) setI((n) => (n + (dx < 0 ? 1 : -1) + slides.length) % slides.length);
+      }}
     >
       <Link to={`/game/${game.slug}`} className="feature-cover" tabIndex={-1} aria-hidden="true">
         {game.banner_url ? (
