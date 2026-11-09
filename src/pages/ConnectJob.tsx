@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
 import { ApiError, answerJob, cancelJob, connectError, getJob, jobCost, runJob, usd, type ConnectError, type ConnectJob as Job, type JobMessage, type Question } from "../lib/ai";
-import { GitHubMark, JobBadge } from "./Connect";
+import { featureKey, GitHubMark, JobBadge } from "./Connect";
 
 /** One Toki Connect run: progress, the AI's questions, and the pull request (/connect/:id). */
 export function ConnectJob() {
@@ -61,7 +61,7 @@ export function ConnectJob() {
       <h1 className="h">{job.repo}</h1>
       <p className="fb-meta">
         <JobBadge status={job.status} pr={!!job.pr_url} />
-        <span>{job.features.map((f) => t(f === "saves" ? "connect.saves" : "connect.scores")).join(" + ")}</span>
+        <span>{job.features.map((f) => t(featureKey(f))).join(" + ")}</span>
         {cost > 0 && <span>{t("connect.cost", { amount: usd(cost) })}</span>}
       </p>
 

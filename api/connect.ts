@@ -1,17 +1,18 @@
 // Toki Connect for developers: start a run, take its next step, answer the AI's questions, cancel.
 // Every action checks that the run (and the GitHub installation) belongs to the logged-in account.
 import { budgetedCompletion } from "../server/ai/budget.js";
-import { step, type Feature, type Job, type Message } from "../server/connect/agent.js";
+import { freeCompletion, freeSettings } from "../server/ai/free.js";
+import { step, type Bug, type Feature, type Job, type Message } from "../server/connect/agent.js";
 import { DbError } from "../server/db.js";
 import { githubConfigured } from "../server/env.js";
 import { github } from "../server/github.js";
 import { body, context, isUuid, json, type Ctx } from "../server/http.js";
 
-const PUBLIC = "id,repo,features,notes,status,messages,pr_url,error,error_detail,game_id,created_at,updated_at";
+const PUBLIC = "id,repo,features,notes,status,messages,pr_url,error,error_detail,game_id,feedback_id,created_at,updated_at";
 // A step holds the run this long at most; a crashed step frees it again after that.
 const LEASE_MS = 290_000;
 
-interface Row extends Omit<Job, "game"> {
+interface Row extends Omit<Job, "game" | "bug"> {
   user_id: string;
   installation_id: number;
   game_id: string | null;
@@ -49,9 +50,19 @@ async function view(ctx: Ctx, id: string) {
 async function start(ctx: Ctx, b: Record<string, unknown>) {
   const installation = Number(b.installation_id);
   const repo = typeof b.repo === "string" ? b.repo : "";
-  const features = Array.isArray(b.features) ? [...new Set(b.features.filter((f): f is Feature => f === "saves" || f === "scores"))] : [];
+  // A bug fix: the feedback post says which game, and only the game's developer (or an admin) may.
+  const feedbackId = isUuid(b.feedback_id) ? b.feedback_id : null;
+  const features: Feature[] = feedbackId
+    ? ["fix"]
+    : Array.isArray(b.features) ? [...new Set(b.features.filter((f): f is Feature => f === "saves" || f === "scores"))] : [];
   const notes = typeof b.notes === "string" ? b.notes.trim().slice(0, 1000) : "";
-  const gameId = isUuid(b.game_id) ? b.game_id : null;
+  let gameId = isUuid(b.game_id) ? b.game_id : null;
+  if (feedbackId) {
+    const [post] = await ctx.db.select<{ game_id: string | null; kind: string }>("feedback_posts", `id=eq.${feedbackId}&select=game_id,kind`);
+    if (!post || post.kind !== "bug") return json({ error: "not_found" }, 404);
+    if (!post.game_id && ctx.user.role !== "admin") return json({ error: "not_allowed" }, 403);
+    gameId = post.game_id;
+  }
   if (!Number.isSafeInteger(installation) || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo) || !features.length) return json({ error: "bad_request" }, 400);
   if (!ctx.env.aiKey && !ctx.env.anthropicKey) return json({ error: "ai_not_configured" }, 503);
   if (!githubConfigured(ctx.env.github)) return json({ error: "github_not_configured" }, 503);
@@ -75,6 +86,7 @@ async function start(ctx: Ctx, b: Record<string, unknown>) {
       features,
       notes,
       game_id: gameId,
+      feedback_id: feedbackId,
       state: { lang: b.lang === "de" ? "de" : "en" },
     });
     return view(ctx, job.id);
@@ -100,8 +112,17 @@ async function run(ctx: Ctx, b: Record<string, unknown>, origin: string) {
   if (job.game_id) {
     [game] = await ctx.db.select<NonNullable<Job["game"]>>("games", `id=eq.${job.game_id}&select=title,score_order,score_format`);
   }
+  let bug: Bug | null = null;
+  if (job.feedback_id) {
+    const [post] = await ctx.db.select<{ title: string; body: string; device: string | null }>("feedback_posts", `id=eq.${job.feedback_id}&select=title,body,device`);
+    const replies = await ctx.db.select<{ body: string }>("feedback_replies", `post_id=eq.${job.feedback_id}&select=body&order=created_at&limit=20`);
+    if (post) bug = { title: post.title, body: post.body, device: post.device, replies: replies.map((r) => r.body.slice(0, 1000)) };
+  }
+  // The free AI does the easy steps, when it's set up and the admin allows it.
+  const [opts] = await ctx.db.select<{ connect_free_steps: boolean }>("ai_settings", "id=eq.1&select=connect_free_steps");
+  const freeAi = opts?.connect_free_steps && ctx.env.aiKey ? await freeSettings(ctx.db) : null;
   const gh = github(ctx.env.github);
-  const result = await step({ ...job, game }, {
+  const result = await step({ ...job, game, bug }, {
     origin,
     async repo() {
       // Still connected? (The developer may have disconnected GitHub since.)
@@ -113,6 +134,14 @@ async function run(ctx: Ctx, b: Record<string, unknown>, origin: string) {
       const c = await budgetedCompletion({ db: ctx.db, keys: { openai_compatible: ctx.env.aiKey, anthropic: ctx.env.anthropicKey }, userId: ctx.user.id, feature: "connect", jobId: job.id, messages, maxTokens });
       return c.text;
     },
+    ...(freeAi
+      ? {
+          async free(messages: Parameters<typeof freeCompletion>[0]["messages"], maxTokens: number) {
+            const c = await freeCompletion({ db: ctx.db, apiKey: ctx.env.aiKey, userId: ctx.user.id, feature: "connect", messages, maxTokens, settings: freeAi, timeoutMs: 120_000 });
+            return c.text;
+          },
+        }
+      : {}),
     async script() {
       const res = await fetch(new URL("/toki-save.js", origin));
       if (!res.ok) throw new Error("toki-save.js not found");

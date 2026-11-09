@@ -5,7 +5,9 @@ import { useRecent } from "../lib/local";
 import { useGames } from "../lib/useGames";
 import { matches, plays } from "../lib/games";
 import { Cover } from "../components/Cover";
-import { GameGrid, GridSkeleton, Plays, RecentItem } from "../components/GameCard";
+import { GameCard, GameGrid, GridSkeleton, Plays, RecentItem } from "../components/GameCard";
+import { useAuth } from "../lib/auth";
+import { suggestions, useFreeAi, type Suggestion } from "../lib/assist";
 import { PlayIcon } from "../components/icons";
 import type { Category, Game } from "../lib/types";
 
@@ -61,6 +63,8 @@ export function Home() {
           </div>
         </section>
       )}
+
+      {!q && <Suggested games={games} recentSlugs={recentSlugs} />}
 
       <section id="all">
         <div className="sechead">
@@ -162,4 +166,60 @@ function useImageRatios(urls: (string | null)[]) {
     };
   }, [key]);
   return ratios;
+}
+
+const SUGGEST_KEY = "toki.suggest";
+const SUGGEST_MS = 30 * 60_000;
+
+/** "You might like": games the free AI picked from what the player liked and played. */
+function Suggested({ games, recentSlugs }: { games: Game[]; recentSlugs: string[] }) {
+  const { t, lang } = useI18n();
+  const { session } = useAuth();
+  const on = useFreeAi();
+  const userId = session?.user.id ?? "";
+  const [list, setList] = useState<Suggestion[]>([]);
+  const recentKey = recentSlugs.slice(0, 10).join(",");
+
+  useEffect(() => {
+    if (!on || !userId) return setList([]);
+    // Kept for a while in this tab, so going back to the home page doesn't ask again.
+    const key = `${SUGGEST_KEY}.${userId}.${lang}`;
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(key) ?? "null") as { at: number; games: Suggestion[] } | null;
+      if (saved && Date.now() - saved.at < SUGGEST_MS) return setList(saved.games);
+    } catch {
+      /* ask the server */
+    }
+    let alive = true;
+    suggestions(lang, recentKey ? recentKey.split(",") : [])
+      .then((g) => {
+        if (!alive) return;
+        setList(g);
+        try {
+          sessionStorage.setItem(key, JSON.stringify({ at: Date.now(), games: g }));
+        } catch {
+          /* only a convenience */
+        }
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [on, userId, lang, recentKey]);
+
+  const shown = list.map((s) => ({ s, g: games.find((g) => g.id === s.id) })).filter((x): x is { s: Suggestion; g: Game } => !!x.g);
+  if (!shown.length) return null;
+  return (
+    <section aria-labelledby="suggest-h">
+      <div className="sechead"><h2 id="suggest-h"><span aria-hidden="true">✦ </span>{t("home.suggested")}</h2></div>
+      <div className="grid">
+        {shown.map(({ s, g }) => (
+          <div key={g.id} className="suggest">
+            <GameCard game={g} />
+            {s.why && <p className="sub suggest-why">{s.why}</p>}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
 }

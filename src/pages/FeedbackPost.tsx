@@ -4,10 +4,11 @@ import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
 import { useVotes } from "../lib/useVotes";
 import {
-  addReply, ago, canManage, deletePost, deleteReply, FeedbackError, getPost, KINDS, LIMITS, listReplies, STATUSES,
+  addReply, ago, canManage, deletePost, deleteReply, FeedbackError, getPost, isClosed, KINDS, LIMITS, listReplies, STATUSES,
   updatePost, updateReply, type FeedbackPost as Post, type FeedbackReply, type PostChange,
 } from "../lib/feedback";
 import { FixedIn, PostMeta, useStatusLabel, VoteButton } from "../components/FeedbackBits";
+import { TranslateToggle, useTranslate } from "../components/AiBits";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -27,6 +28,7 @@ export function FeedbackPost() {
   const [busy, setBusy] = useState(false);
   const posted = (location.state as { posted?: boolean } | null)?.posted === true;
   const list = post ? [post] : null;
+  const tr = useTranslate("post", post?.id ?? id, post ? `${post.title}\n${post.body}` : "");
   const { voted, vote } = useVotes(list, (f) => setPost((p) => (p ? f([p])[0] : p)));
 
   useEffect(() => {
@@ -110,14 +112,15 @@ export function FeedbackPost() {
           <header className="fb-head">
             <VoteButton post={post} voted={voted.has(post.id)} onVote={(on) => vote(post, on)} />
             <div className="fb-main">
-              <h1>{post.title}</h1>
+              <h1>{tr.texts?.[0] ?? post.title}</h1>
               <PostMeta post={post} noRelease />
             </div>
           </header>
           {post.release && <p className="check good fb-fixed-note"><FixedIn post={post} /></p>}
           {post.private && <p className="check">{t("fb.post.privateNote")}</p>}
           {post.hidden && <p className="check warn">{t("fb.post.hiddenNote")}</p>}
-          {post.body && <p className="fb-body">{post.body}</p>}
+          {post.body && <p className="fb-body">{tr.texts?.[1] ?? post.body}</p>}
+          <TranslateToggle tr={tr} />
           <p className="sub fb-dates">
             {post.edited_at && <>{t("fb.post.edited")} {ago(post.edited_at, lang)} · </>}
             {post.status !== "open" && t("fb.post.statusChanged", { when: ago(post.status_at, lang) })}
@@ -152,6 +155,9 @@ export function FeedbackPost() {
             <button type="button" className="btn" disabled={busy} onClick={() => change({ hidden: !post.hidden })}>
               {post.hidden ? t("fb.post.unhide") : t("fb.post.hide")}
             </button>
+            {post.kind === "bug" && !isClosed(post.status) && (
+              <Link to={`/connect?fix=${post.id}`} className="btn" title={t("fb.post.fixAiHelp")}><span aria-hidden="true">✦ </span>{t("fb.post.fixAi")}</Link>
+            )}
             {!isAuthor && me?.role === "admin" && (
               confirmDelete ? (
                 <button type="button" className="btn danger" onClick={remove} disabled={busy}>{t("fb.post.confirmDelete")}</button>
@@ -288,7 +294,7 @@ function Replies({ post, replies, setReplies, manager, onReplied }: {
                   </div>
                 </div>
               ) : (
-                <p className="fb-body">{r.body}</p>
+                <ReplyBody reply={r} />
               )}
               {(mine || manager) && editing !== r.id && (
                 <div className="fb-reply-actions">
@@ -311,5 +317,15 @@ function Replies({ post, replies, setReplies, manager, onReplied }: {
         <Link to={`/login?next=${encodeURIComponent(location.pathname)}`} className="btn">{t("fb.reply.login")}</Link>
       )}
     </section>
+  );
+}
+
+function ReplyBody({ reply }: { reply: FeedbackReply }) {
+  const tr = useTranslate("reply", reply.id, reply.body);
+  return (
+    <>
+      <p className="fb-body">{tr.texts?.[0] ?? reply.body}</p>
+      <TranslateToggle tr={tr} />
+    </>
   );
 }

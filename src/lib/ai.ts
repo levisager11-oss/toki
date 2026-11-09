@@ -2,7 +2,7 @@
 // The AI itself only runs on the server (api/ai.ts, api/github.ts, api/connect.ts).
 import { supabase } from "./supabase";
 
-async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const { data } = await supabase.auth.getSession();
   const res = await fetch(path, {
     ...init,
@@ -39,6 +39,12 @@ export interface AiSettings {
   output_price: number;
   monthly_cap: number;
   default_quota: number;
+  /** the free AI (an OpenAI-compatible endpoint, no prices or quotas) */
+  free_enabled: boolean;
+  free_base_url: string;
+  free_model: string;
+  /** Toki Connect lets the free AI do the easy steps */
+  connect_free_steps: boolean;
   updated_at: string;
 }
 
@@ -51,7 +57,32 @@ export async function getAiSettings(): Promise<AiSettings> {
   return s as unknown as AiSettings;
 }
 
-export type SettingsChange = Partial<Pick<AiSettings, "enabled" | "provider" | "base_url" | "model" | "input_price" | "output_price" | "monthly_cap" | "default_quota">>;
+export type SettingsChange = Partial<
+  Pick<AiSettings, "enabled" | "provider" | "base_url" | "model" | "input_price" | "output_price" | "monthly_cap" | "default_quota" | "free_enabled" | "free_base_url" | "free_model" | "connect_free_steps">
+>;
+
+export interface FreeUsage {
+  feature: string;
+  calls: number;
+  failed: number;
+  tokens: number;
+}
+
+/** The free AI's calls in the last 7 days, per feature (admins). */
+export async function freeUsage(): Promise<FreeUsage[]> {
+  const since = new Date(Date.now() - 6 * 86_400_000).toISOString().slice(0, 10);
+  const { data, error } = await supabase.from("ai_free_usage").select("feature, calls, failed, input_tokens, output_tokens").gte("day", since);
+  if (error) throw error;
+  const by = new Map<string, FreeUsage>();
+  for (const r of data as { feature: string; calls: number; failed: number; input_tokens: number; output_tokens: number }[]) {
+    const u = by.get(r.feature) ?? { feature: r.feature, calls: 0, failed: 0, tokens: 0 };
+    u.calls += r.calls;
+    u.failed += r.failed;
+    u.tokens += Number(r.input_tokens) + Number(r.output_tokens);
+    by.set(r.feature, u);
+  }
+  return [...by.values()].sort((a, b) => b.calls - a.calls);
+}
 
 export async function saveAiSettings(change: SettingsChange): Promise<void> {
   const { error } = await supabase.from("ai_settings").update(change).eq("id", 1);
@@ -236,7 +267,7 @@ export function githubStateMatches(state: string | null): boolean {
   }
 }
 
-export type Feature = "saves" | "scores";
+export type Feature = "saves" | "scores" | "fix";
 export type JobStatus = "working" | "question" | "done" | "failed";
 
 export interface Question {
@@ -264,11 +295,13 @@ export interface ConnectJob {
   /** What the AI service or GitHub answered */
   error_detail: string | null;
   game_id: string | null;
+  /** the bug report a "fix" run is about */
+  feedback_id: string | null;
   created_at: string;
   updated_at: string;
 }
 
-const JOB = "id, repo, features, notes, status, messages, pr_url, error, error_detail, game_id, created_at, updated_at";
+const JOB = "id, repo, features, notes, status, messages, pr_url, error, error_detail, game_id, feedback_id, created_at, updated_at";
 
 export async function myJobs(): Promise<ConnectJob[]> {
   const { data, error } = await supabase.from("connect_jobs").select(JOB).order("created_at", { ascending: false }).limit(20);
@@ -296,6 +329,8 @@ export interface StartJob {
   notes: string;
   game_id: string | null;
   lang: "en" | "de";
+  /** a bug report to fix (then features are ignored) */
+  feedback_id?: string;
 }
 
 const connect = (body: Record<string, unknown>) => api<{ job: ConnectJob }>("/api/connect", { method: "POST", body: JSON.stringify(body) }).then((r) => r.job);

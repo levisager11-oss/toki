@@ -15,6 +15,7 @@ import { GameUpdates } from "../components/GameUpdates";
 import { GameChat } from "../components/GameChat";
 import { Leaderboard, useScoreBridge } from "../components/Leaderboard";
 import { setPlaying } from "../lib/useBadges";
+import { TranslateToggle, useTranslate } from "../components/AiBits";
 import { CloseIcon, FullscreenIcon, ShareIcon } from "../components/icons";
 
 const LANDSCAPE_PHONE = "(orientation: landscape) and (pointer: coarse) and (max-height: 600px)";
@@ -230,7 +231,7 @@ export function GamePage() {
           {desc && (
             <div>
               <h2>{t("game.about")}</h2>
-              <p>{desc}</p>
+              <AboutText gameId={game.id} text={desc} translatable={desc === game.description} />
             </div>
           )}
           {game.controls && (
@@ -253,6 +254,17 @@ export function GamePage() {
           <GameGrid games={more} />
         </section>
       )}
+    </>
+  );
+}
+
+/** The game's description, with "Translate" when it's only in the other language. */
+function AboutText({ gameId, text, translatable }: { gameId: string; text: string; translatable: boolean }) {
+  const tr = useTranslate("game", gameId, translatable ? text : "");
+  return (
+    <>
+      <p>{tr.texts?.[0] ?? text}</p>
+      <TranslateToggle tr={tr} />
     </>
   );
 }

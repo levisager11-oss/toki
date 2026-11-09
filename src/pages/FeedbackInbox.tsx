@@ -9,12 +9,14 @@ import {
   type FeedbackKind, type FeedbackPost, type FeedbackStatus, type StatusFilter,
 } from "../lib/feedback";
 import { ListSkeleton, PostRow, useStatusLabel } from "../components/FeedbackBits";
+import { SummaryButton } from "../components/AiBits";
+import { summarizeInbox } from "../lib/assist";
 
 const TOKI = "toki";
 
 /** The developer's dashboard: feedback for their games (admins: all games and Toki) at /feedback/inbox. */
 export function FeedbackInbox() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { profile } = useAuth();
   const { games, error: gamesError } = useGames();
   const statusLabel = useStatusLabel();
@@ -87,6 +89,7 @@ export function FeedbackInbox() {
         </div>
       ) : (
         <>
+          <SummaryButton key={game} label={t("fb.inbox.aiSummary")} load={() => summarizeInbox(game || null, lang)} />
           <div className="fb-tiles">
             {tile("reply", summary.needsReply, t("fb.inbox.needsReply"), onlyNeedsReply, () => {
               setOnlyNeedsReply(!onlyNeedsReply);
