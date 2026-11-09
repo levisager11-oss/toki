@@ -64,13 +64,13 @@ export async function complete(
 }
 
 interface OpenAiAnswer {
-  choices?: { message?: { content?: string | null }; delta?: { content?: string | null } }[];
+  choices?: { message?: { content?: string | null }; delta?: { content?: string | null }; finish_reason?: string | null }[];
   usage?: { prompt_tokens?: number; completion_tokens?: number } | null;
   error?: { message?: string } | string;
 }
 
 /** The answer's text, token counts and error, from a JSON answer or a streamed one (server-sent events). */
-export function readOpenAiAnswer(raw: string): { text: string; usage: OpenAiAnswer["usage"]; error: string } {
+export function readOpenAiAnswer(raw: string): { text: string; usage: OpenAiAnswer["usage"]; error: string; finish?: string } {
   const errorText = (e: OpenAiAnswer["error"]) => (typeof e === "string" ? e : e?.message ?? "");
   if (!/^\s*(data|event|:)/.test(raw)) {
     let body: OpenAiAnswer = {};
@@ -79,11 +79,12 @@ export function readOpenAiAnswer(raw: string): { text: string; usage: OpenAiAnsw
     } catch {
       return { text: "", usage: null, error: raw.slice(0, 300) };
     }
-    return { text: body.choices?.[0]?.message?.content ?? "", usage: body.usage, error: errorText(body.error) };
+    return { text: body.choices?.[0]?.message?.content ?? "", usage: body.usage, error: errorText(body.error), finish: body.choices?.[0]?.finish_reason ?? undefined };
   }
   let text = "";
   let usage: OpenAiAnswer["usage"] = null;
   let error = "";
+  let finish: string | undefined;
   for (const line of raw.split(/\r?\n/)) {
     const m = /^data:\s?(.*)$/.exec(line);
     if (!m || m[1] === "[DONE]") continue;
@@ -95,9 +96,10 @@ export function readOpenAiAnswer(raw: string): { text: string; usage: OpenAiAnsw
     }
     text += chunk.choices?.[0]?.delta?.content ?? chunk.choices?.[0]?.message?.content ?? "";
     if (chunk.usage) usage = chunk.usage;
+    finish = chunk.choices?.[0]?.finish_reason ?? finish;
     if (chunk.error) error = errorText(chunk.error) || "error in the streamed answer";
   }
-  return { text, usage, error };
+  return { text, usage, error, finish };
 }
 
 // What some endpoints need, learned from their errors, per endpoint and model while this server
@@ -121,7 +123,8 @@ async function openaiCompatible(
         body: JSON.stringify({
           model: config.model,
           messages: req.messages,
-          max_tokens: req.maxTokens,
+          // 0: no limit, the model may use as many tokens as it can (the free AI).
+          ...(req.maxTokens > 0 ? { max_tokens: req.maxTokens } : {}),
           temperature: req.temperature ?? 0.2,
           // Streamed, so text keeps arriving while the model writes: proxies in front of some
           // endpoints cut connections that stay quiet for 30 seconds or so.
@@ -156,7 +159,10 @@ async function openaiCompatible(
   }
   if (!res.ok || (answer.error && !answer.text.trim())) throw new AiError("provider_error", error, res.ok ? undefined : res.status);
   const { text, usage } = answer;
-  if (!text.trim()) throw new AiError("empty_answer");
+  if (!text.trim()) {
+    // Thinking models can use all their tokens for thinking and never get to the answer.
+    throw new AiError("empty_answer", answer.finish === "length" ? "The model used all its tokens before writing an answer." : "empty_answer");
+  }
   const known = typeof usage?.prompt_tokens === "number" && typeof usage?.completion_tokens === "number";
   return {
     text,

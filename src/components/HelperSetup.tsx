@@ -2,7 +2,7 @@ import { useEffect, useId, useState } from "react";
 import { Link } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
 import { ago } from "../lib/feedback";
-import { githubRepos, type GitHubInfo } from "../lib/ai";
+import { ApiError, githubRepos, type GitHubInfo } from "../lib/ai";
 import { assistError, gameHelp, saveGameHelp, useFreeAi, type GameHelp } from "../lib/assist";
 
 /** For the game's developer: what the "Ask AI" helper knows (tips, and a guide learned from GitHub). */
@@ -17,6 +17,7 @@ export function HelperSetup({ gameId }: { gameId: string }) {
   const [busy, setBusy] = useState<"" | "save" | "learn">("");
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
+  const [detail, setDetail] = useState("");
   const [showGuide, setShowGuide] = useState(false);
 
   useEffect(() => {
@@ -36,6 +37,7 @@ export function HelperSetup({ gameId }: { gameId: string }) {
   const save = async (learn: boolean) => {
     setBusy(learn ? "learn" : "save");
     setErr("");
+    setDetail("");
     setMsg("");
     const [inst, name] = repo.split("|");
     try {
@@ -50,6 +52,7 @@ export function HelperSetup({ gameId }: { gameId: string }) {
       setMsg(learn ? t("helper.setup.learned") : t("helper.setup.saved"));
     } catch (e) {
       setErr(t(`assist.err.${assistError(e)}`));
+      setDetail(e instanceof ApiError ? e.detail : "");
     }
     setBusy("");
   };
@@ -79,7 +82,12 @@ export function HelperSetup({ gameId }: { gameId: string }) {
       )}
       {showGuide && help?.guide && <pre className="helper-guide">{help.guide}</pre>}
       {msg && <p className="check good" role="status">{msg}</p>}
-      {err && <p className="error" role="alert">{err}</p>}
+      {err && (
+        <p className="error" role="alert">
+          {err}
+          {detail && <small className="model-error-detail">{detail}</small>}
+        </p>
+      )}
       <div className="actions">
         <button type="button" className="btn" onClick={() => save(false)} disabled={!!busy}>{busy === "save" ? t("rel.form.saving") : t("helper.setup.save")}</button>
         {repo && (

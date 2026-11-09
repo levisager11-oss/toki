@@ -71,8 +71,9 @@ function failed(e: unknown): Response {
 const hash = (s: string) => createHash("sha256").update(s).digest("hex");
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
-async function ask(ctx: Ctx, feature: FreeFeature, messages: ChatMessage[], maxTokens: number, temperature = 0.2): Promise<string> {
-  const c = await freeCompletion({ db: ctx.db, apiKey: ctx.env.aiKey, userId: ctx.user.id, feature, messages, maxTokens, temperature, timeoutMs: TIMEOUT_MS });
+/** One call to the free AI, without a token limit (tokens cost nothing there). */
+async function ask(ctx: Ctx, feature: FreeFeature, messages: ChatMessage[], temperature = 0.2): Promise<string> {
+  const c = await freeCompletion({ db: ctx.db, apiKey: ctx.env.aiKey, userId: ctx.user.id, feature, messages, temperature, timeoutMs: TIMEOUT_MS });
   return c.text;
 }
 
@@ -127,8 +128,7 @@ async function translate(ctx: Ctx, user: Db, b: Record<string, unknown>) {
       /* translate again */
     }
   }
-  const size = texts.join("").length;
-  const answer = await ask(ctx, "translate", translatePrompt(texts, to), Math.min(8000, Math.ceil(size / 2) + 1500), 0.1);
+  const answer = await ask(ctx, "translate", translatePrompt(texts, to), 0.1);
   const out = readTranslation(answer, texts);
   if (!out) return json({ error: "ai_bad_answer" }, 502);
   const stored = JSON.stringify(out);
@@ -154,7 +154,7 @@ async function similar(ctx: Ctx, user: Db, b: Record<string, unknown>) {
     `select=id,kind,title,body,vote_count&hidden=eq.false&status=in.(open,planned,in_progress)&${gameId ? `game_id=eq.${gameId}` : "game_id=is.null"}&order=vote_count.desc&limit=150`,
   );
   if (!list.length) return json({ posts: [] });
-  const answer = await ask(ctx, "similar", similarPrompt({ kind, title, body: text }, list), 1500, 0);
+  const answer = await ask(ctx, "similar", similarPrompt({ kind, title, body: text }, list), 0);
   const posts = readSimilar(answer, list).map((id) => list.find((p) => p.id === id)!);
   return json({ posts: posts.map((p) => ({ id: p.id, kind: p.kind, title: p.title, vote_count: p.vote_count })) });
 }
@@ -195,7 +195,7 @@ async function suggest(ctx: Ctx, b: Record<string, unknown>, lang: Lang) {
       return json({ games: saved.games.filter((g) => byId.has(g.id) && !seen.has(g.id)), cached: true });
     }
   }
-  const answer = await ask(ctx, "suggest", suggestPrompt(liked.slice(0, 10), played.slice(0, 10), candidates, lang), 1500, 0.4);
+  const answer = await ask(ctx, "suggest", suggestPrompt(liked.slice(0, 10), played.slice(0, 10), candidates, lang), 0.4);
   const games = readSuggest(answer, candidates);
   await ctx.db
     .insert("ai_suggestions", { user_id: ctx.user.id, lang, basis, games, created_at: new Date().toISOString() }, "resolution=merge-duplicates,return=minimal")
@@ -235,7 +235,7 @@ async function release(ctx: Ctx, b: Record<string, unknown>, lang: Lang) {
   }
   const notes = str(b.notes, 1500);
   if (!notes && !fixes.length && !commits.length) return json({ error: "nothing_to_write", commitsError }, 400);
-  const answer = await ask(ctx, "release", releasePrompt({ game: game?.title ?? null, lang, notes, fixes, commits, lastVersion: last?.version ?? null }), 2500, 0.3);
+  const answer = await ask(ctx, "release", releasePrompt({ game: game?.title ?? null, lang, notes, fixes, commits, lastVersion: last?.version ?? null }), 0.3);
   const draft = readRelease(answer);
   if (!draft) return json({ error: "ai_bad_answer" }, 502);
   return json({ ...draft, commits: commits.length, commitsError });
@@ -261,7 +261,6 @@ async function describe(ctx: Ctx, b: Record<string, unknown>) {
       de: str(b.description_de, 1000),
       page: page?.ok ? { title: page.title, text: page.text } : null,
     }),
-    2000,
     0.5,
   );
   const out = readDescribe(answer);
@@ -299,7 +298,7 @@ async function summary(ctx: Ctx, b: Record<string, unknown>, lang: Lang) {
     answered: r.answered,
     status: r.status,
   }));
-  const answer = await ask(ctx, "summary", inboxPrompt(posts, lang), 2500, 0.2);
+  const answer = await ask(ctx, "summary", inboxPrompt(posts, lang), 0.2);
   return json({ text: plain(answer, 4000) });
 }
 
@@ -308,7 +307,7 @@ async function application(ctx: Ctx, b: Record<string, unknown>, lang: Lang) {
   const [app] = await ctx.db.select<{ about: string; links: string }>("developer_applications", `id=eq.${b.id}&select=about,links`);
   if (!app) return json({ error: "not_found" }, 404);
   const pages = await Promise.all(linksIn(`${app.links}\n${app.about}`).map((u) => readPage(u)));
-  const answer = await ask(ctx, "summary", applicationPrompt(app, pages, lang), 1500, 0.2);
+  const answer = await ask(ctx, "summary", applicationPrompt(app, pages, lang), 0.2);
   return json({ text: plain(answer, 2000) });
 }
 
@@ -336,7 +335,7 @@ async function help(ctx: Ctx, b: Record<string, unknown>, lang: Lang) {
       guide: h?.guide ?? "",
     };
   }
-  const answer = await ask(ctx, "help", helpPrompt(game, turns, lang), 1200, 0.3);
+  const answer = await ask(ctx, "help", helpPrompt(game, turns, lang), 0.3);
   const text = plain(answer, 3000);
   return text ? json({ text }) : json({ error: "ai_empty_answer" }, 502);
 }
@@ -368,12 +367,12 @@ async function helpSetup(ctx: Ctx, b: Record<string, unknown>) {
     const files: Record<string, string> = {};
     let total = 0;
     for (const p of guideFiles(tree, pickFiles(tree))) {
-      if (total >= 60_000) break;
-      const c = (await access.read(p, branch)).slice(0, 15_000);
+      if (total >= 40_000) break;
+      const c = (await access.read(p, branch)).slice(0, 12_000);
       files[p] = c;
       total += c.length;
     }
-    const answer = await ask(ctx, "learn", learnPrompt(g, files), 3000, 0.2);
+    const answer = await ask(ctx, "learn", learnPrompt(g, files), 0.2);
     const guide = plain(answer, 8000);
     if (!guide) return json({ error: "ai_empty_answer" }, 502);
     Object.assign(row, { installation_id: installation, repo, guide, learned_at: new Date().toISOString() });
@@ -393,7 +392,6 @@ async function test(ctx: Ctx) {
       userId: ctx.user.id,
       feature: "test",
       messages: [{ role: "user", content: "Reply with the single word OK." }],
-      maxTokens: 1024,
       timeoutMs: TIMEOUT_MS,
     });
     return json({ ok: true, text: c.text.slice(0, 200), inputTokens: c.inputTokens, outputTokens: c.outputTokens, estimated: c.estimated });
