@@ -25,6 +25,7 @@ export function Layout() {
   const { profile, signOut } = useAuth();
   const badges = useBadges();
   const newUpdate = useNewUpdate();
+  const offline = useOffline();
   const unread = profile ? badges.notifications + badges.chats : 0;
   useEffect(() => setTitleCount(unread), [unread]);
   const ai = useAiStatus();
@@ -213,6 +214,7 @@ export function Layout() {
           )}
 
         </header>
+        {offline && <p className="offline-bar" role="status">{t("offline")}</p>}
         <main className="content" id="main" tabIndex={-1}>
           {/* A new boundary per page, so going to another page clears an error. */}
           <ErrorBoundary key={location.pathname}>
@@ -247,4 +249,19 @@ export function Layout() {
       </nav>
     </div>
   );
+}
+
+/** true while the browser has no internet connection. */
+function useOffline() {
+  const [offline, setOffline] = useState(() => typeof navigator !== "undefined" && navigator.onLine === false);
+  useEffect(() => {
+    const update = () => setOffline(!navigator.onLine);
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
+  return offline;
 }

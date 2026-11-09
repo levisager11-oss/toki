@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 const en = {
   "nav.play": "Play",
   "nav.skip": "Skip to content",
+  "offline": "You're offline. Some things won't load or save until you're back online.",
   "nav.discover": "Discover",
   "nav.favorites": "Favorites",
   "nav.all": "All games",
@@ -872,6 +873,7 @@ export type Key = keyof typeof en;
 const de: Record<Key, string> = {
   "nav.play": "Spielen",
   "nav.skip": "Zum Inhalt springen",
+  "offline": "Du bist offline. Manches lädt oder speichert erst wieder, wenn du online bist.",
   "nav.discover": "Entdecken",
   "nav.favorites": "Favoriten",
   "nav.all": "Alle Spiele",
