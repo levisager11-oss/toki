@@ -368,6 +368,14 @@ describe("Toki Connect run", () => {
     expect(r.messages.at(-1)).toMatchObject({ kind: "impossible", text: "Das Repo enthält nur ein fertiges Build." });
   });
 
+  it("finishes without a pull request when everything is already in the code", async () => {
+    const f = fixture([JSON.stringify({ action: "already", summary: "Das Skript ist schon in index.html, und toki.score wird in main.ts aufgerufen." })]);
+    const r = await step(newJob(), f.deps);
+    expect(r).toMatchObject({ status: "done", error: null });
+    expect(r.pr_url).toBeUndefined();
+    expect(r.messages.at(-1)).toMatchObject({ kind: "done", files: [], text: expect.stringContaining("index.html") });
+  });
+
   it("stops with the reason when the budget is used up", async () => {
     const f = fixture([]);
     f.deps.ai = async () => {

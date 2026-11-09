@@ -113,7 +113,7 @@ export function Connect() {
                 <div className="fb-main">
                   <Link to={`/connect/${j.id}`} className="fb-title">{j.repo}</Link>
                   <span className="fb-meta">
-                    <JobBadge status={j.status} />
+                    <JobBadge status={j.status} pr={!!j.pr_url} />
                     <span>{j.features.map((f) => t(f === "saves" ? "connect.saves" : "connect.scores")).join(" + ")}</span>
                     <time dateTime={j.created_at}>{ago(j.created_at, lang)}</time>
                     {j.pr_url && <a href={j.pr_url} target="_blank" rel="noopener noreferrer">{t("connect.openPr")} ↗</a>}
@@ -128,10 +128,11 @@ export function Connect() {
   );
 }
 
-export function JobBadge({ status }: { status: ConnectJob["status"] }) {
+/** pr: whether the run opened a pull request (a finished run without one found nothing to do). */
+export function JobBadge({ status, pr }: { status: ConnectJob["status"]; pr: boolean }) {
   const { t } = useI18n();
   const cls = { working: "st-in_progress", question: "st-planned", done: "st-done", failed: "st-declined" }[status];
-  return <span className={`st ${cls}`}>{t(`connect.status.${status}`)}</span>;
+  return <span className={`st ${cls}`}>{t(status === "done" && !pr ? "connect.status.already" : `connect.status.${status}`)}</span>;
 }
 
 export const GitHubMark = () => (
