@@ -9,6 +9,8 @@ import { GameCard, GameGrid, GridSkeleton, Plays, RecentItem } from "../componen
 import { useAuth } from "../lib/auth";
 import { suggestions, useFreeAi, type Suggestion } from "../lib/assist";
 import { PlayIcon } from "../components/icons";
+import { Avatar } from "../components/Avatar";
+import { isOnline, myFriends, type FriendRow } from "../lib/social";
 import type { Category, Game } from "../lib/types";
 
 const ROTATE_MS = 8000;
@@ -106,6 +108,8 @@ export function Home() {
           </div>
         </section>
       )}
+
+      {!q && <FriendsPlaying games={games} />}
 
       {!q && <Suggested games={games} recentSlugs={recentSlugs} />}
 
@@ -280,6 +284,45 @@ function Suggested({ games, recentSlugs }: { games: Game[]; recentSlugs: string[
             <GameCard game={g} />
             {s.why && <p className="sub suggest-why">{s.why}</p>}
           </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/** Friends who are playing something right now, with a link to join in. Only for logged-in players. */
+function FriendsPlaying({ games }: { games: Game[] }) {
+  const { t } = useI18n();
+  const { session } = useAuth();
+  const userId = session?.user.id;
+  const [rows, setRows] = useState<FriendRow[]>([]);
+
+  useEffect(() => {
+    if (!userId) return setRows([]);
+    let alive = true;
+    myFriends().then((r) => alive && setRows(r), () => {});
+    return () => {
+      alive = false;
+    };
+  }, [userId]);
+
+  const playing = rows
+    .filter((r) => r.status === "friend" && r.playing && isOnline(r.last_seen))
+    .map((r) => ({ r, g: games.find((g) => g.id === r.playing) }))
+    .filter((x): x is { r: FriendRow; g: Game } => !!x.g);
+  if (!playing.length) return null;
+  return (
+    <section aria-labelledby="friends-playing-h">
+      <div className="sechead"><h2 id="friends-playing-h">{t("home.friendsPlaying")}</h2></div>
+      <div className="recent">
+        {playing.map(({ r, g }) => (
+          <Link key={r.id} to={`/game/${g.slug}`} className="ritem">
+            <Avatar person={r} size={40} online />
+            <span>
+              <b>@{r.username}</b>
+              <span className="sub">{t("soc.playingNow")} {g.title}</span>
+            </span>
+          </Link>
         ))}
       </div>
     </section>
