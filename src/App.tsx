@@ -1,5 +1,6 @@
 import { lazy, Suspense, type ReactNode } from "react";
 import { Route, Routes } from "react-router-dom";
+import { Analytics } from "@vercel/analytics/react";
 import { Layout } from "./components/Layout";
 import { RequireMember } from "./components/RequireMember";
 import { Home } from "./pages/Home";
@@ -30,34 +31,37 @@ const Later = ({ children }: { children: ReactNode }) => <Suspense fallback={nul
 
 export function App() {
   return (
-    <Routes>
-      <Route element={<Layout />}>
-        <Route index element={<Home />} />
-        <Route path="favorites" element={<Favorites />} />
-        <Route path="game/:slug" element={<GamePage />} />
-        <Route path="game/:slug/feedback" element={<Later><FeedbackBoard /></Later>} />
-        <Route path="game/:slug/updates" element={<Later><Releases /></Later>} />
-        <Route path="updates" element={<Later><Releases /></Later>} />
-        <Route path="feedback" element={<Later><FeedbackBoard /></Later>} />
-        <Route path="feedback/inbox" element={<RequireMember><Later><FeedbackInbox /></Later></RequireMember>} />
-        <Route path="feedback/:id" element={<Later><FeedbackPost /></Later>} />
-        <Route path="login" element={<Later><Login /></Later>} />
-        <Route path="signup" element={<Later><Signup /></Later>} />
-        <Route path="my-games" element={<RequireMember><Later><MyGames /></Later></RequireMember>} />
-        <Route path="add" element={<RequireMember><Later><GameForm key="add" /></Later></RequireMember>} />
-        <Route path="edit/:slug" element={<RequireMember><Later><GameForm /></Later></RequireMember>} />
-        <Route path="account" element={<RequireMember player><Later><Account /></Later></RequireMember>} />
-        <Route path="u/:username" element={<Later><Profile /></Later>} />
-        <Route path="friends" element={<RequireMember player><Later><Friends /></Later></RequireMember>} />
-        <Route path="chat" element={<RequireMember player><Later><Chat /></Later></RequireMember>} />
-        <Route path="chat/:id" element={<RequireMember player><Later><Chat /></Later></RequireMember>} />
-        <Route path="notifications" element={<RequireMember player><Later><Notifications /></Later></RequireMember>} />
-        <Route path="reports" element={<RequireMember admin><Later><Reports /></Later></RequireMember>} />
-        <Route path="apply" element={<RequireMember player><Later><Apply /></Later></RequireMember>} />
-        <Route path="applications" element={<RequireMember admin><Later><Applications /></Later></RequireMember>} />
-        <Route path="invites" element={<RequireMember admin><Later><Invites /></Later></RequireMember>} />
-        <Route path="*" element={<NotFound />} />
-      </Route>
-    </Routes>
+    <>
+      <Routes>
+        <Route element={<Layout />}>
+          <Route index element={<Home />} />
+          <Route path="favorites" element={<Favorites />} />
+          <Route path="game/:slug" element={<GamePage />} />
+          <Route path="game/:slug/feedback" element={<Later><FeedbackBoard /></Later>} />
+          <Route path="game/:slug/updates" element={<Later><Releases /></Later>} />
+          <Route path="updates" element={<Later><Releases /></Later>} />
+          <Route path="feedback" element={<Later><FeedbackBoard /></Later>} />
+          <Route path="feedback/inbox" element={<RequireMember><Later><FeedbackInbox /></Later></RequireMember>} />
+          <Route path="feedback/:id" element={<Later><FeedbackPost /></Later>} />
+          <Route path="login" element={<Later><Login /></Later>} />
+          <Route path="signup" element={<Later><Signup /></Later>} />
+          <Route path="my-games" element={<RequireMember><Later><MyGames /></Later></RequireMember>} />
+          <Route path="add" element={<RequireMember><Later><GameForm key="add" /></Later></RequireMember>} />
+          <Route path="edit/:slug" element={<RequireMember><Later><GameForm /></Later></RequireMember>} />
+          <Route path="account" element={<RequireMember player><Later><Account /></Later></RequireMember>} />
+          <Route path="u/:username" element={<Later><Profile /></Later>} />
+          <Route path="friends" element={<RequireMember player><Later><Friends /></Later></RequireMember>} />
+          <Route path="chat" element={<RequireMember player><Later><Chat /></Later></RequireMember>} />
+          <Route path="chat/:id" element={<RequireMember player><Later><Chat /></Later></RequireMember>} />
+          <Route path="notifications" element={<RequireMember player><Later><Notifications /></Later></RequireMember>} />
+          <Route path="reports" element={<RequireMember admin><Later><Reports /></Later></RequireMember>} />
+          <Route path="apply" element={<RequireMember player><Later><Apply /></Later></RequireMember>} />
+          <Route path="applications" element={<RequireMember admin><Later><Applications /></Later></RequireMember>} />
+          <Route path="invites" element={<RequireMember admin><Later><Invites /></Later></RequireMember>} />
+          <Route path="*" element={<NotFound />} />
+        </Route>
+      </Routes>
+      <Analytics />
+    </>
   );
 }
