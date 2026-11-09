@@ -10,6 +10,10 @@
 // - Each save goes up with the account versions this device built on ("bases"). The server
 //   only lets it replace the account copy when it was made on top of it; otherwise the account
 //   copy stays and the other save is kept as a conflict copy (see put_game_save in schema.sql).
+// - A game puts Toki's save back and reloads. With the first script version, a game that saves
+//   on its own right then (autosave, saving on close) writes its fresh state over it. When the
+//   game's first save after such a reload is far smaller than what it was given, Toki doesn't
+//   let it replace the progress ("lost"): it stays a backup, and the player can load again.
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { supabase } from "./supabase";
 import { visitorId } from "./local";
@@ -49,6 +53,10 @@ export const ANSWER_DEADLINE_MS = 6000;
 export const CLOUD_WAIT_MS = 2000;
 const READ_TIMEOUT_MS = 15_000;
 const RETRY_MS = [500, 1000, 2000, 4000, 8000];
+/** A "hello" this soon after Toki gave a save comes from the game reloading to put it back. */
+const RELOAD_WINDOW_MS = 30_000;
+
+const size = (keys: Record<string, string>) => JSON.stringify(keys).length;
 
 /** Checks a save sent by a game. Returns null if it isn't one. */
 export function asSave(v: unknown): SaveData | null {
@@ -103,6 +111,8 @@ export interface SaveSyncOptions {
   answer: (save: SaveData | null) => void;
   /** The account has progress this game page doesn't show (made on another device). */
   onConflict?: (conflict: boolean) => void;
+  /** The game didn't keep the save it was given and started fresh (see above). */
+  onLost?: (lost: boolean) => void;
   now?: () => number;
 }
 
@@ -110,7 +120,7 @@ type CloudState = { known: false } | { known: true; save: SaveData | null };
 
 /** Keeps one game's save in sync for one player on this page. */
 export class SaveSync {
-  private o: SaveSyncOptions & Required<Pick<SaveSyncOptions, "onConflict" | "now">>;
+  private o: SaveSyncOptions & Required<Pick<SaveSyncOptions, "onConflict" | "onLost" | "now">>;
   private cloud: CloudState = { known: false };
   private waitingHello = false;
   private stopped = false;
@@ -118,11 +128,16 @@ export class SaveSync {
   private uploading = false;
   private again = false;
   private conflict = false;
+  private lost = false;
+  /** The last save handed to the game, and when. */
+  private given: { save: SaveData; at: number } | null = null;
+  /** The save the game should be running on after reloading, checked against its first save. */
+  private expected: SaveData | null = null;
   private timers = new Set<ReturnType<typeof setTimeout>>();
   private uploadTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(opts: SaveSyncOptions) {
-    this.o = { onConflict: () => {}, now: Date.now, ...opts };
+    this.o = { onConflict: () => {}, onLost: () => {}, now: Date.now, ...opts };
     if (this.o.userId) this.loadCloud(0);
   }
 
@@ -148,14 +163,28 @@ export class SaveSync {
     this.conflict = c;
     this.o.onConflict(c);
   }
+  private setLost(l: boolean) {
+    if (this.lost === l) return;
+    this.lost = l;
+    this.o.onLost(l);
+  }
+  private send(save: SaveData | null) {
+    if (save) {
+      this.given = { save, at: this.o.now() };
+      this.setLost(false);
+    }
+    this.o.answer(save);
+  }
 
   /** The game asks for its save. */
   hello() {
     if (this.stopped) return;
+    const g = this.given;
+    this.expected = g && this.o.now() - g.at < RELOAD_WINDOW_MS ? g.save : null;
     if (!this.o.userId) {
       const save = this.rec()?.save ?? null;
       if (save) this.setGameT(save.t); // the game takes it when it is newer than its own
-      this.o.answer(save);
+      this.send(save);
       return;
     }
     if (this.cloud.known) return this.answerFromCloud(this.cloud.save);
@@ -174,13 +203,19 @@ export class SaveSync {
   /** The game saved. */
   store(save: SaveData) {
     if (this.stopped) return;
-    this.setGameT(save.t);
+    const expected = this.expected;
+    this.expected = null;
+    if (expected && size(save.keys) * 2 < size(expected.keys)) this.setLost(true);
     const rec = this.rec();
+    this.setGameT(save.t);
     if (!this.o.userId) {
-      this.setRec({ save, bases: [], dirty: false });
+      if (!this.lost) this.setRec({ save, bases: [], dirty: false });
+      // Lost: the saved progress stays, newer than the game's, so the game takes it next time.
+      else if (rec) this.setRec({ ...rec, save: { keys: rec.save.keys, t: save.t + 1 } });
       return;
     }
-    this.setRec({ save, bases: rec?.bases ?? [], dirty: true });
+    // Lost: not built on the account save, so it goes up as a backup and doesn't replace it.
+    this.setRec({ save, bases: this.lost ? [] : rec?.bases ?? [], dirty: true });
     clearTimeout(this.uploadTimer);
     this.uploadTimer = this.later(() => this.upload(), CLOUD_WAIT_MS);
   }
@@ -265,7 +300,7 @@ export class SaveSync {
    * goes with a fresh "t", so the game takes it.
    */
   private give(rec: LocalRecord | null, changed = false) {
-    if (!rec) return this.o.answer(null);
+    if (!rec) return this.send(null);
     const gameT = this.gameT();
     if (gameT > rec.save.t) {
       rec = { ...rec, save: { keys: rec.save.keys, t: Math.max(this.o.now(), gameT + 1) } };
@@ -273,7 +308,7 @@ export class SaveSync {
     }
     if (changed) this.setRec(rec);
     this.setGameT(rec.save.t);
-    this.o.answer(rec.save);
+    this.send(rec.save);
   }
 
   /** The "t" of the save the game in the frame has on this device, as far as Toki knows. */
@@ -386,15 +421,17 @@ export function useSaveBridge(
   gameId: string | undefined,
   playUrl: string | undefined,
   userId: string | undefined,
-): { status: SaveStatus; conflict: boolean } {
+): { status: SaveStatus; conflict: boolean; lost: boolean } {
   const [active, setActive] = useState(false);
   const [conflict, setConflict] = useState(false);
+  const [lost, setLost] = useState(false);
   const sync = useRef<SaveSync | null>(null);
 
   useEffect(() => setActive(false), [gameId]);
 
   useEffect(() => {
     setConflict(false);
+    setLost(false);
     if (!gameId || !playUrl) return;
     let origin: string;
     try {
@@ -410,6 +447,7 @@ export function useSaveBridge(
       device: visitorId(),
       answer: (data) => frame.current?.contentWindow?.postMessage({ toki: 1, type: "save", data }, origin),
       onConflict: setConflict,
+      onLost: setLost,
     });
     sync.current = s;
     if (userId) live.add(s);
@@ -445,5 +483,5 @@ export function useSaveBridge(
     };
   }, [frame, gameId, playUrl, userId]);
 
-  return { status: !active ? "none" : userId ? "account" : "device", conflict };
+  return { status: !active ? "none" : userId ? "account" : "device", conflict, lost };
 }

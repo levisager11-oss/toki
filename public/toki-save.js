@@ -1,4 +1,4 @@
-/* Toki save support v1. Put this in the game's HTML <head>, before the game's own scripts.
+/* Toki save support v2. Put this in the game's HTML <head>, before the game's own scripts.
    Inside Toki, it keeps a copy of everything the game stores in localStorage, so progress
    survives closing the app (iPhone deletes storage of games shown inside other sites) and
    follows logged-in players to other devices. Outside Toki it does nothing. */
@@ -10,7 +10,7 @@
   var origin = (location.ancestorOrigins && location.ancestorOrigins[0]) ||
     (document.referrer ? new URL(document.referrer).origin : "*");
   var P = Storage.prototype, raw = { set: P.setItem, clear: P.clear };
-  var ready = false, answered = false, timer = null;
+  var ready = false, answered = false, restoring = false, timer = null;
 
   function send(type, data) { top.postMessage({ toki: 1, type: type, data: data }, origin); }
   function keys() {
@@ -30,6 +30,8 @@
   ["setItem", "removeItem", "clear"].forEach(function (name) {
     var fn = P[name];
     P[name] = function () {
+      // Putting Toki's save back: the game may still save its old state before the reload.
+      if (this === ls && restoring) return;
       var r = fn.apply(this, arguments);
       if (this === ls && ready) later();
       return r;
@@ -46,6 +48,7 @@
       raw.clear.call(ls);
       for (var k in save.keys) raw.set.call(ls, k, save.keys[k]);
       raw.set.call(ls, MARK, String(save.t));
+      restoring = true;
       location.reload();
       return;
     }

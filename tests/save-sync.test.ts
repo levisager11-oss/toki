@@ -48,6 +48,12 @@ class FakeGame {
   answered = false;
   ready = false;
   reloads = 0;
+  /** The game saves its state on its own while it reloads (autosave timer, saving on close). */
+  savesOnClose = false;
+  /** Script v2: blocks those saves while Toki's save is put back. */
+  v2 = false;
+  /** What the game read from storage when it started. */
+  private memory: Record<string, string> = {};
   private fallback?: ReturnType<typeof setTimeout>;
   constructor(private toki: () => SaveSync, private freshSave: Record<string, string> = { level: "1" }) {}
 
@@ -57,6 +63,7 @@ class FakeGame {
     clearTimeout(this.fallback);
     // A fresh game writes its starting save right away (not sent: not ready yet).
     if (Object.keys(this.storage).length === 0) this.storage = { ...this.freshSave };
+    this.memory = { ...this.storage };
     this.fallback = setTimeout(() => (this.ready = true), 10_000);
     this.toki().hello();
   }
@@ -66,6 +73,7 @@ class FakeGame {
     if (save && save.keys && save.t > this.mark) {
       this.storage = { ...save.keys };
       this.mark = save.t;
+      if (this.savesOnClose && !this.v2) this.storage = { ...this.memory };
       this.reloads++;
       this.start();
       return;
@@ -95,6 +103,7 @@ class Device {
   game: FakeGame;
   sync!: SaveSync;
   conflict = false;
+  lost = false;
   constructor(public name: string, public cloud: FakeCloud, fresh?: Record<string, string>) {
     this.game = new FakeGame(() => this.sync, fresh);
   }
@@ -108,6 +117,7 @@ class Device {
       device: this.name,
       answer: (s) => setTimeout(() => this.game.onSave(s), 0),
       onConflict: (c) => (this.conflict = c),
+      onLost: (l) => (this.lost = l),
     });
     this.game.start();
   }
@@ -303,6 +313,96 @@ describe("SaveSync", () => {
     await settle(3000);
     expect(a.game.storage.level).toBe("4");
     expect(cloud.save?.keys.level).toBe("4");
+  });
+
+  const progress = { level: "7", coins: "12345", items: "sword,shield,bow,map" };
+
+  it("a game that saves its fresh state while putting the save back doesn't overwrite the account", async () => {
+    const cloud = new FakeCloud();
+    const a = new Device("A", cloud);
+    a.open();
+    await settle();
+    a.game.play(progress);
+    await settle(3000);
+    a.close();
+    a.game.wipe();
+    a.game.savesOnClose = true; // old script in the game
+    a.open();
+    await settle(3000);
+    expect(a.game.storage).toEqual({ level: "1" }); // the game started fresh
+    a.game.play({ level: "1" }); // its autosave
+    await settle(3000);
+    a.game.play({ level: "2" });
+    await settle(3000);
+    expect(cloud.save?.keys).toEqual(progress);
+    expect(a.lost).toBe(true);
+    expect(cloud.conflicts.get("A")?.keys.level).toBe("2"); // kept as a backup
+
+    // Once the game has the new script, "Load my progress" works.
+    a.game.v2 = true;
+    a.game.start();
+    await settle(3000);
+    expect(a.game.storage).toEqual(progress);
+    expect(a.lost).toBe(false);
+    a.game.play({ level: "8" });
+    await settle(3000);
+    expect(cloud.save?.keys.level).toBe("8");
+  });
+
+  it("with the new script the save is put back even when the game saves while reloading", async () => {
+    const cloud = new FakeCloud();
+    const a = new Device("A", cloud);
+    a.open();
+    await settle();
+    a.game.play(progress);
+    await settle(3000);
+    a.close();
+    a.game.wipe();
+    a.game.savesOnClose = true;
+    a.game.v2 = true;
+    a.open();
+    await settle(3000);
+    expect(a.game.storage).toEqual(progress);
+    a.game.play({ level: "8" });
+    await settle(3000);
+    expect(cloud.save?.keys).toEqual({ ...progress, level: "8" });
+    expect(a.lost).toBe(false);
+  });
+
+  it("visitors keep their progress when the game starts fresh while putting it back", async () => {
+    const cloud = new FakeCloud();
+    const a = new Device("A", cloud);
+    a.open(null);
+    await settle();
+    a.game.play(progress);
+    await settle(100);
+    a.game.wipe();
+    a.game.savesOnClose = true;
+    a.open(null);
+    await settle(100);
+    a.game.play({ level: "1" });
+    await settle(100);
+    expect(a.lost).toBe(true);
+    expect(readRecord(a.kv, "anon", GAME)?.save.keys).toEqual(progress);
+    a.game.v2 = true;
+    a.open(null);
+    await settle(100);
+    expect(a.game.storage).toEqual(progress);
+  });
+
+  it("a deliberate new game later on still replaces the save", async () => {
+    const cloud = new FakeCloud();
+    const a = new Device("A", cloud);
+    a.open();
+    await settle();
+    a.game.play(progress);
+    await settle(3000);
+    await settle(60_000);
+    a.game.storage = {};
+    a.game.play({ level: "1" });
+    await settle(3000);
+    expect(cloud.save?.keys).toEqual({ level: "1" });
+    expect(a.lost).toBe(false);
   });
 
   it("a lost answer to an upload doesn't cause a false conflict", async () => {
