@@ -40,6 +40,13 @@ export function ChatView({ chatId, kind, compact }: { chatId: string; kind: Chat
   const isAdmin = profile?.role === "admin";
   const remember = (ms: Message[]) => ms.forEach((m) => m.author && people.current.set(m.author_id, m.author));
 
+  // Re-draws once a minute, so "now" becomes "1 minute ago" while the chat stays open.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => document.visibilityState === "visible" && setTick((n) => n + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   const markRead = () => {
     if ((kind === "dm" || kind === "group") && document.visibilityState === "visible") markChatRead(chatId).then(refreshBadges, () => {});
   };
