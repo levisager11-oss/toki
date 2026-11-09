@@ -5,7 +5,7 @@
 Whenever you change something in Toki, also post a Toki update (release notes) so players see it on `/updates`.
 
 - Updates of Toki itself are rows in `public.game_releases` with `game_id = null`, in the live Supabase project `toki` (id `oygszctxhkubofspywzr`). Post them with the Supabase connector (`execute_sql`), after the change is pushed.
-- Version: look up the latest Toki update (`select version from game_releases where game_id is null order by published_at desc limit 1`) and count up (1.1 → 1.2). Smaller fixes may use a third number (1.2 → 1.2.1).
+- Version: look up the latest Toki update (`select version from game_releases where game_id is null order by published_at desc limit 1`) and count up (1.1 → 1.2). Smaller fixes use a third number (1.2 → 1.2.1) and are posted with `small = true`: they show compactly under the main version instead of as a big card, and the main version stays on show.
 - Write for players, in plain English: a short `title` and `notes` where lines starting with `- ` become a list. No technical words.
 - If a change fixes feedback posts, link them with `set_release_fixes` (or set `fixed_in` and `status = 'done'`).
 

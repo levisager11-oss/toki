@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
 import { ago } from "../lib/feedback";
-import { listReleases, type Release } from "../lib/releases";
+import { groupReleases, listReleases, type Release } from "../lib/releases";
 import type { Game } from "../lib/types";
 import { Notes } from "./ReleaseCard";
 
@@ -12,6 +12,7 @@ export function GameUpdates({ game }: { game: Game }) {
   const { t, lang } = useI18n();
   const { profile } = useAuth();
   const [latest, setLatest] = useState<Release | null | undefined>(undefined);
+  const [smalls, setSmalls] = useState<Release[]>([]); // small updates newer than `latest`
   const page = `/game/${game.slug}/updates`;
   const manager = !!profile && (profile.role === "admin" || profile.id === game.created_by);
   // Long notes are cut to a few lines, with "Show more" to read them here.
@@ -31,8 +32,14 @@ export function GameUpdates({ game }: { game: Game }) {
 
   useEffect(() => {
     let alive = true;
-    listReleases(game.id, 1)
-      .then(([r]) => alive && setLatest(r ?? null))
+    // The main version stays on show; small updates after it are listed below it.
+    listReleases(game.id, 10)
+      .then((list) => {
+        if (!alive) return;
+        const [g] = groupReleases(list);
+        setLatest(g ? g.main ?? g.small[0] : null);
+        setSmalls(g?.main ? g.small : []);
+      })
       .catch(() => alive && setLatest(null));
     return () => {
       alive = false;
@@ -66,6 +73,16 @@ export function GameUpdates({ game }: { game: Game }) {
         <button type="button" className="linkish rel-more" aria-expanded={open} aria-controls="rel-teaser-notes" onClick={() => setOpen(!open)}>
           {open ? t("rel.less") : t("rel.more")}
         </button>
+      )}
+      {smalls.length > 0 && (
+        <ul className="rel-mini" aria-label={t("rel.smallSince", { v: latest.version })}>
+          {smalls.slice(0, 3).map((r) => (
+            <li key={r.id}>
+              <Link to={`${page}#r-${r.id}`}><span className="ver">{r.version}</span> {r.title ?? t("rel.small")}</Link>
+              <time dateTime={r.published_at}>{ago(r.published_at, lang)}</time>
+            </li>
+          ))}
+        </ul>
       )}
       <div className="actions">
         <Link to={`${page}#r-${latest.id}`} className="btn">{t("rel.all")}</Link>

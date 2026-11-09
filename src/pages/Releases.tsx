@@ -4,7 +4,7 @@ import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
 import { useGames } from "../lib/useGames";
 import { findGame } from "../lib/games";
-import { deleteRelease, listReleases, nextVersion, type Release } from "../lib/releases";
+import { deleteRelease, groupReleases, listReleases, nextSmallVersion, nextVersion, type Release } from "../lib/releases";
 import { ReleaseCard } from "../components/ReleaseCard";
 import { ReleaseForm } from "../components/ReleaseForm";
 
@@ -82,6 +82,30 @@ export function Releases() {
       </div>
     );
 
+  const card = (r: Release) =>
+    editing === r.id ? (
+      <ReleaseForm key={r.id} gameId={gameId ?? null} release={r} onSaved={saved} onCancel={() => setEditing(null)} />
+    ) : (
+      <ReleaseCard
+        key={r.id}
+        release={r}
+        highlight={r.id === target}
+        actions={manager && (
+          <div className="actions rel-actions">
+            <button type="button" className="btn" onClick={() => setEditing(r.id)}>{t("fb.post.edit")}</button>
+            {confirmDelete === r.id ? (
+              <>
+                <button type="button" className="btn danger" onClick={() => remove(r.id)}>{t("fb.post.confirmDelete")}</button>
+                <button type="button" className="btn" onClick={() => setConfirmDelete(null)}>{t("form.cancel")}</button>
+              </>
+            ) : (
+              <button type="button" className="btn ghost-danger" onClick={() => setConfirmDelete(r.id)}>{t("rel.delete")}</button>
+            )}
+          </div>
+        )}
+      />
+    );
+
   return (
     <section className="fb-board rel-page">
       {slug && <Link to={`/game/${slug}`} className="back">← {t("fb.backToGame")}</Link>}
@@ -89,7 +113,7 @@ export function Releases() {
       <p className="lead">{game ? t("rel.lead.game", { title: game.title }) : t("rel.lead.toki")}</p>
 
       {manager && releases && (writing ? (
-        <ReleaseForm gameId={gameId ?? null} suggestedVersion={nextVersion(releases[0]?.version)} onSaved={saved} onCancel={() => setWriting(false)} />
+        <ReleaseForm gameId={gameId ?? null} suggestedVersion={nextVersion(releases.find((r) => !r.small)?.version)} suggestedSmallVersion={nextSmallVersion(releases)} onSaved={saved} onCancel={() => setWriting(false)} />
       ) : (
         <div className="actions">
           <button type="button" className="btn primary" onClick={() => setWriting(true)}>{t("rel.new")}</button>
@@ -102,30 +126,17 @@ export function Releases() {
         <p className="msg fb-empty">{t(manager ? "rel.emptyDev" : "rel.empty")}</p>
       ) : (
         <div className="rel-list">
-          {releases.map((r) =>
-            editing === r.id ? (
-              <ReleaseForm key={r.id} gameId={gameId ?? null} release={r} onSaved={saved} onCancel={() => setEditing(null)} />
-            ) : (
-              <ReleaseCard
-                key={r.id}
-                release={r}
-                highlight={r.id === target}
-                actions={manager && (
-                  <div className="actions rel-actions">
-                    <button type="button" className="btn" onClick={() => setEditing(r.id)}>{t("fb.post.edit")}</button>
-                    {confirmDelete === r.id ? (
-                      <>
-                        <button type="button" className="btn danger" onClick={() => remove(r.id)}>{t("fb.post.confirmDelete")}</button>
-                        <button type="button" className="btn" onClick={() => setConfirmDelete(null)}>{t("form.cancel")}</button>
-                      </>
-                    ) : (
-                      <button type="button" className="btn ghost-danger" onClick={() => setConfirmDelete(r.id)}>{t("rel.delete")}</button>
-                    )}
-                  </div>
-                )}
-              />
-            ),
-          )}
+          {groupReleases(releases).map((g) => (
+            <div key={(g.main ?? g.small[0]).id} className="rel-group">
+              {g.main && card(g.main)}
+              {g.small.length > 0 && (
+                <div className="rel-smalls">
+                  <h2 className="label">{t(g.main ? "rel.smallSince" : "rel.smallOnly", { v: g.main?.version ?? "" })}</h2>
+                  {g.small.map(card)}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </section>
