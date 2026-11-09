@@ -51,12 +51,24 @@ const MAX_BASES = 20;
 export const ANSWER_DEADLINE_MS = 6000;
 /** Saves go up after the game has been quiet this long. */
 export const CLOUD_WAIT_MS = 2000;
+/**
+ * At most one upload per this long while playing (closing or hiding the page sends at once).
+ * Many games save every few seconds; uploading each would mean over 1000 database writes an hour.
+ */
+export const UPLOAD_GAP_MS = 30_000;
 const READ_TIMEOUT_MS = 15_000;
 const RETRY_MS = [500, 1000, 2000, 4000, 8000];
 /** A "hello" this soon after Toki gave a save comes from the game reloading to put it back. */
 const RELOAD_WINDOW_MS = 30_000;
 
 const size = (keys: Record<string, string>) => JSON.stringify(keys).length;
+
+/** Whether two saves hold exactly the same keys and values. */
+export function sameKeys(a: Record<string, string>, b: Record<string, string>): boolean {
+  const ka = Object.keys(a);
+  if (ka.length !== Object.keys(b).length) return false;
+  return ka.every((k) => Object.prototype.hasOwnProperty.call(b, k) && a[k] === b[k]);
+}
 
 /** Checks a save sent by a game. Returns null if it isn't one. */
 export function asSave(v: unknown): SaveData | null {
@@ -135,6 +147,7 @@ export class SaveSync {
   private expected: SaveData | null = null;
   private timers = new Set<ReturnType<typeof setTimeout>>();
   private uploadTimer: ReturnType<typeof setTimeout> | undefined;
+  private lastUpload = -Infinity;
 
   constructor(opts: SaveSyncOptions) {
     this.o = { onConflict: () => {}, onLost: () => {}, now: Date.now, ...opts };
@@ -217,7 +230,8 @@ export class SaveSync {
     // Lost: not built on the account save, so it goes up as a backup and doesn't replace it.
     this.setRec({ save, bases: this.lost ? [] : rec?.bases ?? [], dirty: true });
     clearTimeout(this.uploadTimer);
-    this.uploadTimer = this.later(() => this.upload(), CLOUD_WAIT_MS);
+    const wait = Math.max(CLOUD_WAIT_MS, this.lastUpload + UPLOAD_GAP_MS - this.o.now());
+    this.uploadTimer = this.later(() => this.upload(), wait);
   }
 
   /** Sends a waiting save now (the page is closing or hidden). */
@@ -343,7 +357,15 @@ export class SaveSync {
     }
     const rec = this.rec();
     if (!rec?.dirty) return;
+    // Nothing changed since the account save this one builds on (games often save the same
+    // state again): no need to send it.
+    const cloud = this.cloud.save;
+    if (cloud && rec.bases.includes(cloud.t) && !this.lost && sameKeys(rec.save.keys, cloud.keys)) {
+      this.setRec({ ...rec, dirty: false });
+      return;
+    }
     this.uploading = true;
+    this.lastUpload = this.o.now();
     const sent = rec.save;
     try {
       const res = await this.o.cloud.put(this.o.gameId, sent, rec.bases, this.o.device);

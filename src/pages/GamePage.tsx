@@ -14,7 +14,7 @@ import { GameFeedback } from "../components/GameFeedback";
 import { GameUpdates } from "../components/GameUpdates";
 import { GameChat } from "../components/GameChat";
 import { Leaderboard, useScoreBridge } from "../components/Leaderboard";
-import { setPlaying } from "../lib/presence";
+import { setPlaying } from "../lib/useBadges";
 import { CloseIcon, FullscreenIcon, ShareIcon } from "../components/icons";
 
 const LANDSCAPE_PHONE = "(orientation: landscape) and (pointer: coarse) and (max-height: 600px)";

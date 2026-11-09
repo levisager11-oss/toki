@@ -272,12 +272,6 @@ export async function listNotifications(): Promise<Notification[]> {
   return data as unknown as Notification[];
 }
 
-export async function unreadNotifications(): Promise<number> {
-  const { count, error } = await supabase.from("notifications").select("id", { count: "exact", head: true }).is("read_at", null);
-  if (error) return 0;
-  return count ?? 0;
-}
-
 export const markNotificationsRead = (ids?: number[]) => rpc<void>("mark_notifications_read", { p_ids: ids ?? null });
 
 export async function clearNotifications() {
