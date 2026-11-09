@@ -60,6 +60,8 @@ export interface JobState {
   nudges?: number;
   /** how many times the session had stopped when Toki last looked */
   idleSeen?: number;
+  /** passing errors (e.g. Anthropic briefly unreachable) in a row */
+  hiccups?: number;
 }
 
 export type Status = "working" | "question" | "done" | "failed";

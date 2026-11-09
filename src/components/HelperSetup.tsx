@@ -59,8 +59,9 @@ export function HelperSetup({ gameId }: { gameId: string }) {
   const sameRepo = !!help?.repo && repo === `${help.installation_id}|${help.repo}`;
 
   return (
-    <section className="ai-panel helper-setup" aria-labelledby={`${id}-h`}>
-      <h2 id={`${id}-h`} className="label"><span aria-hidden="true">✦ </span>{t("helper.setup.title")}</h2>
+    <details className="helper-setup" open={!!help?.notes || !!help?.learned_at}>
+      <summary><b id={`${id}-h`}>{t("helper.setup.title")}</b></summary>
+      <div className="ai-panel">
       <small>{t("helper.setup.lead")}</small>
       <label htmlFor={`${id}-n`}>{t("helper.setup.notes")}</label>
       <textarea id={`${id}-n`} rows={4} maxLength={4000} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t("helper.setup.notesPlaceholder")} />
@@ -96,6 +97,7 @@ export function HelperSetup({ gameId }: { gameId: string }) {
           </button>
         )}
       </div>
-    </section>
+      </div>
+    </details>
   );
 }

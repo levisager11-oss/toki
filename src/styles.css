@@ -839,3 +839,6 @@ a.author:hover { text-decoration: underline; color: var(--fg); }
 .helper-form input { flex: 1 1 auto; min-width: 0; }
 .helper-setup { margin: 16px 0; }
 .helper-guide { white-space: pre-wrap; font-family: var(--f-ui); font-size: 13px; background: var(--surface); border: 1px solid var(--line); padding: 8px 10px; max-height: 260px; overflow: auto; margin: 0; }
+.ai-link { align-self: flex-start; font-size: 14px; }
+.helper-setup > summary { cursor: pointer; padding: 6px 0; }
+.helper-setup > .ai-panel { margin-top: 8px; }

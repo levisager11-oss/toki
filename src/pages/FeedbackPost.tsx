@@ -159,7 +159,7 @@ export function FeedbackPost() {
               {post.hidden ? t("fb.post.unhide") : t("fb.post.hide")}
             </button>
             {strong && post.kind === "bug" && !isClosed(post.status) && (
-              <Link to={`/connect?fix=${post.id}`} className="btn" title={t("fb.post.fixAiHelp")}><span aria-hidden="true">✦ </span>{t("fb.post.fixAi")}</Link>
+              <Link to={`/connect?fix=${post.id}`} className="btn" title={t("fb.post.fixAiHelp")}>{t("fb.post.fixAi")}</Link>
             )}
             {!isAuthor && me?.role === "admin" && (
               confirmDelete ? (

@@ -104,6 +104,9 @@ export interface AiStatus {
   aiKeySource: "env" | "toki" | null;
   anthropicKey: boolean;
   anthropicKeySource: "env" | "toki" | null;
+  /** the free AI's own key (optional) */
+  freeAiKey: boolean;
+  freeAiKeySource: "env" | "toki" | null;
   serviceKey: boolean;
   github: boolean;
   githubSource: "env" | "toki" | null;
@@ -126,8 +129,9 @@ export interface TestResult {
 
 const aiAction = <T = { ok: boolean }>(body: Record<string, unknown>) => api<T>("/api/ai", { method: "POST", body: JSON.stringify(body) });
 /** Stored encrypted on the server; it can't be read back. */
-export const setAiKey = (key: string, provider: Provider) => aiAction({ action: "set_ai_key", key, provider });
-export const clearAiKey = (provider: Provider) => aiAction({ action: "clear_ai_key", provider });
+/** "free": the free AI's own key. */
+export const setAiKey = (key: string, provider: Provider | "free") => aiAction({ action: "set_ai_key", key, provider });
+export const clearAiKey = (provider: Provider | "free") => aiAction({ action: "clear_ai_key", provider });
 export const githubFromManifest = (code: string) => aiAction<{ ok: boolean; slug: string; htmlUrl: string }>({ action: "github_manifest", code });
 export const clearGithubApp = () => aiAction({ action: "clear_github" });
 

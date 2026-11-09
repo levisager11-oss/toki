@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useI18n } from "../lib/i18n";
-import { freeUsage, saveAiSettings, THINKING, type AiSettings, type FreeUsage, type Thinking } from "../lib/ai";
+import { aiStatus, clearAiKey, freeUsage, saveAiSettings, setAiKey, THINKING, type AiSettings, type AiStatus, type FreeUsage, type Thinking } from "../lib/ai";
 import { assistError, testFreeAi, type FreeTest } from "../lib/assist";
 import { ModelPicker } from "./ModelPicker";
 
@@ -54,7 +54,8 @@ export function FreeAiCard({ settings }: { settings: AiSettings }) {
   };
 
   return (
-    <form className="form ai-card" onSubmit={save} aria-labelledby="free-ai-h">
+    <div className="ai-card">
+    <form className="form" onSubmit={save} aria-labelledby="free-ai-h">
       <h2 id="free-ai-h">{t("ai.free.title")}</h2>
       <p className="hint">{t("ai.free.lead")}</p>
       <label className="fb-check">
@@ -120,5 +121,56 @@ export function FreeAiCard({ settings }: { settings: AiSettings }) {
         </div>
       )}
     </form>
+    <FreeKey />
+    </div>
   );
 }
+
+/** The free AI's own key: optional, only needed when its endpoint isn't the strong AI's. */
+function FreeKey() {
+  const { t } = useI18n();
+  const [status, setStatus] = useState<AiStatus | null>(null);
+  const [key, setKey] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(false);
+  const [reload, setReload] = useState(0);
+  useEffect(() => {
+    aiStatus().then(setStatus).catch(() => {});
+  }, [reload]);
+  const run = async (fn: () => Promise<unknown>) => {
+    setBusy(true);
+    setErr(false);
+    try {
+      await fn();
+      setKey("");
+      setReload((n) => n + 1);
+    } catch {
+      setErr(true);
+    }
+    setBusy(false);
+  };
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    run(() => setAiKey(key.trim(), "free"));
+  };
+  return (
+    <form className="form setup-key" onSubmit={submit} aria-labelledby="free-key-h">
+      <h3 id="free-key-h" className="label">{t("ai.free.key")}</h3>
+      <small>{t("ai.free.keyHelp")}</small>
+      {status?.freeAiKey ? (
+        <p className="check good">
+          {t(status.freeAiKeySource === "env" ? "ai.free.keyEnv" : "ai.free.keySet")}{" "}
+          {status.freeAiKeySource === "toki" && <button type="button" className="linkish" disabled={busy} onClick={() => run(() => clearAiKey("free"))}>{t("ai.free.keyRemove")}</button>}
+        </p>
+      ) : (
+        <>
+          <label htmlFor="free-key" className="sr-only">{t("ai.free.key")}</label>
+          <input id="free-key" type="password" autoComplete="off" spellCheck={false} minLength={8} maxLength={500} value={key} onChange={(e) => setKey(e.target.value)} placeholder={t("setup.ai.placeholder")} />
+          <button className="btn" disabled={busy || key.trim().length < 8}>{t("setup.ai.save")}</button>
+        </>
+      )}
+      {err && <p className="error" role="alert">{t("error")}</p>}
+    </form>
+  );
+}
+

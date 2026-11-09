@@ -14,6 +14,8 @@ export async function GET(request: Request) {
     aiKeySource: ctx.sources.aiKey,
     anthropicKey: !!ctx.sources.anthropicKey,
     anthropicKeySource: ctx.sources.anthropicKey,
+    freeAiKey: !!ctx.sources.freeAiKey,
+    freeAiKeySource: ctx.sources.freeAiKey,
     github: !!ctx.sources.github,
     githubSource: ctx.sources.github,
     githubSlug: ctx.env.github.slug || null,
@@ -56,11 +58,11 @@ export async function POST(request: Request) {
     case "set_ai_key": {
       const key = typeof b.key === "string" ? b.key.trim() : "";
       if (key.length < 8 || key.length > 500 || /\s/.test(key)) return json({ error: "bad_request" }, 400);
-      await saveSecret(ctx.db, ctx.env, b.provider === "anthropic" ? "anthropic_api_key" : "ai_api_key", key, ctx.user.id);
+      await saveSecret(ctx.db, ctx.env, secretFor(b.provider), key, ctx.user.id);
       return json({ ok: true });
     }
     case "clear_ai_key":
-      await removeSecret(ctx.db, b.provider === "anthropic" ? "anthropic_api_key" : "ai_api_key");
+      await removeSecret(ctx.db, secretFor(b.provider));
       return json({ ok: true });
     case "github_manifest": {
       // GitHub sends the admin back with a one-time code after they created the app there.
@@ -81,3 +83,6 @@ export async function POST(request: Request) {
       return json({ error: "bad_request" }, 400);
   }
 }
+
+/** Where a provider's key is kept: "free" is the free AI's own key. */
+const secretFor = (provider: unknown) => (provider === "anthropic" ? "anthropic_api_key" : provider === "free" ? "free_ai_api_key" : "ai_api_key");

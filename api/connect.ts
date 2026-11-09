@@ -129,12 +129,16 @@ async function run(ctx: Ctx, b: Record<string, unknown>, origin: string) {
   }
   if (job.engine === "agent") {
     const result = await runAgent(ctx, job, { ...job, game, bug }, origin);
-    await saveStep(ctx, job, result);
+    if (!(await saveStep(ctx, job, result)) && result.state.session) {
+      // Cancelled while this step worked (e.g. while the session was being started): stop the
+      // agent and count what it cost, since the cancel couldn't see the session yet.
+      await stopAgent(ctx, result.state.session, result.state.reservation);
+    }
     return view(ctx, job.id);
   }
   // The free AI does the easy steps, when it's set up and the admin allows it.
   const [opts] = await ctx.db.select<{ connect_free_steps: boolean }>("ai_settings", "id=eq.1&select=connect_free_steps");
-  const freeAi = opts?.connect_free_steps && ctx.env.aiKey ? await freeSettings(ctx.db) : null;
+  const freeAi = opts?.connect_free_steps && (ctx.env.freeAiKey || ctx.env.aiKey) ? await freeSettings(ctx.db) : null;
   const gh = github(ctx.env.github);
   const result = await step({ ...job, game, bug }, {
     origin,
@@ -151,7 +155,7 @@ async function run(ctx: Ctx, b: Record<string, unknown>, origin: string) {
     ...(freeAi
       ? {
           async free(messages: Parameters<typeof freeCompletion>[0]["messages"]) {
-            const c = await freeCompletion({ db: ctx.db, apiKey: ctx.env.aiKey, userId: ctx.user.id, feature: "connect", messages, settings: freeAi, timeoutMs: 120_000 });
+            const c = await freeCompletion({ db: ctx.db, keys: { free: ctx.env.freeAiKey, openai: ctx.env.aiKey }, userId: ctx.user.id, feature: "connect", messages, settings: freeAi, timeoutMs: 120_000 });
             return c.text;
           },
         }
@@ -166,9 +170,9 @@ async function run(ctx: Ctx, b: Record<string, unknown>, origin: string) {
   return view(ctx, job.id);
 }
 
-async function saveStep(ctx: Ctx, job: Row, result: StepResult) {
-  // Only if it wasn't cancelled meanwhile.
-  await ctx.db.update("connect_jobs", `id=eq.${job.id}&status=eq.working`, {
+/** false when the run was cancelled meanwhile (then nothing is saved). */
+async function saveStep(ctx: Ctx, job: Row, result: StepResult): Promise<boolean> {
+  const rows = await ctx.db.update("connect_jobs", `id=eq.${job.id}&status=eq.working`, {
     status: result.status,
     messages: result.messages,
     state: result.state,
@@ -178,7 +182,23 @@ async function saveStep(ctx: Ctx, job: Row, result: StepResult) {
     lease_until: null,
     updated_at: new Date().toISOString(),
   });
+  return rows.length > 0;
 }
+
+/** Stops an agent's session and settles its reservation at what it cost (the whole cap if unknown). */
+async function stopAgent(ctx: Ctx, session: string, reservation: number | undefined) {
+  const [s] = await ctx.db.select<{ base_url: string; agent_budget: string }>("ai_settings", "id=eq.1&select=base_url,agent_budget");
+  const client = agentClient(ctx.env.anthropicKey, s?.base_url ?? "");
+  await interrupt(client, session).catch(() => {});
+  const cost = await sessionStatus(client, session).then((x) => x.cost, () => 0);
+  if (reservation) {
+    await ctx.db.rpc("ai_settle_amount", { p_id: reservation, p_cost: cost > 0 ? cost : Number(s?.agent_budget ?? 0), p_ok: false }).catch(() => {});
+  }
+}
+
+/** Errors that pass (Anthropic briefly unreachable or busy): try again on the next step. */
+const passing = (e: unknown) =>
+  e instanceof Anthropic.APIConnectionError || (e instanceof Anthropic.APIError && (e.status === 429 || (e.status ?? 0) >= 500));
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -191,8 +211,10 @@ async function runAgent(ctx: Ctx, row: Row, job: Job, origin: string): Promise<S
   const client = agentClient(ctx.env.anthropicKey, s.base_url);
   const budget = Number(s.agent_budget);
   const state = { ...(job.state ?? {}) };
+  // A run that started always cost something; if the cost isn't known yet, count the whole cap.
   const settle = async (cost: number, ok: boolean) => {
-    if (state.reservation) await ctx.db.rpc("ai_settle_amount", { p_id: state.reservation, p_cost: cost, p_ok: ok }).catch(() => {});
+    const amount = cost > 0 || !state.session ? cost : budget;
+    if (state.reservation) await ctx.db.rpc("ai_settle_amount", { p_id: state.reservation, p_cost: amount, p_ok: ok }).catch(() => {});
   };
   try {
     if (!state.session) {
@@ -202,7 +224,8 @@ async function runAgent(ctx: Ctx, row: Row, job: Job, origin: string): Promise<S
         p_feature: "connect",
         p_job: row.id,
         p_input_tokens: 0,
-        p_max_output_tokens: Math.ceil((budget * 1_000_000) / Math.max(Number(s.output_price), 0.0001)),
+        // (capped to the database's integer range; such a cheap model reserves a bit less)
+        p_max_output_tokens: Math.min(2_000_000_000, Math.ceil((budget * 1_000_000) / Math.max(Number(s.output_price), 0.0001))),
       });
       state.reservation = r.id;
     }
@@ -242,8 +265,12 @@ async function runAgent(ctx: Ctx, row: Row, job: Job, origin: string): Promise<S
       },
     });
     if (result.status === "done" || result.status === "failed") await settle(result.cost ?? 0, result.status === "done");
-    return result;
+    return { ...result, state: { ...result.state, hiccups: 0 } };
   } catch (e) {
+    // Anthropic briefly unreachable during a run: keep it, and look again next step (a few times).
+    if (state.session && passing(e) && (state.hiccups ?? 0) < 5) {
+      return { status: "working", messages: job.messages, state: { ...state, hiccups: (state.hiccups ?? 0) + 1 }, error: null };
+    }
     // What it cost so far, if a session was started.
     const cost = state.session ? await sessionStatus(client, state.session).then((x) => x.cost, () => budget) : 0;
     if (state.session) await interrupt(client, state.session).catch(() => {});
@@ -278,12 +305,6 @@ async function cancel(ctx: Ctx, b: Record<string, unknown>) {
     updated_at: new Date().toISOString(),
   });
   // An agent run: stop the agent, and count what it cost so far instead of the whole cap.
-  if (job?.engine === "agent" && job.state?.session) {
-    const [s] = await ctx.db.select<{ base_url: string }>("ai_settings", "id=eq.1&select=base_url");
-    const client = agentClient(ctx.env.anthropicKey, s?.base_url ?? "");
-    await interrupt(client, job.state.session).catch(() => {});
-    const cost = await sessionStatus(client, job.state.session).then((x) => x.cost, () => null);
-    if (job.state.reservation && cost !== null) await ctx.db.rpc("ai_settle_amount", { p_id: job.state.reservation, p_cost: cost, p_ok: false }).catch(() => {});
-  }
+  if (job?.engine === "agent" && job.state?.session) await stopAgent(ctx, job.state.session, job.state.reservation);
   return view(ctx, b.id);
 }

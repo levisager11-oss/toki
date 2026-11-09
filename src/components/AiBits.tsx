@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
 import { assistError, detectLang, translate, useFreeAi, type TranslateKind } from "../lib/assist";
@@ -23,8 +23,8 @@ export function SummaryButton({ label, load }: { label: string; load: () => Prom
   };
   return (
     <div className="ai-inline">
-      <button type="button" className="btn ai-start" onClick={run} disabled={busy}>
-        <span aria-hidden="true">✦ </span>{busy ? t("assist.summarizing") : label}
+      <button type="button" className="linkish ai-link" onClick={run} disabled={busy}>
+        {busy ? t("assist.summarizing") : label}
       </button>
       {err && <p className="error" role="alert">{err}</p>}
       {text !== null && (
@@ -56,6 +56,18 @@ export function useTranslate(kind: TranslateKind, id: string | number, sample: s
   const [shown, setShown] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // Another post, reply, message or game in the same place (e.g. after following a link): start over.
+  const key = `${kind}:${id}`;
+  const current = useRef(key);
+  current.current = key;
+  const [forKey, setForKey] = useState(key);
+  if (forKey !== key) {
+    setForKey(key);
+    setTexts(null);
+    setCache(null);
+    setShown(false);
+    setError("");
+  }
   const from = detectLang(sample);
   const offer = !!session && on && !!from && from !== lang;
   const toggle = () => {
@@ -68,6 +80,8 @@ export function useTranslate(kind: TranslateKind, id: string | number, sample: s
     setError("");
     translate(kind, id, lang)
       .then((out) => {
+        // The page moved on to something else meanwhile.
+        if (current.current !== key) return;
         setCache({ lang, texts: out });
         setTexts(out);
         setShown(true);
@@ -127,7 +141,7 @@ export function AiBox({ title, children, onClose }: { title: string; children: R
   return (
     <section className="ai-box" aria-label={title}>
       <div className="ai-box-head">
-        <b><span aria-hidden="true">✦ </span>{title}</b>
+        <b>{title}</b>
         {onClose && <button type="button" className="linkish" onClick={onClose}>{t("assist.close")}</button>}
       </div>
       {children}

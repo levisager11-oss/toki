@@ -340,10 +340,9 @@ function DescribeWithAi({ game, onUse }: { game: Parameters<typeof describeGame>
   };
   return (
     <div className="ai-inline">
-      <button type="button" className="btn ai-start" onClick={write} disabled={busy}>
-        <span aria-hidden="true">✦ </span>{busy ? t("assist.writing") : game.description || game.description_de ? t("form.ai.improve") : t("form.ai.write")}
+      <button type="button" className="linkish ai-link" onClick={write} disabled={busy} title={t("form.ai.help")}>
+        {busy ? t("assist.writing") : game.description || game.description_de ? t("form.ai.improve") : t("form.ai.write")}
       </button>
-      <small>{t("form.ai.help")}</small>
       {err && <p className="error" role="alert">{err}</p>}
       {draft && (
         <AiBox title={t("form.ai.draft")} onClose={() => setDraft(null)}>

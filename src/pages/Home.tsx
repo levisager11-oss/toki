@@ -211,7 +211,7 @@ function Suggested({ games, recentSlugs }: { games: Game[]; recentSlugs: string[
   if (!shown.length) return null;
   return (
     <section aria-labelledby="suggest-h">
-      <div className="sechead"><h2 id="suggest-h"><span aria-hidden="true">✦ </span>{t("home.suggested")}</h2></div>
+      <div className="sechead"><h2 id="suggest-h">{t("home.suggested")}</h2></div>
       <div className="grid">
         {shown.map(({ s, g }) => (
           <div key={g.id} className="suggest">

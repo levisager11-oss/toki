@@ -53,6 +53,10 @@ Next to the "strong AI" above (prices, quotas, the monthly cap; used to write co
 uses the same key as the OpenAI-compatible endpoint (`AI_API_KEY`). Fill in its address and model
 in the *Free AI* card on the AI page, turn it on, save and test it.
 
+**Key:** the free AI can have its own key (the "Own key" field in the Free AI card, or
+`FREE_AI_API_KEY` in Vercel). Without one, it uses the OpenAI-compatible key, but only when the
+strong AI is Anthropic or the same endpoint, so the strong AI's key never goes to another service.
+
 It does the small helpers (`api/assist.ts`, prompts in `server/assist/prompts.ts`):
 
 - **Translate** posts, replies, chat messages and game descriptions between English and German

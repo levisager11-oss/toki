@@ -195,11 +195,6 @@ export function GamePage() {
           <div className="actions">
             <FavButton game={game} withLabel />
             <button type="button" className="btn" onClick={share} aria-live="polite"><ShareIcon />{shared ? t("game.copied") : t("game.share")}</button>
-            {freeAi && (
-              <button type="button" className="btn" onClick={() => setHelper((h) => !h)} aria-expanded={helper}>
-                <span aria-hidden="true">✦ </span>{t("helper.open")}
-              </button>
-            )}
             {canEdit && <Link to={`/edit/${game.slug}`} className="btn">{t("game.edit")}</Link>}
             <button type="button" className="btn primary" onClick={fullscreen}><FullscreenIcon />{t("game.fullscreen")}</button>
           </div>
@@ -221,6 +216,11 @@ export function GamePage() {
           {t("game.notLoading")}{" "}
           <a href={game.play_url} target="_blank" rel="noopener noreferrer">{t("game.openDirect")} ↗</a>
         </p>
+        {freeAi && userId && !helper && (
+          <p className="hint">
+            <button type="button" className="linkish" onClick={() => setHelper(true)} aria-expanded={false}>{t("helper.open")}</button>
+          </p>
+        )}
       </section>
 
       {game.screenshots.length > 0 && (

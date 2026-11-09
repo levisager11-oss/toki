@@ -55,8 +55,9 @@ export async function ensureAgent(client: Anthropic, db: Db, s: AgentSettings): 
   if (!environmentId) {
     const env = await client.beta.environments.create({
       name: "Toki Connect",
-      // No web; package registries only, for the odd quick check.
-      config: { type: "cloud", networking: { type: "limited", allow_package_managers: true, allow_mcp_servers: false } },
+      // No network at all: bug reports come from players, so nothing they write can make the
+      // agent install, download or publish anything.
+      config: { type: "cloud", networking: { type: "limited", allow_package_managers: false, allow_mcp_servers: false } },
     });
     environmentId = env.id;
     patch.environment_id = env.id;
