@@ -23,7 +23,15 @@ type StepState = "wait" | "busy" | "ok" | "skip" | "fail";
  * "Add your game" in one go: drop the game or pick a GitHub repository, Toki's AI reads it and
  * proposes its page, and one button puts it live (and lets the AI add leaderboard support).
  */
-export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManual: () => void }) {
+/** What the one-click screen hands to the full form ("Advanced"), so nothing is lost. */
+export interface QuickCarry {
+  proposal: Proposal | null;
+  picked: Picked | null;
+  git: GitChoice | null;
+  kind: "upload" | "github";
+}
+
+export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManual: (carry: QuickCarry) => void }) {
   const { t, lang } = useI18n();
   const { profile } = useAuth();
   const navigate = useNavigate();
@@ -157,12 +165,18 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
     }
   };
 
+  /** The full form, with everything picked or proposed so far. */
+  const advanced = () => onManual({ proposal: p, picked, git, kind });
+
   // ---------- screens ----------
 
   if (phase === "pick" || phase === "scanning") {
     return (
       <section className="panel quick-add">
-        <h1 className="h">{t("quick.title")}</h1>
+<div className="sechead quick-head">
+          <h1 className="h">{t("quick.title")}</h1>
+          <button type="button" className="btn" onClick={advanced} title={t("quick.advancedHelp")}>{t("quick.advanced")}</button>
+        </div>
         <p className="lead">{t("quick.lead")}</p>
         <div className="seg" role="radiogroup" aria-label={t("host.where")}>
           {(["upload", "github"] as const).map((k) => (
@@ -185,9 +199,6 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
           </>
         )}
         {err && <p className="error" role="alert">{err}</p>}
-        <p className="quick-manual">
-          <button type="button" className="linkish" onClick={onManual}>{t("quick.manual")}</button>
-        </p>
       </section>
     );
   }
@@ -208,7 +219,10 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
     const field = <K extends keyof Proposal>(k: K) => (v: Proposal[K]) => setP({ ...p, [k]: v });
     return (
       <section className="panel quick-add">
-        <h1 className="h">{t("quick.reviewTitle")}</h1>
+<div className="sechead quick-head">
+          <h1 className="h">{t("quick.reviewTitle")}</h1>
+          <button type="button" className="btn" onClick={advanced} title={t("quick.advancedHelp")}>{t("quick.advanced")}</button>
+        </div>
         <p className="lead">{scan.ai ? t("quick.reviewLead") : t("quick.reviewLeadNoAi")}</p>
         <div className="form quick-form">
           <label htmlFor="q-title">{t("form.title")}</label>

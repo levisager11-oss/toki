@@ -20,7 +20,25 @@ import { HostedUpload, type Picked } from "../components/HostedUpload";
 import { ImportFromLink } from "../components/ImportFromLink";
 import { gitConnect, gitDisconnect, hostError, unhostGame, uploadGame, useHosting, type GitChoice, type GitRow, type Imported } from "../lib/hosting";
 import { GitHubFollow } from "../components/GitHubFollow";
-import { QuickAdd } from "../components/QuickAdd";
+import { QuickAdd, type QuickCarry } from "../components/QuickAdd";
+
+// Developers who chose "Advanced" get the full form straight away next time (this browser only).
+const ADVANCED_KEY = "toki.addAdvanced";
+const prefersAdvanced = () => {
+  try {
+    return localStorage.getItem(ADVANCED_KEY) === "1";
+  } catch {
+    return false;
+  }
+};
+const rememberAdvanced = (on: boolean) => {
+  try {
+    if (on) localStorage.setItem(ADVANCED_KEY, "1");
+    else localStorage.removeItem(ADVANCED_KEY);
+  } catch {
+    /* only a convenience */
+  }
+};
 import { siteFor, siteUrl } from "../lib/hostingRules";
 
 const MAX_IMAGE = 2 * 1024 * 1024;
@@ -65,7 +83,7 @@ export function GameForm() {
   const [picked, setPicked] = useState<Picked | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
   // New games: the one-click way first; "fill in everything yourself" shows this form.
-  const [manual, setManual] = useState(false);
+  const [manual, setManual] = useState(prefersAdvanced);
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   // Pictures uploaded while this form is open. The ones not saved with the game are deleted again.
@@ -120,10 +138,41 @@ export function GameForm() {
     });
   }, [editSlug]);
 
+  /** "Advanced": the full form, filled in with what the one-click screen had so far. */
+  const toAdvanced = (c: QuickCarry) => {
+    rememberAdvanced(true);
+    setManual(true);
+    const p = c.proposal;
+    if (p) {
+      setTitle(p.title);
+      setSlug(slugify(p.title));
+      setDescription(p.description);
+      setDescriptionDe(p.description_de);
+      setControls(p.controls);
+      setCategory(p.category);
+      setEngine(p.engine);
+      setScoreOrder(p.score_order);
+      setScoreFormat(p.score_format);
+      setIsolation(p.isolation);
+      setDirty(true);
+    }
+    if (c.kind === "github") {
+      setMode("github");
+      if (c.git) setGitChoice(c.git);
+    } else {
+      setMode("upload");
+      if (c.picked) setPicked(c.picked);
+    }
+  };
+  const toQuick = () => {
+    rememberAdvanced(false);
+    setManual(false);
+  };
+
   if (missing) return <NotFound />;
   if (!editSlug && !manual) {
     if (hosting === null) return <p className="msg" aria-busy="true">{t("loading")}</p>;
-    if (hosting.enabled && hosting.domain) return <QuickAdd hosting={hosting} onManual={() => setManual(true)} />;
+    if (hosting.enabled && hosting.domain) return <QuickAdd hosting={hosting} onManual={toAdvanced} />;
   }
   if (editSlug && !orig) return <p className="msg">{t("loading")}</p>;
   if (orig && profile && profile.role !== "admin" && orig.created_by !== profile.id) return <p className="msg">{t("auth.noRights")}</p>;
@@ -315,7 +364,10 @@ export function GameForm() {
 
   return (
     <section className="panel">
-      <h1 className="h">{orig ? t("form.editTitle") : t("form.addTitle")}</h1>
+      <div className="sechead quick-head">
+        <h1 className="h">{orig ? t("form.editTitle") : t("form.addTitle")}</h1>
+        {!orig && canHost && <button type="button" className="btn" onClick={toQuick}>{t("quick.backToQuick")}</button>}
+      </div>
       <form className="form two" onSubmit={submit} onChange={() => setDirty(true)}>
         <div className="col">
           <ImportFromLink onImport={applyImport} />

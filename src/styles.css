@@ -928,3 +928,5 @@ main.content:focus { outline: none; }
 .quick-steps li.ok { border-left-color: #2f9e5b; }
 .quick-steps li.fail { border-left-color: var(--danger); }
 .quick-steps li.busy { border-left-color: var(--accent); }
+.quick-head { margin-bottom: 0; }
+.quick-head .h { margin: 0; }
