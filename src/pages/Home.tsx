@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
-import { useRecent } from "../lib/local";
+import { clearRecent, useRecent } from "../lib/local";
 import { useGames } from "../lib/useGames";
 import { likes, matches, plays } from "../lib/games";
 import { Cover } from "../components/Cover";
@@ -97,7 +97,10 @@ export function Home() {
 
       {!q && recent.length > 0 && (
         <section>
-          <div className="sechead"><h2>{t("home.recent")}</h2></div>
+          <div className="sechead">
+            <h2>{t("home.recent")}</h2>
+            <button type="button" className="linkish sub" onClick={clearRecent}>{t("home.clearRecent")}</button>
+          </div>
           <div className="recent">
             {recent.map((g) => <RecentItem key={g.id} game={g} />)}
           </div>
