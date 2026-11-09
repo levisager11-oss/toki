@@ -60,7 +60,7 @@ export function ConnectJob() {
       <Link to="/connect" className="back">← {t("connect.back")}</Link>
       <h1 className="h">{job.repo}</h1>
       <p className="fb-meta">
-        <JobBadge status={job.status} />
+        <JobBadge status={job.status} pr={!!job.pr_url} />
         <span>{job.features.map((f) => t(f === "saves" ? "connect.saves" : "connect.scores")).join(" + ")}</span>
         {cost > 0 && <span>{t("connect.cost", { amount: usd(cost) })}</span>}
       </p>
@@ -90,6 +90,11 @@ export function ConnectJob() {
         <div className="check good job-done">
           <p>{t("connect.done")}</p>
           <a className="btn primary" href={job.pr_url} target="_blank" rel="noopener noreferrer"><GitHubMark />{t("connect.openPr")} ↗</a>
+        </div>
+      )}
+      {job.status === "done" && !job.pr_url && (
+        <div className="check good job-done">
+          <p>{t("connect.already")}</p>
         </div>
       )}
       {job.status === "failed" && (

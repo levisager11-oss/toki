@@ -44,7 +44,7 @@ function client(config: Config, fetchImpl?: typeof fetch) {
 function asAiError(e: unknown): AiError {
   if (e instanceof AiError) return e;
   if (e instanceof Anthropic.APIConnectionTimeoutError) return new AiError("timeout");
-  if (e instanceof Anthropic.APIError) return new AiError("provider_error", `${e.status ?? ""}: ${e.message}`.slice(0, 300));
+  if (e instanceof Anthropic.APIError) return new AiError("provider_error", `${e.status ?? ""}: ${e.message}`.slice(0, 300), e.status ?? undefined);
   return new AiError("provider_error", "couldn't reach the Anthropic API");
 }
 

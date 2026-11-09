@@ -30,6 +30,20 @@ describe("OpenAI-compatible provider", () => {
     expect(JSON.parse(String((f.mock.calls[0] as [string, RequestInit])[1].body))).toMatchObject({ stream: true, stream_options: { include_usage: true } });
   });
 
+  it("tries once without streaming when a streamed answer fails on the server's side", async () => {
+    const f = vi.fn(async (_u: string, init: RequestInit) =>
+      JSON.parse(String(init.body)).stream
+        ? new Response(JSON.stringify({ error: { message: "upstream stream broke" } }), { status: 502 })
+        : new Response(JSON.stringify({ choices: [{ message: { content: "OK" } }], usage: { prompt_tokens: 5, completion_tokens: 1 } }), { status: 200 }),
+    ) as unknown as typeof fetch & ReturnType<typeof vi.fn>;
+    const cfg = { ...CFG, model: "stream-4" };
+    expect((await complete(cfg, { messages: [{ role: "user", content: "hi" }], maxTokens: 16 }, f)).text).toBe("OK");
+    expect(f).toHaveBeenCalledTimes(2);
+    // Remembered: the next call goes without streaming right away.
+    await complete(cfg, { messages: [{ role: "user", content: "hi" }], maxTokens: 16 }, f);
+    expect(f).toHaveBeenCalledTimes(3);
+  });
+
   it("reports an error sent inside the stream", async () => {
     const f = vi.fn(async () => new Response(sse([{ error: { message: "context too long" } }]), { status: 200 })) as unknown as typeof fetch;
     await expect(complete({ ...CFG, model: "stream-2" }, { messages: [{ role: "user", content: "hi" }], maxTokens: 16 }, f)).rejects.toMatchObject({
@@ -147,10 +161,14 @@ describe("budgeted AI calls", () => {
     expect(f).not.toHaveBeenCalled();
   });
 
-  it("settles a failed call as failed, counting what was sent", async () => {
+  it("settles a failed call as failed: free when refused, counting what was sent when the connection broke", async () => {
     const { db, calls } = fakeDb();
-    await expect(budgetedCompletion({ db, keys: { openai_compatible: "k", anthropic: "" }, userId: "u", feature: "connect", messages: [{ role: "user", content: "abc" }], maxTokens: 1, fetchImpl: reply({}, 500) })).rejects.toBeInstanceOf(AiError);
-    expect(calls[1].args).toMatchObject({ p_ok: false, p_output_tokens: 0, p_input_tokens: 11 });
+    const msg = [{ role: "user" as const, content: "abc" }];
+    await expect(budgetedCompletion({ db, keys: { openai_compatible: "k", anthropic: "" }, userId: "u", feature: "connect", messages: msg, maxTokens: 1, fetchImpl: reply({}, 400) })).rejects.toBeInstanceOf(AiError);
+    expect(calls[1].args).toMatchObject({ p_ok: false, p_output_tokens: 0, p_input_tokens: 0 });
+    const broken = vi.fn(async () => { throw new TypeError("fetch failed"); }) as unknown as typeof fetch;
+    await expect(budgetedCompletion({ db, keys: { openai_compatible: "k", anthropic: "" }, userId: "u", feature: "connect", messages: msg, maxTokens: 1, fetchImpl: broken })).rejects.toBeInstanceOf(AiError);
+    expect(calls[3].args).toMatchObject({ p_ok: false, p_output_tokens: 0, p_input_tokens: 11 });
   });
 
   it("needs the API key", async () => {
@@ -198,6 +216,24 @@ describe("paths the AI may write", () => {
 
 describe("applying the AI's edits", () => {
   const files = { "index.html": "<head>\n<title>G</title>\n</head>", "a.js": "x = 1;\nx = 1;" };
+  it("matches whole lines when only spaces or indentation differ, and keeps the file's indentation", () => {
+    const code = "function save() {\n    const data = JSON.stringify(state);\n    localStorage.setItem('s', data);\n}\n";
+    const r = applyEdits({ "s.js": code }, [
+      { path: "s.js", search: "  const data = JSON.stringify(state);\n  localStorage.setItem('s',  data);", replace: "  const data = JSON.stringify(state);\n  localStorage.setItem('s', data);\n  toki.save();" },
+    ]);
+    expect(r.errors).toEqual([]);
+    expect(r.changed["s.js"]).toBe("function save() {\n    const data = JSON.stringify(state);\n    localStorage.setItem('s', data);\n    toki.save();\n}\n");
+  });
+
+  it("refuses a loose match that fits in more than one place, and shows the closest part of the file", () => {
+    const r = applyEdits({ "a.js": "  x = 1;\ny = 2;\n  x = 1;" }, [{ path: "a.js", search: "x = 1;", replace: "x = 3;" }]);
+    expect(r.errors[0]).toMatch(/more than once/);
+    const near = applyEdits({ "b.js": "let score = 0;\nfunction endRound(points) {\n  score += points;\n}" }, [
+      { path: "b.js", search: "function endRound(points) {\n  score = score + points;\n}", replace: "x" },
+    ]);
+    expect(near.errors[0]).toMatch(/not found[\s\S]*closest part of the file is:\nlet score = 0;\nfunction endRound/);
+  });
+
   it("replaces exact text and writes new files", () => {
     const r = applyEdits(files, [
       { path: "index.html", search: "<head>", replace: "<head>\n<script>t</script>" },
@@ -330,6 +366,14 @@ describe("Toki Connect run", () => {
     const r = await step(newJob(), f.deps);
     expect(r).toMatchObject({ status: "failed", error: "impossible" });
     expect(r.messages.at(-1)).toMatchObject({ kind: "impossible", text: "Das Repo enthält nur ein fertiges Build." });
+  });
+
+  it("finishes without a pull request when everything is already in the code", async () => {
+    const f = fixture([JSON.stringify({ action: "already", summary: "Das Skript ist schon in index.html, und toki.score wird in main.ts aufgerufen." })]);
+    const r = await step(newJob(), f.deps);
+    expect(r).toMatchObject({ status: "done", error: null });
+    expect(r.pr_url).toBeUndefined();
+    expect(r.messages.at(-1)).toMatchObject({ kind: "done", files: [], text: expect.stringContaining("index.html") });
   });
 
   it("stops with the reason when the budget is used up", async () => {

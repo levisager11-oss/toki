@@ -145,6 +145,8 @@ export interface UsageRow {
   input_tokens: number;
   output_tokens: number;
   cost: number;
+  /** why a failed call failed */
+  error: string | null;
   created_at: string;
   user: { username: string } | null;
 }
@@ -152,7 +154,7 @@ export interface UsageRow {
 export async function recentUsage(): Promise<UsageRow[]> {
   const { data, error } = await supabase
     .from("ai_usage")
-    .select("id, feature, model, status, input_tokens, output_tokens, cost, created_at, user:profiles!ai_usage_user_id_fkey(username)")
+    .select("id, feature, model, status, input_tokens, output_tokens, cost, error, created_at, user:profiles!ai_usage_user_id_fkey(username)")
     .order("id", { ascending: false })
     .limit(30);
   if (error) throw error;

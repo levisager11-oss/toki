@@ -39,9 +39,15 @@ export async function budgetedCompletion(call: BudgetedCall): Promise<Completion
   try {
     result = await complete({ provider: r.provider, baseUrl: r.base_url, model: r.model, apiKey: call.keys[r.provider] ?? "" }, { messages: call.messages, maxTokens: call.maxTokens }, call.fetchImpl);
   } catch (e) {
-    // The endpoint may have charged for reading the request: count it, on the safe side.
-    const tokens = e instanceof AiError && e.code === "not_configured" ? 0 : inputTokens;
-    await call.db.rpc("ai_settle", { p_id: r.id, p_input_tokens: tokens, p_output_tokens: 0, p_ok: false }).catch(() => {});
+    // A request the service refused with an error status wasn't worked on. Otherwise (e.g. the
+    // connection broke) the service may have charged for reading it: count that, on the safe side.
+    const refused = e instanceof AiError && (e.code === "not_configured" || e.status !== undefined);
+    await call.db.rpc("ai_settle", { p_id: r.id, p_input_tokens: refused ? 0 : inputTokens, p_output_tokens: 0, p_ok: false }).catch(() => {});
+    // Why it failed, for the admin page.
+    const why = e instanceof AiError ? (e.message === e.code ? e.code : `${e.code}: ${e.message}`) : "error";
+    await Promise.resolve()
+      .then(() => call.db.update("ai_usage", `id=eq.${r.id}`, { error: why.slice(0, 500) }))
+      .catch(() => {});
     throw e;
   }
   const cost = await call.db.rpc<number | null>("ai_settle", { p_id: r.id, p_input_tokens: result.inputTokens, p_output_tokens: result.outputTokens, p_ok: true });
