@@ -18,6 +18,13 @@ export function RequireMember({ admin, player, children }: { admin?: boolean; pl
     );
   if (!profile) return <p className="msg">{t("auth.noRights")}</p>;
   const allowed = admin ? profile.role === "admin" : player || canCreate(profile);
+  if (!allowed && !admin)
+    return (
+      <div className="msg">
+        <p>{t("auth.notDeveloper")}</p>
+        <Link to="/apply" className="btn primary">{t("apply.title")}</Link>
+      </div>
+    );
   if (!allowed) return <p className="msg">{t("auth.noRights")}</p>;
   return <>{children}</>;
 }

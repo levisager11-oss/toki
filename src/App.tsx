@@ -17,6 +17,8 @@ const FeedbackBoard = lazy(() => import("./pages/FeedbackBoard").then((m) => ({ 
 const FeedbackPost = lazy(() => import("./pages/FeedbackPost").then((m) => ({ default: m.FeedbackPost })));
 const FeedbackInbox = lazy(() => import("./pages/FeedbackInbox").then((m) => ({ default: m.FeedbackInbox })));
 const Releases = lazy(() => import("./pages/Releases").then((m) => ({ default: m.Releases })));
+const Apply = lazy(() => import("./pages/Apply").then((m) => ({ default: m.Apply })));
+const Applications = lazy(() => import("./pages/Applications").then((m) => ({ default: m.Applications })));
 const Invites = lazy(() => import("./pages/Invites").then((m) => ({ default: m.Invites })));
 
 const Later = ({ children }: { children: ReactNode }) => <Suspense fallback={null}>{children}</Suspense>;
@@ -40,6 +42,8 @@ export function App() {
         <Route path="add" element={<RequireMember><Later><GameForm key="add" /></Later></RequireMember>} />
         <Route path="edit/:slug" element={<RequireMember><Later><GameForm /></Later></RequireMember>} />
         <Route path="account" element={<RequireMember player><Later><Account /></Later></RequireMember>} />
+        <Route path="apply" element={<RequireMember player><Later><Apply /></Later></RequireMember>} />
+        <Route path="applications" element={<RequireMember admin><Later><Applications /></Later></RequireMember>} />
         <Route path="invites" element={<RequireMember admin><Later><Invites /></Later></RequireMember>} />
         <Route path="*" element={<NotFound />} />
       </Route>

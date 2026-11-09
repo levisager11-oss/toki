@@ -534,3 +534,33 @@ a.fb-fixed:hover { text-decoration: underline; text-underline-offset: 3px; }
 .me-out:hover { color: var(--danger); background: var(--surface); }
 .me-guest { display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 0 8px; font-size: 14px; }
 .me-guest .linkish { text-align: center; }
+
+/* developer applications */
+.navgroup a .badge { margin-left: 8px; font-family: var(--f-px); font-size: 10px; background: var(--accent); color: var(--accent-ink); border: 1px solid var(--accent-ink); padding: 0 5px; vertical-align: 1px; }
+.dev-card { margin-top: 8px; border: 1px solid var(--line); border-left: 3px solid var(--accent); background: var(--surface); padding: 14px 16px; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.dev-card h2 { margin: 0; font-size: 18px; font-weight: 800; }
+.dev-card p { margin: 0; }
+.dev-card .check { align-self: stretch; }
+.dev-card .check p + p { margin-top: 4px; }
+.dev-invite { align-self: stretch; border-top: 1px solid var(--line); margin-top: 4px; }
+.dev-invite label { margin-top: 8px; }
+.dev-invite .btn { align-self: flex-start; margin-top: 8px; }
+.apply .check { margin: 0 0 8px; }
+.apply .check p + p { margin-top: 4px; }
+.apply-sent { border: 1px solid var(--line); background: var(--surface); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.apply-sent p { margin: 0; }
+.apply-sent h2 { margin: 8px 0 0; font-weight: 400; }
+.rv-list { display: flex; flex-direction: column; gap: 14px; }
+.rv { background: var(--surface); border: 1px solid var(--line); padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+.rv h3 { margin: 0 0 4px; font-weight: 400; }
+.rv-info { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+.rv-decide { border-top: 1px solid var(--line); padding-top: 4px; }
+.rv-decide .btn.primary { margin-top: 0; }
+.rv-trusted { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 18px; display: flex; flex-direction: column; gap: 8px; }
+.rv-trusted h2 { margin: 0; font-size: 18px; font-weight: 800; }
+.rv-trusted ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.rv-trusted li { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+@media (max-width: 860px) {
+  .rv { padding: 14px; }
+  .dev-card .btn { align-self: stretch; padding-block: 11px; }
+}

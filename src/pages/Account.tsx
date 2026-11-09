@@ -5,6 +5,7 @@ import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
 import { canCreate } from "../lib/types";
 import { SaveHistory } from "../components/SaveHistory";
+import { DeveloperCard } from "../components/DeveloperCard";
 import { MyFeedback } from "../components/MyFeedback";
 
 export function Account() {
@@ -40,13 +41,15 @@ export function Account() {
           <Link to="/feedback/inbox" className="btn">{t("fb.inbox.title")}</Link>
         </div>
       ) : (
-        <form className="form" onSubmit={redeem}>
-          <label htmlFor="code">{t("account.inviteTitle")}</label>
-          <small>{t("account.inviteHelp")}</small>
-          <input id="code" required value={code} onChange={(e) => setCode(e.target.value)} autoComplete="off" spellCheck={false} />
-          {err && <p className="error" role="alert">{err}</p>}
-          <button className="btn" disabled={busy}>{busy ? t("loading") : t("account.redeem")}</button>
-        </form>
+        <DeveloperCard>
+          <form className="form dev-invite" onSubmit={redeem}>
+            <label htmlFor="code">{t("account.inviteTitle")}</label>
+            <small>{t("account.inviteHelp")}</small>
+            <input id="code" required value={code} onChange={(e) => setCode(e.target.value)} autoComplete="off" spellCheck={false} />
+            {err && <p className="error" role="alert">{err}</p>}
+            <button className="btn" disabled={busy}>{busy ? t("loading") : t("account.redeem")}</button>
+          </form>
+        </DeveloperCard>
       )}
 
       <SaveHistory />

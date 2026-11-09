@@ -87,3 +87,15 @@ describe("ago", () => {
   });
   it("shows a date for old posts", () => expect(ago("2026-01-15T12:00:00Z", "en", now)).toMatch(/2026/));
 });
+
+describe("linkParts", () => {
+  it("turns https links into links and leaves the rest as text", async () => {
+    const { linkParts } = await import("../src/lib/applications");
+    expect(linkParts("My game: https://me.itch.io/game. And more")).toEqual([
+      { text: "My game: " }, { text: "https://me.itch.io/game", href: "https://me.itch.io/game" }, { text: ". And more" },
+    ]);
+    expect(linkParts("no links, http://old.example only")).toEqual([{ text: "no links, http://old.example only" }]);
+    expect(linkParts("(https://a.dev)")).toEqual([{ text: "(" }, { text: "https://a.dev", href: "https://a.dev" }, { text: ")" }]);
+    expect(linkParts("javascript:alert(1)")).toEqual([{ text: "javascript:alert(1)" }]);
+  });
+});
