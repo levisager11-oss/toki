@@ -23,9 +23,10 @@ export const releaseDate = (iso: string, lang: "en" | "de") =>
 export function ReleaseCard({ release, highlight, actions }: { release: Release; highlight?: boolean; actions?: ReactNode }) {
   const { t, lang } = useI18n();
   return (
-    <article id={`r-${release.id}`} className={`rel ${highlight ? "hl" : ""}`}>
+    <article id={`r-${release.id}`} className={`rel ${release.small ? "small" : ""} ${highlight ? "hl" : ""}`}>
       <header className="rel-head">
         <span className="ver">{release.version}</span>
+        {release.small && <span className="rel-tag">{t("rel.small")}</span>}
         <time dateTime={release.published_at}>{releaseDate(release.published_at, lang)}</time>
       </header>
       {release.title && <h2>{release.title}</h2>}

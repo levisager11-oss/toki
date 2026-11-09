@@ -10,12 +10,14 @@ import { githubRepos, type GitHubInfo } from "../lib/ai";
 import { assistError, draftRelease, useFreeAi } from "../lib/assist";
 
 /** Posting or editing an update, and choosing the feedback it fixes. */
-export function ReleaseForm({ gameId, release, suggestedVersion = "", onSaved, onCancel }: {
+export function ReleaseForm({ gameId, release, suggestedVersion = "", suggestedSmallVersion = "", onSaved, onCancel }: {
   /** null: an update of Toki itself */
   gameId: string | null;
   /** The update to edit; none for a new one. */
   release?: Release;
   suggestedVersion?: string;
+  /** The version to suggest when "small update" is ticked, e.g. 1.2.1. */
+  suggestedSmallVersion?: string;
   onSaved: () => void;
   onCancel: () => void;
 }) {
@@ -23,6 +25,7 @@ export function ReleaseForm({ gameId, release, suggestedVersion = "", onSaved, o
   const id = useId();
   const freeAi = useFreeAi();
   const [version, setVersion] = useState(release?.version ?? suggestedVersion);
+  const [small, setSmall] = useState(release?.small ?? false);
   const [title, setTitle] = useState(release?.title ?? "");
   const [notes, setNotes] = useState(release?.notes ?? "");
   const [fixable, setFixable] = useState<Fixable[] | null>(null);
@@ -48,12 +51,20 @@ export function ReleaseForm({ gameId, release, suggestedVersion = "", onSaved, o
       return next;
     });
 
+  // Ticking "small update" swaps the suggested version, unless the player typed their own.
+  const toggleSmall = (on: boolean) => {
+    setSmall(on);
+    if (release) return;
+    const [from, to] = on ? [suggestedVersion, suggestedSmallVersion] : [suggestedSmallVersion, suggestedVersion];
+    if (version === from && to) setVersion(to);
+  };
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setErr("");
     try {
-      const input = { version: version.trim(), title: title.trim() || null, notes: notes.trim() };
+      const input = { version: version.trim(), title: title.trim() || null, notes: notes.trim(), small };
       const saved = release ? await updateRelease(release.id, input) : await createRelease(gameId, input);
       const before = new Set(release?.fixed.map((f) => f.id));
       const changed = picked.size !== before.size || [...picked].some((p) => !before.has(p));
@@ -78,6 +89,10 @@ export function ReleaseForm({ gameId, release, suggestedVersion = "", onSaved, o
           <input id={`${id}-t`} maxLength={RELEASE_LIMITS.title} value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("rel.form.titleHelp")} autoComplete="off" />
         </div>
       </div>
+      <label className="fb-check">
+        <input type="checkbox" checked={small} onChange={(e) => toggleSmall(e.target.checked)} />
+        <span>{t("rel.form.small")} <span className="sub">· {t("rel.form.smallHelp")}</span></span>
+      </label>
       {freeAi && !release && (
         <ReleaseDraft
           gameId={gameId}

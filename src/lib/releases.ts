@@ -17,6 +17,8 @@ export interface Release {
   version: string;
   title: string | null;
   notes: string;
+  /** A quick fix (1.2.1) next to the main version (1.2): shown compactly under the main version. */
+  small: boolean;
   created_by: string | null;
   published_at: string;
   edited_at: string | null;
@@ -46,6 +48,7 @@ export interface ReleaseInput {
   version: string;
   title: string | null;
   notes: string;
+  small: boolean;
 }
 
 export async function createRelease(gameId: string | null, r: ReleaseInput): Promise<Release> {
@@ -117,6 +120,38 @@ export function noteBlocks(notes: string): NoteBlock[] {
   }
   flush();
   return blocks;
+}
+
+export interface ReleaseGroup {
+  /** The main version; none when only small updates exist. */
+  main: Release | null;
+  /** Small updates published after this main version (before the next one), newest first. */
+  small: Release[];
+}
+
+/** Newest first in, groups out: each main version with the small updates that came after it. */
+export function groupReleases(list: Release[]): ReleaseGroup[] {
+  const groups: ReleaseGroup[] = [];
+  let small: Release[] = [];
+  for (const r of list) {
+    if (r.small) small.push(r);
+    else {
+      groups.push({ main: r, small });
+      small = [];
+    }
+  }
+  if (small.length) groups.unshift({ main: null, small }); // only reachable when no main version is older
+  return groups;
+}
+
+/** The version for a new small update: "1.2" → "1.2.1", and "1.2.2" once "1.2.1" exists. `list` is newest first. */
+export function nextSmallVersion(list: Release[]): string {
+  const group = groupReleases(list).find((g) => g.main);
+  if (!group?.main) return "";
+  const base = group.main.version.trim();
+  const taken = new Set(list.map((r) => r.version));
+  for (let n = group.small.length + 1; n < 1000; n++) if (!taken.has(`${base}.${n}`)) return `${base}.${n}`;
+  return "";
 }
 
 /** A guess for the next version: "1.2" → "1.3", "v0.9.4" → "v0.9.5". Empty when there's no number to count up. */

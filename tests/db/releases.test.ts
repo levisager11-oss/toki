@@ -62,6 +62,16 @@ describe("release notes", () => {
     await expect(release(admin, null, "2.0")).rejects.toThrow(/duplicate key/);
   });
 
+  it("marks small updates, off by default, and lets the developer set it", async () => {
+    const r = await release(dev);
+    expect((await t.admin<{ small: boolean }>("select small from game_releases where id = $1", [r.id]))[0].small).toBe(false);
+    const [s] = await t.as<{ small: boolean }>(dev, "insert into game_releases (game_id, version, notes, small) values ($1, '9.1.1', '- Fix', true) returning small", [game.id]);
+    expect(s.small).toBe(true);
+    const [u] = await t.as<{ small: boolean }>(dev, "update game_releases set small = true where id = $1 returning small", [r.id]);
+    expect(u.small).toBe(true);
+    await expect(t.as(player, "update game_releases set small = true where id = $1", [r.id])).resolves.toHaveLength(0);
+  });
+
   it("lets the developer edit and delete, not others", async () => {
     const r = await release(dev);
     expect(await t.as(otherDev, "update game_releases set notes = 'x' where id = $1 returning id", [r.id])).toHaveLength(0);
