@@ -22,8 +22,10 @@ import { github, GitHubError } from "../server/github.js";
 import { body, context, isUuid, json, type Ctx } from "../server/http.js";
 import type { ChatMessage } from "../server/ai/provider.js";
 
-// Vercel gives this function a minute; leave room to answer.
-const TIMEOUT_MS = 50_000;
+// Vercel gives this function 5 minutes (vercel.json). Players and developers wait for most
+// answers, so those get 90 seconds; learning a game from its code may take longer.
+const TIMEOUT_MS = 90_000;
+const LEARN_TIMEOUT_MS = 280_000;
 
 export async function POST(request: Request) {
   const ctx = await context(request, ["admin", "creator", "player"]);
@@ -72,8 +74,8 @@ const hash = (s: string) => createHash("sha256").update(s).digest("hex");
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
 /** One call to the free AI, without a token limit (tokens cost nothing there). */
-async function ask(ctx: Ctx, feature: FreeFeature, messages: ChatMessage[], temperature = 0.2): Promise<string> {
-  const c = await freeCompletion({ db: ctx.db, apiKey: ctx.env.aiKey, userId: ctx.user.id, feature, messages, temperature, timeoutMs: TIMEOUT_MS });
+async function ask(ctx: Ctx, feature: FreeFeature, messages: ChatMessage[], temperature = 0.2, timeoutMs = TIMEOUT_MS): Promise<string> {
+  const c = await freeCompletion({ db: ctx.db, apiKey: ctx.env.aiKey, userId: ctx.user.id, feature, messages, temperature, timeoutMs });
   return c.text;
 }
 
@@ -372,7 +374,7 @@ async function helpSetup(ctx: Ctx, b: Record<string, unknown>) {
       files[p] = c;
       total += c.length;
     }
-    const answer = await ask(ctx, "learn", learnPrompt(g, files), 0.2);
+    const answer = await ask(ctx, "learn", learnPrompt(g, files), 0.2, LEARN_TIMEOUT_MS);
     const guide = plain(answer, 8000);
     if (!guide) return json({ error: "ai_empty_answer" }, 502);
     Object.assign(row, { installation_id: installation, repo, guide, learned_at: new Date().toISOString() });
