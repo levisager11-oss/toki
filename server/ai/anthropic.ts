@@ -1,6 +1,6 @@
 // Anthropic (Claude) as AI provider, through the official SDK.
 import Anthropic from "@anthropic-ai/sdk";
-import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
+import type { MessageParam, TextBlockParam } from "@anthropic-ai/sdk/resources/messages";
 import { AiError, TIMEOUT_MS, type ChatMessage, type Completion, type ModelInfo, type Thinking } from "./provider.js";
 
 export const ANTHROPIC_URL = "https://api.anthropic.com";
@@ -62,12 +62,16 @@ export async function anthropicComplete(
   req: { messages: ChatMessage[]; maxTokens: number },
   fetchImpl?: typeof fetch,
 ): Promise<Completion> {
-  const system = req.messages.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
+  // Parts marked "cache" get a cache breakpoint: the next call with the same beginning reads them
+  // from the cache at a tenth of the price. (Consecutive user messages become one turn.)
+  const cacheControl = { type: "ephemeral" as const };
+  const systemParts = req.messages.filter((m) => m.role === "system");
+  const system: TextBlockParam[] = systemParts.map((m) => ({ type: "text", text: m.content, ...(m.cache ? { cache_control: cacheControl } : {}) }));
   const messages: MessageParam[] = req.messages
     .filter((m) => m.role !== "system")
-    .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+    .map((m) => ({ role: m.role as "user" | "assistant", content: [{ type: "text", text: m.content, ...(m.cache ? { cache_control: cacheControl } : {}) }] }));
   const effort = effortFor(config.thinking);
-  const plain = { model: config.model, max_tokens: req.maxTokens, messages, ...(system ? { system } : {}) };
+  const plain = { model: config.model, max_tokens: req.maxTokens, messages, ...(system.length ? { system } : {}) };
   try {
     const c = client(config, fetchImpl);
     // Streamed, because requests can be large and take a while.
@@ -93,7 +97,8 @@ export async function anthropicComplete(
     const u = msg.usage;
     return {
       text,
-      inputTokens: u.input_tokens + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0),
+      // In what they cost: writing to the cache costs 1.25 times the input price, reading 0.1 times.
+      inputTokens: Math.ceil(u.input_tokens + 1.25 * (u.cache_creation_input_tokens ?? 0) + 0.1 * (u.cache_read_input_tokens ?? 0)),
       outputTokens: u.output_tokens,
       estimated: false,
     };

@@ -641,17 +641,33 @@ describe("Anthropic provider", () => {
     return { url: String(url instanceof Request ? url.url : url), body: init.body ? JSON.parse(String(init.body)) : null, headers: new Headers(init.headers) };
   };
 
-  it("sends the system text separately, streams, and counts all input tokens", async () => {
+  it("sends the system text separately, streams, and counts input tokens by what they cost", async () => {
     const f = sse("OK");
     const c = await complete(cfg, { messages: [{ role: "system", content: "Be brief." }, { role: "user", content: "hi" }], maxTokens: 64 }, f);
-    expect(c).toEqual({ text: "OK", inputTokens: 15, outputTokens: 5, estimated: false });
+    // 12 input tokens, and 3 read from the cache at a tenth of the price
+    expect(c).toEqual({ text: "OK", inputTokens: 13, outputTokens: 5, estimated: false });
     const { url, body, headers } = sent(f);
     expect(url).toContain("https://api.anthropic.com/v1/messages");
     expect(headers.get("authorization") ?? headers.get("x-api-key")).toContain("sk-ant-test");
-    expect(body).toMatchObject({ model: "claude-opus-5-5", max_tokens: 64, system: "Be brief.", stream: true, messages: [{ role: "user", content: "hi" }] });
+    expect(body).toMatchObject({ model: "claude-opus-5-5", max_tokens: 64, system: [{ type: "text", text: "Be brief." }], stream: true, messages: [{ role: "user", content: [{ type: "text", text: "hi" }] }] });
+    expect(body.system[0].cache_control).toBeUndefined();
     // This model gets the server-side fallback.
     expect(body.fallbacks).toBe("default");
     expect(headers.get("anthropic-beta")).toContain("server-side-fallback-2026-07-01");
+  });
+
+  it("caches the parts that stay the same between calls", async () => {
+    const f = sse("OK");
+    await complete(cfg, {
+      messages: [{ role: "system", content: "Rules", cache: true }, { role: "user", content: "Files", cache: true }, { role: "user", content: "Answers" }],
+      maxTokens: 64,
+    }, f);
+    const { body } = sent(f);
+    expect(body.system).toEqual([{ type: "text", text: "Rules", cache_control: { type: "ephemeral" } }]);
+    expect(body.messages).toEqual([
+      { role: "user", content: [{ type: "text", text: "Files", cache_control: { type: "ephemeral" } }] },
+      { role: "user", content: [{ type: "text", text: "Answers" }] },
+    ]);
   });
 
   it("leaves the fallback out for other models and uses a custom address", async () => {

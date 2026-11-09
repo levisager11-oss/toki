@@ -369,15 +369,19 @@ ${shapes}`;
       .map(([p, c]) => `<file path="${p}">\n${c}\n</file>`)
       .join("\n")}`,
   );
+  // Everything above stays the same from step to step (until more files are read), so it's a
+  // separate, cached part; the conversation and Toki's notes below change.
+  const later: string[] = [];
   const talk = messages.flatMap((m) =>
     m.kind === "question" ? [`You asked: ${m.text}\n${m.questions.map((q) => `- (${q.id}) ${q.text}`).join("\n")}`]
     : m.kind === "answer" ? [`The developer answered:\n${m.answers.map((x) => `- (${x.id}) ${x.answer}`).join("\n")}`]
     : [],
   );
-  if (talk.length) parts.push(`Conversation with the developer:\n${talk.join("\n\n")}`);
-  if (state.feedback) parts.push(`Note from Toki about your last answer:\n${state.feedback}`);
+  if (talk.length) later.push(`Conversation with the developer:\n${talk.join("\n\n")}`);
+  if (state.feedback) later.push(`Note from Toki about your last answer:\n${state.feedback}`);
   return [
-    { role: "system", content: system },
-    { role: "user", content: parts.join("\n\n") },
+    { role: "system", content: system, cache: true },
+    { role: "user", content: parts.join("\n\n"), cache: true },
+    ...(later.length ? [{ role: "user" as const, content: later.join("\n\n") }] : []),
   ];
 }

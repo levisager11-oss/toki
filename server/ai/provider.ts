@@ -6,6 +6,8 @@ import { anthropicComplete, anthropicModels } from "./anthropic.js";
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
   content: string;
+  /** Anthropic: this part stays the same between calls, so cache it (other providers ignore it). */
+  cache?: boolean;
 }
 
 export interface Completion {
@@ -147,7 +149,7 @@ async function openaiCompatible(
         headers: { "content-type": "application/json", authorization: `Bearer ${config.apiKey}` },
         body: JSON.stringify({
           model: config.model,
-          messages: withNoThink(req.messages, config.thinking),
+          messages: withNoThink(req.messages, config.thinking).map(({ role, content }) => ({ role, content })),
           ...thinkingFields(config.thinking, quirks),
           // 0: no limit, the model may use as many tokens as it can (the free AI).
           ...(req.maxTokens > 0 ? { max_tokens: req.maxTokens } : {}),
