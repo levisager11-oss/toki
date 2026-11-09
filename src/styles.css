@@ -617,6 +617,7 @@ a.author:hover { text-decoration: underline; color: var(--fg); }
 .board li:nth-child(-n+3) .rank { color: var(--fg); }
 .board .person { flex: 1; }
 .leaderboard .check { margin-bottom: 10px; max-width: 560px; }
+.leaderboard { scroll-margin-top: 90px; }
 
 @media (max-width: 860px) {
   .chat-layout { grid-template-columns: minmax(0, 1fr); border-left: 0; border-right: 0; margin: -20px calc(-1 * max(16px, env(safe-area-inset-left, 0px))) 0; min-height: 0; }

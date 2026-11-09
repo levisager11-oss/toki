@@ -85,11 +85,15 @@ export function ChatView({ chatId, kind, compact }: { chatId: string; kind: Chat
     if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
   };
 
+  const [loadingEarlier, setLoadingEarlier] = useState(false);
   const loadEarlier = async () => {
-    if (!messages?.length) return;
+    if (!messages?.length || loadingEarlier) return;
+    setLoadingEarlier(true);
     const el = list.current;
     const before = el ? el.scrollHeight - el.scrollTop : 0;
-    const older = await listMessages(chatId, messages[0].id).catch(() => [] as Message[]);
+    const older = await listMessages(chatId, messages[0].id).catch(() => null);
+    setLoadingEarlier(false);
+    if (!older) return setErr(t("error"));
     remember(older);
     setMore(older.length === MESSAGE_PAGE);
     stick.current = false;
@@ -157,7 +161,7 @@ export function ChatView({ chatId, kind, compact }: { chatId: string; kind: Chat
   return (
     <div className={`chat-view ${compact ? "compact" : ""}`}>
       <div className="messages" ref={list} onScroll={onScroll} aria-live="polite" aria-busy={messages === null}>
-        {more && <button type="button" className="linkish earlier" onClick={loadEarlier}>{t("chat.earlier")}</button>}
+        {more && <button type="button" className="linkish earlier" onClick={loadEarlier} disabled={loadingEarlier}>{t("chat.earlier")}</button>}
         {messages === null && !err && <p className="msg">{t("loading")}</p>}
         {messages?.length === 0 && <p className="msg empty">{t(kind === "public" || kind === "game" ? "chat.emptyRoom" : "chat.empty")}</p>}
         {messages?.map((m, i) => {

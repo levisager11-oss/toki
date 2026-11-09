@@ -47,8 +47,19 @@ export function Layout() {
     setQ(params.get("q") ?? "");
   }, [params]);
   useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [location.pathname]);
+    if (!location.hash) {
+      window.scrollTo(0, 0);
+      return;
+    }
+    // A link to a part of a page (e.g. a game's high scores): wait for it to load, then go there.
+    let tries = 0;
+    const id = setInterval(() => {
+      const el = document.getElementById(decodeURIComponent(location.hash.slice(1)));
+      if (el) el.scrollIntoView({ block: "start" });
+      if (el || ++tries > 30) clearInterval(id);
+    }, 150);
+    return () => clearInterval(id);
+  }, [location.pathname, location.hash]);
   useEffect(() => {
     // Only game pages can be isolated (the game page checks its own game).
     if (pageIsolated() && !GAME_PAGE.test(location.pathname)) matchIsolation(false);

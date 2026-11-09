@@ -294,7 +294,8 @@ export function GameForm() {
           {err && <p className="error" role="alert">{err}</p>}
           <div className="actions">
             <button className="btn primary" disabled={busy}>{busy ? t("form.saving") : t("form.save")}</button>
-            <button type="button" className="btn" onClick={() => navigate(-1)}>{t("form.cancel")}</button>
+            {/* Back where they came from; opened from a link (nothing to go back to): to their games. */}
+            <button type="button" className="btn" onClick={() => ((window.history.state?.idx ?? 0) > 0 ? navigate(-1) : navigate(orig ? `/game/${orig.slug}` : "/my-games"))}>{t("form.cancel")}</button>
             {orig && (
               confirmDelete ? (
                 <button type="button" className="btn danger" onClick={remove} disabled={busy}>{t("form.confirmDelete")}</button>

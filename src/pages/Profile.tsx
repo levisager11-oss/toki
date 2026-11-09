@@ -30,6 +30,14 @@ export function Profile() {
   const [confirmBlock, setConfirmBlock] = useState(false);
   const userId = session?.user.id;
 
+  // Another player's page: don't show the last one's details while this one loads.
+  useEffect(() => {
+    setP(undefined);
+    setScores([]);
+    setErr("");
+    setConfirmBlock(false);
+  }, [username]);
+
   useEffect(() => {
     if (!ready) return;
     let alive = true;

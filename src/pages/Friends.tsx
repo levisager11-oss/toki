@@ -19,6 +19,8 @@ export function Friends() {
   const [blocked, setBlocked] = useState<Person[]>([]);
   const [q, setQ] = useState("");
   const [found, setFound] = useState<Person[]>([]);
+  // The search the list belongs to, so "nobody found" only shows for a finished search.
+  const [foundFor, setFoundFor] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
@@ -33,9 +35,15 @@ export function Friends() {
   }, [reload, t]);
 
   useEffect(() => {
-    const id = setTimeout(() => findPlayers(q).then(setFound, () => setFound([])), 250);
-    return () => clearTimeout(id);
+    // An older, slower search must not replace the results of a newer one.
+    let alive = true;
+    const id = setTimeout(() => findPlayers(q).then((f) => alive && (setFound(f), setFoundFor(q)), () => alive && setFound([])), 250);
+    return () => {
+      alive = false;
+      clearTimeout(id);
+    };
   }, [q]);
+  const searched = q.trim().replace(/^@/, "").length >= 2 && foundFor === q;
 
   const act = async (id: string, fn: () => Promise<unknown>) => {
     setErr("");
@@ -69,6 +77,7 @@ export function Friends() {
         <label htmlFor="find">{t("soc.findPlayers")}</label>
         <input id="find" value={q} onChange={(e) => setQ(e.target.value)} placeholder="@username" autoComplete="off" autoCapitalize="none" spellCheck={false} />
       </form>
+      {searched && found.filter((p) => p.id !== profile?.id).length === 0 && <p className="hint">{t("soc.nobodyFound")}</p>}
       {found.length > 0 && (
         <ul className="people">
           {found.filter((p) => p.id !== profile?.id).map((p) => {
