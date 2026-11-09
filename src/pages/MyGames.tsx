@@ -43,7 +43,7 @@ export function MyGames() {
       {list.length === 0 ? (
         <p className="msg">{t("my.empty")}</p>
       ) : (
-        <ul className="table">
+        <ul className="table my-list">
           {list.map((g) => (
             <li key={g.id}>
               <Cover slug={g.slug} cover={g.cover} image={g.thumbnail_url} />
