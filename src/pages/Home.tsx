@@ -12,6 +12,7 @@ import { PlayIcon } from "../components/icons";
 import type { Category, Game } from "../lib/types";
 
 const ROTATE_MS = 8000;
+const MAX_SLIDES = 4;
 const SORT_KEY = "toki.sort";
 const SORTS = ["new", "popular", "liked", "updated"] as const;
 type Sort = (typeof SORTS)[number];
@@ -32,7 +33,6 @@ function savedSort(): Sort {
     return "new";
   }
 }
-const MAX_SLIDES = 4;
 
 export function Home() {
   const { t } = useI18n();

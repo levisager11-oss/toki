@@ -70,7 +70,8 @@ export function Layout() {
       if (el || ++tries > 30) clearInterval(id);
     }, 150);
     return () => clearInterval(id);
-    // Only a new page counts, not e.g. the search text changing on the home page.
+    // Only a new page counts, not e.g. the search text changing on the home page (navType
+    // is read for the change that led here).
   }, [location.pathname, location.hash]);
   useEffect(() => {
     // Only game pages can be isolated (the game page checks its own game).
