@@ -12,6 +12,9 @@ import { GameGrid, Plays } from "../components/GameCard";
 import { FavButton } from "../components/FavButton";
 import { GameFeedback } from "../components/GameFeedback";
 import { GameUpdates } from "../components/GameUpdates";
+import { GameChat } from "../components/GameChat";
+import { Leaderboard, useScoreBridge } from "../components/Leaderboard";
+import { setPlaying } from "../lib/presence";
 import { CloseIcon, FullscreenIcon, ShareIcon } from "../components/icons";
 
 const LANDSCAPE_PHONE = "(orientation: landscape) and (pointer: coarse) and (max-height: 600px)";
@@ -36,6 +39,7 @@ export function GamePage() {
   const gameId = game?.id;
   const userId = session?.user.id;
   const saves = useSaveBridge(gameFrame, gameId, game?.play_url, userId);
+  const scores = useScoreBridge(gameFrame, game, userId);
   // Loads the game again, e.g. to continue from newer progress made on another device.
   const [frameRun, setFrameRun] = useState(0);
   const isolated = game?.needs_isolation === true;
@@ -43,6 +47,12 @@ export function GamePage() {
   useEffect(() => {
     if (game) matchIsolation(isolated);
   }, [game, isolated]);
+
+  // Friends see which game is open.
+  useEffect(() => {
+    setPlaying(gameId ?? null);
+    return () => setPlaying(null);
+  }, [gameId]);
 
   useEffect(() => {
     if (!gameId) return;
@@ -170,7 +180,7 @@ export function GamePage() {
           <div className="info">
             <h1>{game.title}</h1>
             <span className="sub">
-              {t("game.by")} <b>{game.author ? `@${game.author.username}` : "Toki"}</b>
+              {t("game.by")} {game.author ? <Link to={`/u/${game.author.username}`}><b>@{game.author.username}</b></Link> : <b>Toki</b>}
               {game.engine ? ` · ${game.engine}` : ""} · {t(`cat.${game.category}`)}
               {plays(game) > 0 && <> · <Plays game={game} /></>}
             </span>
@@ -230,7 +240,9 @@ export function GamePage() {
         </section>
       )}
 
+      <Leaderboard game={game} version={scores.version} last={scores.last} />
       <GameUpdates game={game} />
+      <GameChat game={game} />
       <GameFeedback game={game} />
 
       {more.length > 0 && (

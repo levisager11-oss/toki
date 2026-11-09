@@ -1,8 +1,10 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import { stopAccountSaves } from "./saves";
 import { syncAccountLikes } from "./local";
+import { usePresence } from "./presence";
+import { useBadgeUpdates } from "./useBadges";
 import type { Profile } from "./types";
 
 interface AuthState {
@@ -12,15 +14,19 @@ interface AuthState {
   /** true once it is known whether someone is logged in on this device. */
   ready: boolean;
   signOut: () => Promise<void>;
+  /** Loads the profile again, e.g. after changing the avatar. */
+  reloadProfile: () => void;
 }
 
-const AuthContext = createContext<AuthState>({ session: null, profile: null, loading: true, ready: false, signOut: async () => {} });
+const AuthContext = createContext<AuthState>({ session: null, profile: null, loading: true, ready: false, signOut: async () => {}, reloadProfile: () => {} });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [ready, setReady] = useState(false);
+  const [profileRun, setProfileRun] = useState(0);
+  const loadedFor = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -39,17 +45,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (ready) syncAccountLikes(userId ?? null);
   }, [ready, userId]);
+  usePresence(userId);
+  useBadgeUpdates(userId);
 
   useEffect(() => {
     if (!userId) {
+      loadedFor.current = undefined;
       setProfile(null);
       return;
     }
     let alive = true;
-    setLoading(true);
+    // Reloading the same account's profile keeps the page as it is (no "loading" in between).
+    if (loadedFor.current !== userId) setLoading(true);
+    loadedFor.current = userId;
     supabase
       .from("profiles")
-      .select("id, username, role")
+      .select("id, username, role, bio, avatar_url, avatar_seed")
       .eq("id", userId)
       .maybeSingle()
       .then(({ data }) => {
@@ -60,14 +71,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       alive = false;
     };
-  }, [userId]);
+  }, [userId, profileRun]);
 
   const signOut = async () => {
     stopAccountSaves(); // nothing goes up to the account on the way out
     await supabase.auth.signOut();
   };
 
-  return <AuthContext.Provider value={{ session, profile, loading, ready, signOut }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ session, profile, loading, ready, signOut, reloadProfile: () => setProfileRun((n) => n + 1) }}>{children}</AuthContext.Provider>;
 }
 
 export const useAuth = () => useContext(AuthContext);

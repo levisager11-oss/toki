@@ -17,6 +17,11 @@ const FeedbackBoard = lazy(() => import("./pages/FeedbackBoard").then((m) => ({ 
 const FeedbackPost = lazy(() => import("./pages/FeedbackPost").then((m) => ({ default: m.FeedbackPost })));
 const FeedbackInbox = lazy(() => import("./pages/FeedbackInbox").then((m) => ({ default: m.FeedbackInbox })));
 const Releases = lazy(() => import("./pages/Releases").then((m) => ({ default: m.Releases })));
+const Profile = lazy(() => import("./pages/Profile").then((m) => ({ default: m.Profile })));
+const Friends = lazy(() => import("./pages/Friends").then((m) => ({ default: m.Friends })));
+const Chat = lazy(() => import("./pages/Chat").then((m) => ({ default: m.Chat })));
+const Notifications = lazy(() => import("./pages/Notifications").then((m) => ({ default: m.Notifications })));
+const Reports = lazy(() => import("./pages/Reports").then((m) => ({ default: m.Reports })));
 const Invites = lazy(() => import("./pages/Invites").then((m) => ({ default: m.Invites })));
 
 const Later = ({ children }: { children: ReactNode }) => <Suspense fallback={null}>{children}</Suspense>;
@@ -40,6 +45,12 @@ export function App() {
         <Route path="add" element={<RequireMember><Later><GameForm key="add" /></Later></RequireMember>} />
         <Route path="edit/:slug" element={<RequireMember><Later><GameForm /></Later></RequireMember>} />
         <Route path="account" element={<RequireMember player><Later><Account /></Later></RequireMember>} />
+        <Route path="u/:username" element={<Later><Profile /></Later>} />
+        <Route path="friends" element={<RequireMember player><Later><Friends /></Later></RequireMember>} />
+        <Route path="chat" element={<RequireMember player><Later><Chat /></Later></RequireMember>} />
+        <Route path="chat/:id" element={<RequireMember player><Later><Chat /></Later></RequireMember>} />
+        <Route path="notifications" element={<RequireMember player><Later><Notifications /></Later></RequireMember>} />
+        <Route path="reports" element={<RequireMember admin><Later><Reports /></Later></RequireMember>} />
         <Route path="invites" element={<RequireMember admin><Later><Invites /></Later></RequireMember>} />
         <Route path="*" element={<NotFound />} />
       </Route>

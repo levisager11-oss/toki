@@ -37,6 +37,8 @@ export function GameForm() {
   const [featured, setFeatured] = useState(false);
   const [isolation, setIsolation] = useState(false);
   const [shots, setShots] = useState<string[]>([]);
+  const [scoreOrder, setScoreOrder] = useState<"high" | "low">("high");
+  const [scoreFormat, setScoreFormat] = useState<"points" | "time">("points");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -60,6 +62,8 @@ export function GameForm() {
       setFeatured(g.featured);
       setIsolation(g.needs_isolation === true);
       setShots(g.screenshots ?? []);
+      setScoreOrder(g.score_order ?? "high");
+      setScoreFormat(g.score_format ?? "points");
     });
   }, [editSlug]);
 
@@ -121,6 +125,8 @@ export function GameForm() {
       screenshots: shots,
       featured, // the database un-features the previous game
       needs_isolation: isolation,
+      score_order: scoreOrder,
+      score_format: scoreFormat,
     };
     setBusy(true);
     const res = orig
@@ -179,6 +185,24 @@ export function GameForm() {
               <input id="engine" maxLength={30} placeholder="Godot, Unity, Phaser…" value={engine} onChange={(e) => setEngine(e.target.value)} />
             </div>
           </div>
+
+          <div className="pair">
+            <div>
+              <label htmlFor="score-order">{t("form.scores")}</label>
+              <select id="score-order" value={scoreOrder} onChange={(e) => setScoreOrder(e.target.value as "high" | "low")} aria-describedby="scores-help">
+                <option value="high">{t("form.scoreOrder.high")}</option>
+                <option value="low">{t("form.scoreOrder.low")}</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor="score-format" className="sr-only">{t("form.scores")}</label>
+              <select id="score-format" value={scoreFormat} onChange={(e) => setScoreFormat(e.target.value as "points" | "time")} style={{ marginTop: "auto" }}>
+                <option value="points">{t("form.scoreFormat.points")}</option>
+                <option value="time">{t("form.scoreFormat.time")}</option>
+              </select>
+            </div>
+          </div>
+          <small id="scores-help">{t("form.scoresHelp")}</small>
 
           <label htmlFor="description">{t("form.description")}</label>
           <textarea id="description" rows={3} maxLength={1000} value={description} onChange={(e) => setDescription(e.target.value)} />

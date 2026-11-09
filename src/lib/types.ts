@@ -7,6 +7,9 @@ export interface Profile {
   id: string;
   username: string;
   role: Role;
+  bio?: string;
+  avatar_url?: string | null;
+  avatar_seed?: string | null;
 }
 
 export interface Game {
@@ -28,6 +31,10 @@ export interface Game {
   screenshots: string[];
   /** Earlier addresses of the game, newest first. Old links still lead to it. */
   old_slugs?: string[];
+  /** High scores: is a higher or a lower score better (e.g. a time)? */
+  score_order?: "high" | "low";
+  /** High scores are points, or a time in milliseconds. */
+  score_format?: "points" | "time";
   /** The game only runs with cross-origin isolation (e.g. Godot 4 with threads). Off for most games. */
   needs_isolation?: boolean;
   author?: { username: string } | null;

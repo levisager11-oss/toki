@@ -34,7 +34,7 @@ export function GameCard({ game }: { game: Game }) {
         <div className="info">
           <Link to={`/game/${game.slug}`} className="title">{game.title}</Link>
           <span className="sub">
-            {by(game)}
+            {game.author ? <Link to={`/u/${game.author.username}`} className="author">@{game.author.username}</Link> : "Toki"}
             {game.engine ? ` · ${game.engine}` : ""}
           </span>
           <Plays game={game} />
