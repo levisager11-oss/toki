@@ -104,7 +104,7 @@ function Featured({ slides }: { slides: Game[] }) {
       onBlur={() => setPaused(false)}
     >
       <Link to={`/game/${game.slug}`} className="feature-cover" tabIndex={-1} aria-hidden="true">
-        <Cover key={game.id} slug={game.slug} cover={game.cover} image={game.thumbnail_url} wide animate="always" />
+        <Cover key={game.id} slug={game.slug} cover={game.cover} image={game.thumbnail_url} wide fit animate="always" />
       </Link>
       <div className="txt" key={game.id}>
         <span className="label">{game.featured ? t("home.featured") : t("home.popular")}</span>

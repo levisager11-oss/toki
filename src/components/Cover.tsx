@@ -7,6 +7,8 @@ interface Props {
   image?: string | null;
   alt?: string;
   wide?: boolean;
+  /** Show all of an uploaded image, with a blurred copy of it filling the space around (for frames of another shape). */
+  fit?: boolean;
   className?: string;
   /** "hover": moves while the pointer is over the surrounding card. "always": keeps moving. */
   animate?: "hover" | "always";
@@ -16,7 +18,7 @@ const FRAME_MS = 140;
 const reducedMotion = () => typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 // Shows the uploaded image if there is one, otherwise a pixel scene.
-export function Cover({ slug, cover, image, alt = "", wide, className, animate }: Props) {
+export function Cover({ slug, cover, image, alt = "", wide, fit, className, animate }: Props) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [hovered, setHovered] = useState(false);
   const name = coverFor(slug, cover);
@@ -53,6 +55,13 @@ export function Cover({ slug, cover, image, alt = "", wide, className, animate }
     };
   }, [image, name, slug, w, h, moving]);
 
+  if (image && fit)
+    return (
+      <span className={`cover fit ${className ?? ""}`}>
+        <img className="fit-bg" src={image} alt="" aria-hidden="true" decoding="async" />
+        <img className="fit-img" src={image} alt={alt} decoding="async" />
+      </span>
+    );
   if (image) return <img className={`cover ${className ?? ""}`} src={image} alt={alt} loading="lazy" decoding="async" />;
   return <canvas ref={ref} width={w} height={h} className={`cover pixel ${className ?? ""}`} role={alt ? "img" : undefined} aria-label={alt || undefined} aria-hidden={alt ? undefined : true} />;
 }
