@@ -4,6 +4,7 @@ import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
 import { useGames } from "../lib/useGames";
 import { ago, getPost, type FeedbackPost } from "../lib/feedback";
+import { useAiStatus } from "../lib/assist";
 import {
   ApiError, connectError, githubDisconnect, githubInstallLink, githubRepos, myBudget, myJobs, startJob, usd,
   type Budget, type ConnectJob, type Feature, type GitHubInfo,
@@ -17,6 +18,8 @@ export function Connect() {
   const location = useLocation();
   const navigate = useNavigate();
   const [budget, setBudget] = useState<Budget | null>(null);
+  // Without the strong AI, this page is only for connecting GitHub (the free AI helpers read it too).
+  const { strong } = useAiStatus();
   const [gh, setGh] = useState<GitHubInfo | null>(null);
   const [jobs, setJobs] = useState<ConnectJob[] | null>(null);
   const [error, setError] = useState(false);
@@ -86,9 +89,9 @@ export function Connect() {
   return (
     <section className="fb-board connect">
       <h1 className="h">{t("connect.title")}</h1>
-      <p className="lead">{t("connect.lead")}</p>
+      <p className="lead">{t(strong ? "connect.lead" : "connect.leadGithubOnly")}</p>
 
-      <div className="ai-card connect-budget">
+      {strong && <div className="ai-card connect-budget">
         <p>{budget.quota === null ? t("connect.budgetAdmin", { spent: usd(budget.spent) }) : t("connect.budget", { spent: usd(budget.spent), quota: usd(budget.quota) })}</p>
         {budget.quota !== null && (
           <div className="meter" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)} aria-label={t("ai.month")}>
@@ -96,7 +99,7 @@ export function Connect() {
           </div>
         )}
         {blocked && <p className="check warn">{blocked}</p>}
-      </div>
+      </div>}
 
       <section className="ai-card" aria-labelledby="gh-h">
         <h2 id="gh-h">{t("connect.github")}</h2>
@@ -132,7 +135,7 @@ export function Connect() {
         )}
       </section>
 
-      {active ? (
+      {!strong ? null : active ? (
         <div className="check">
           <p>{t("connect.active")} <Link to={`/connect/${active.id}`}>{t("connect.open")}</Link></p>
         </div>

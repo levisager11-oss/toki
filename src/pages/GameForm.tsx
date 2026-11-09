@@ -12,6 +12,7 @@ import { NotFound } from "./NotFound";
 import { LinkCheck } from "../components/LinkCheck";
 import { SaveSupport } from "../components/SaveSupport";
 import { AiBox } from "../components/AiBits";
+import { HelperSetup } from "../components/HelperSetup";
 import { assistError, describeGame, useFreeAi } from "../lib/assist";
 
 const MAX_IMAGE = 2 * 1024 * 1024;
@@ -295,6 +296,8 @@ export function GameForm() {
             </div>
           )}
         </div>
+
+        {orig && <HelperSetup gameId={orig.id} />}
 
         <div className="form-foot">
           {err && <p className="error" role="alert">{err}</p>}

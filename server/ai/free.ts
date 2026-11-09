@@ -4,7 +4,7 @@
 import type { Db } from "../db.js";
 import { AiError, complete, type ChatMessage, type Completion } from "./provider.js";
 
-export type FreeFeature = "translate" | "similar" | "suggest" | "release" | "describe" | "summary" | "connect" | "test";
+export type FreeFeature = "translate" | "similar" | "suggest" | "help" | "learn" | "release" | "describe" | "summary" | "connect" | "test";
 
 export interface FreeSettings {
   free_enabled: boolean;

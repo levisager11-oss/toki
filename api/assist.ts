@@ -13,6 +13,8 @@ import {
   similarPrompt, suggestPrompt, translatePrompt, type CatalogGame, type InboxPost, type Lang,
 } from "../server/assist/prompts.js";
 import { linksIn, readPage } from "../server/assist/pages.js";
+import { cleanTurns, guideFiles, helpPrompt, learnPrompt, type HelpGame } from "../server/assist/help.js";
+import { pickFiles } from "../server/connect/files.js";
 import { errorDetail } from "../server/connect/agent.js";
 import { DbError, userDb, type Db } from "../server/db.js";
 import { githubConfigured } from "../server/env.js";
@@ -45,6 +47,10 @@ export async function POST(request: Request) {
         return await summary(ctx, b, lang);
       case "application":
         return await application(ctx, b, lang);
+      case "help":
+        return await help(ctx, b, lang);
+      case "help_setup":
+        return await helpSetup(ctx, b);
       case "test":
         return await test(ctx);
       default:
@@ -304,6 +310,76 @@ async function application(ctx: Ctx, b: Record<string, unknown>, lang: Lang) {
   const pages = await Promise.all(linksIn(`${app.links}\n${app.about}`).map((u) => readPage(u)));
   const answer = await ask(ctx, "summary", applicationPrompt(app, pages, lang), 1500, 0.2);
   return json({ text: plain(answer, 2000) });
+}
+
+// ---------- the game helper ("Ask AI") ----------
+
+async function help(ctx: Ctx, b: Record<string, unknown>, lang: Lang) {
+  const turns = cleanTurns(b.messages);
+  if (!turns.length) return json({ error: "bad_request" }, 400);
+  let game: HelpGame | null = null;
+  if (isUuid(b.game_id)) {
+    const [g] = await ctx.db.select<{ title: string; slug: string; category: string; description: string; description_de: string | null; controls: string; author: { username: string } | null }>(
+      "games",
+      `id=eq.${b.game_id}&select=title,slug,category,description,description_de,controls,author:profiles!games_created_by_fkey(username)`,
+    );
+    if (!g) return json({ error: "not_found" }, 404);
+    const [h] = await ctx.db.select<{ notes: string; guide: string }>("game_help", `game_id=eq.${b.game_id}&select=notes,guide`);
+    game = {
+      title: g.title,
+      slug: g.slug,
+      category: g.category,
+      description: (lang === "de" && g.description_de) || g.description,
+      controls: g.controls,
+      author: g.author?.username ?? null,
+      notes: h?.notes ?? "",
+      guide: h?.guide ?? "",
+    };
+  }
+  const answer = await ask(ctx, "help", helpPrompt(game, turns, lang), 1200, 0.3);
+  const text = plain(answer, 3000);
+  return text ? json({ text }) : json({ error: "ai_empty_answer" }, 502);
+}
+
+/** The developer saves tips for the helper, and lets it learn the game from a repository (once, now). */
+async function helpSetup(ctx: Ctx, b: Record<string, unknown>) {
+  if (!isUuid(b.game_id)) return json({ error: "bad_request" }, 400);
+  if ((await manages(ctx, b.game_id)) === false) return json({ error: "not_allowed" }, 403);
+  const notes = str(b.notes, 4000);
+  const installation = Number(b.installation_id);
+  const repo = typeof b.repo === "string" ? b.repo : "";
+  const row: Record<string, unknown> = { game_id: b.game_id, notes, updated_at: new Date().toISOString() };
+  if (repo && b.learn !== true) {
+    // Only new tips: what it learned stays.
+  } else if (!repo) {
+    // No repository (any more): only the developer's tips.
+    Object.assign(row, { installation_id: null, repo: null, guide: "", learned_at: null });
+  } else {
+    if (!Number.isSafeInteger(installation) || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo)) return json({ error: "bad_request" }, 400);
+    if (!githubConfigured(ctx.env.github)) return json({ error: "github_error" }, 503);
+    const [owned] = await ctx.db.select("github_installations", `user_id=eq.${ctx.user.id}&installation_id=eq.${installation}&select=installation_id`);
+    if (!owned) return json({ error: "not_allowed" }, 403);
+    const gh = github(ctx.env.github);
+    if (!(await gh.repos(installation)).some((r) => r.repo.toLowerCase() === repo.toLowerCase())) return json({ error: "not_allowed" }, 403);
+    const [g] = await ctx.db.select<{ title: string; description: string; controls: string }>("games", `id=eq.${b.game_id}&select=title,description,controls`);
+    const access = await gh.repo(installation, repo);
+    const branch = await access.defaultBranch();
+    const tree = await access.tree(branch);
+    const files: Record<string, string> = {};
+    let total = 0;
+    for (const p of guideFiles(tree, pickFiles(tree))) {
+      if (total >= 60_000) break;
+      const c = (await access.read(p, branch)).slice(0, 15_000);
+      files[p] = c;
+      total += c.length;
+    }
+    const answer = await ask(ctx, "learn", learnPrompt(g, files), 3000, 0.2);
+    const guide = plain(answer, 8000);
+    if (!guide) return json({ error: "ai_empty_answer" }, 502);
+    Object.assign(row, { installation_id: installation, repo, guide, learned_at: new Date().toISOString() });
+  }
+  await ctx.db.insert("game_help", row, "resolution=merge-duplicates,return=minimal");
+  return json({ ok: true, learned_at: row.learned_at ?? null, guide: row.guide ?? null });
 }
 
 // ---------- admins: test the free AI ----------

@@ -66,12 +66,23 @@ It does the small helpers (`api/assist.ts`, prompts in `server/assist/prompts.ts
 - **Toki Connect's easy steps** (if ticked): it reads the code and asks the developer; only the
   step that writes the change uses the strong AI. If the free AI fails, the strong AI takes over.
 
+- **Ask AI (game helper):** a button on every game's page opens a small chat under the game for
+  players who are stuck or have a question about Toki. It answers from the game's description and
+  controls, the developer's tips, a short player's guide it learned once from the game's GitHub
+  repository, and a guide to Toki (`server/assist/help.ts`). Developers set it up at the bottom of
+  their game's form ("AI helper for players"): tips, and "Learn from GitHub" (one call, saved in
+  `game_help`; "Learn again" after an update).
+
 There are no prices, so instead every account may use each helper only so often an hour
 (`ai_free_take` in `supabase/migrations/20261112090000_free_ai.sql`, e.g. 120 translations, 10
 suggestions). Calls are counted per day and helper (one row each) and shown on the AI page.
 
 "Fix with AI" on a bug report (developers and admins) starts a Toki Connect run that fixes the bug
 and opens a pull request. It uses the strong AI and its limits.
+
+Buttons only show when the AI behind them is on (`ai_status()`): without the strong AI, Toki
+Connect's runs and "Fix with AI" are hidden, and the Toki Connect page only connects GitHub (which
+the free helpers use for update drafts and the game helper).
 
 ## Using Vercel's settings instead
 

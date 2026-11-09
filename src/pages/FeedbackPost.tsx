@@ -8,6 +8,7 @@ import {
   updatePost, updateReply, type FeedbackPost as Post, type FeedbackReply, type PostChange,
 } from "../lib/feedback";
 import { FixedIn, PostMeta, useStatusLabel, VoteButton } from "../components/FeedbackBits";
+import { useAiStatus } from "../lib/assist";
 import { TranslateToggle, useTranslate } from "../components/AiBits";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -29,6 +30,8 @@ export function FeedbackPost() {
   const posted = (location.state as { posted?: boolean } | null)?.posted === true;
   const list = post ? [post] : null;
   const tr = useTranslate("post", post?.id ?? id, post ? `${post.title}\n${post.body}` : "");
+  // "Fix with AI" needs the strong AI.
+  const { strong } = useAiStatus();
   const { voted, vote } = useVotes(list, (f) => setPost((p) => (p ? f([p])[0] : p)));
 
   useEffect(() => {
@@ -155,7 +158,7 @@ export function FeedbackPost() {
             <button type="button" className="btn" disabled={busy} onClick={() => change({ hidden: !post.hidden })}>
               {post.hidden ? t("fb.post.unhide") : t("fb.post.hide")}
             </button>
-            {post.kind === "bug" && !isClosed(post.status) && (
+            {strong && post.kind === "bug" && !isClosed(post.status) && (
               <Link to={`/connect?fix=${post.id}`} className="btn" title={t("fb.post.fixAiHelp")}><span aria-hidden="true">✦ </span>{t("fb.post.fixAi")}</Link>
             )}
             {!isAuthor && me?.role === "admin" && (

@@ -820,3 +820,13 @@ a.author:hover { text-decoration: underline; color: var(--fg); }
 .ai-text li { overflow-wrap: anywhere; }
 .suggest { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .suggest-why { margin: 0; }
+.helper { margin-top: 12px; }
+.helper-list { display: flex; flex-direction: column; gap: 8px; max-height: 340px; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; }
+.helper-msg { max-width: 85%; padding: 6px 10px; background: var(--bg); border: 1px solid var(--line); overflow-wrap: anywhere; }
+.helper-msg.mine { align-self: flex-end; background: var(--surface); border-color: var(--fg); }
+.helper-msg p { margin: 0; }
+.helper-starters { display: flex; flex-wrap: wrap; gap: 6px; }
+.helper-form { display: flex; gap: 8px; flex-wrap: nowrap; margin: 0; }
+.helper-form input { flex: 1 1 auto; min-width: 0; }
+.helper-setup { margin: 16px 0; }
+.helper-guide { white-space: pre-wrap; font-family: var(--f-ui); font-size: 13px; background: var(--surface); border: 1px solid var(--line); padding: 8px 10px; max-height: 260px; overflow: auto; margin: 0; }

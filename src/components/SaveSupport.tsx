@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
-import { myBudget } from "../lib/ai";
+import { useAiStatus } from "../lib/assist";
 import snippet from "../../public/toki-save.js?raw";
 import { integrationGuide, scriptTag } from "../lib/integration";
 
@@ -13,17 +13,8 @@ const agentPrompt = integrationGuide(snippet);
 export function SaveSupport({ open, gameId }: { open?: boolean; gameId?: string }) {
   const { t } = useI18n();
   const [copied, setCopied] = useState<"code" | "agent" | null>(null);
-  // Toki Connect is offered only while admins have the AI turned on.
-  const [connect, setConnect] = useState(false);
-  useEffect(() => {
-    let alive = true;
-    myBudget()
-      .then((b) => alive && setConnect(b.enabled))
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, []);
+  // Toki Connect is offered only while the strong AI is on.
+  const connect = useAiStatus().strong;
 
   const copy = async (what: "code" | "agent") => {
     try {

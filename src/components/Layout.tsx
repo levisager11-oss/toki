@@ -9,6 +9,7 @@ import { APPLICATIONS_CHANGED, openApplicationCount } from "../lib/applications"
 import { BellIcon, BubbleIcon, HeartTabIcon, HomeIcon, KeyIcon, ListIcon, LogoMark, LogoutIcon, PlusIcon, SearchIcon, UserIcon } from "./icons";
 import { useBadges } from "../lib/useBadges";
 import { Avatar } from "./Avatar";
+import { useAiStatus } from "../lib/assist";
 import { ErrorBoundary } from "./ErrorBoundary";
 
 // The admin pages, all reached through "Admin" in the sidebar.
@@ -21,6 +22,7 @@ export function Layout() {
   const { t, lang, setLang } = useI18n();
   const { profile, signOut } = useAuth();
   const badges = useBadges();
+  const ai = useAiStatus();
   const [params] = useSearchParams();
   const [q, setQ] = useState(params.get("q") ?? "");
   const navigate = useNavigate();
@@ -113,7 +115,7 @@ export function Layout() {
             <NavLink to="/my-games">{t("nav.myGames")}</NavLink>
             <NavLink to="/add">{t("nav.addGame")}</NavLink>
             <NavLink to="/feedback/inbox">{t("fb.inbox.title")}</NavLink>
-            <NavLink to="/connect">{t("nav.connect")}</NavLink>
+            {(ai.strong || ai.free) && <NavLink to="/connect">{t("nav.connect")}</NavLink>}
             {profile.role === "admin" && (
               <NavLink to="/admin" className={() => (ADMIN_PAGE.test(location.pathname) ? "active" : "")}>
                 {t("nav.admin")}

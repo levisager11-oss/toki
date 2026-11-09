@@ -5,12 +5,14 @@ import { useI18n } from "../lib/i18n";
 import { useGames } from "../lib/useGames";
 import { compact, likes, myGameStats, plays } from "../lib/games";
 import { Cover } from "../components/Cover";
+import { useAiStatus } from "../lib/assist";
 import { HeartIcon, PlayIcon } from "../components/icons";
 
 export function MyGames() {
   const { t } = useI18n();
   const { profile } = useAuth();
   const { games, error } = useGames();
+  const ai = useAiStatus();
   const [daily, setDaily] = useState<Record<string, number[]>>({});
 
   useEffect(() => {
@@ -29,7 +31,7 @@ export function MyGames() {
         <div className="actions">
           {isAdmin && <Link to="/applications" className="btn">{t("nav.applications")}</Link>}
           <Link to="/feedback/inbox" className="btn">{t("fb.inbox.title")}</Link>
-          <Link to="/connect" className="btn">{t("nav.connect")}</Link>
+          {(ai.strong || ai.free) && <Link to="/connect" className="btn">{t("nav.connect")}</Link>}
           <Link to="/add" className="btn primary"><span aria-hidden="true">+</span>{t("my.add")}</Link>
         </div>
       </div>

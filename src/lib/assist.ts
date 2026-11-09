@@ -5,20 +5,33 @@ import { api } from "./ai";
 
 export type Lang = "en" | "de";
 
-let freeOn: Promise<boolean> | null = null;
-/** Whether the free AI features are on (asked once per visit). */
-export function useFreeAi(): boolean {
-  const [on, setOn] = useState(false);
+export interface AiStatus {
+  /** the free AI: small helpers */
+  free: boolean;
+  /** the strong AI: Toki Connect and bug fixes */
+  strong: boolean;
+}
+
+let status: Promise<AiStatus> | null = null;
+/** Which AI is on (asked once per visit), so buttons only show when the AI behind them works. */
+export function useAiStatus(): AiStatus {
+  const [s, setS] = useState<AiStatus>({ free: false, strong: false });
   useEffect(() => {
     let alive = true;
-    freeOn ??= Promise.resolve(supabase.rpc("ai_free_on")).then(({ data, error }) => !error && data === true, () => false);
-    freeOn.then((v) => alive && setOn(v));
+    status ??= Promise.resolve(supabase.rpc("ai_status")).then(
+      ({ data, error }) => (error || !data ? { free: false, strong: false } : { free: data.free === true, strong: data.strong === true }),
+      () => ({ free: false, strong: false }),
+    );
+    status.then((v) => alive && setS(v));
     return () => {
       alive = false;
     };
   }, []);
-  return on;
+  return s;
 }
+
+/** Whether the free AI's helpers are on. */
+export const useFreeAi = () => useAiStatus().free;
 
 const assist = <T,>(body: Record<string, unknown>) => api<T>("/api/assist", { method: "POST", body: JSON.stringify(body) });
 
@@ -73,6 +86,31 @@ export const describeGame = (g: { title: string; category: string; engine: strin
 export const summarizeInbox = (gameId: string | null, lang: Lang) => assist<{ text: string }>({ action: "summary", game_id: gameId, lang }).then((r) => r.text);
 export const summarizeApplication = (id: string, lang: Lang) => assist<{ text: string }>({ action: "application", id, lang }).then((r) => r.text);
 
+export interface HelpTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+/** The game helper's answer to the conversation so far (the last turn is the player's question). */
+export const askHelper = (gameId: string | null, messages: HelpTurn[], lang: Lang) =>
+  assist<{ text: string }>({ action: "help", game_id: gameId, messages, lang }).then((r) => r.text);
+
+export interface GameHelp {
+  notes: string;
+  installation_id: number | null;
+  repo: string | null;
+  guide: string;
+  learned_at: string | null;
+}
+/** What the helper knows about a game (its developer and admins). */
+export async function gameHelp(gameId: string): Promise<GameHelp | null> {
+  const { data, error } = await supabase.from("game_help").select("notes, installation_id, repo, guide, learned_at").eq("game_id", gameId).maybeSingle();
+  if (error) throw error;
+  return data as GameHelp | null;
+}
+/** Saves the tips; with learn, the AI reads the repository again now. */
+export const saveGameHelp = (h: { game_id: string; notes: string; installation_id?: number; repo?: string; learn?: boolean }) =>
+  assist<{ ok: boolean; learned_at: string | null; guide: string | null }>({ action: "help_setup", ...h });
+
 export interface FreeTest {
   ok: boolean;
   text?: string;
@@ -85,7 +123,7 @@ export interface FreeTest {
 export const testFreeAi = () => assist<FreeTest>({ action: "test" });
 
 /** Error codes the free features have texts for. */
-const ERRORS = ["free_off", "rate_limited", "not_allowed", "nothing_to_write", "ai_timeout", "ai_bad_answer", "ai_provider_error", "ai_empty_answer"] as const;
+const ERRORS = ["free_off", "rate_limited", "not_allowed", "nothing_to_write", "github_error", "ai_timeout", "ai_bad_answer", "ai_provider_error", "ai_empty_answer"] as const;
 export type AssistError = (typeof ERRORS)[number] | "error";
 export const assistError = (e: unknown): AssistError => {
   const code = e instanceof Error ? e.message : "";
