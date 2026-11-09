@@ -33,7 +33,7 @@ export function decrypt(stored: string, serviceKey: string): string | null {
   }
 }
 
-export type SecretName = "ai_api_key" | "github_app";
+export type SecretName = "ai_api_key" | "anthropic_api_key" | "github_app";
 
 export async function saveSecret(db: Db, env: ServerEnv, name: SecretName, plain: string, by: string): Promise<void> {
   await db.insert(
@@ -49,13 +49,18 @@ export async function removeSecret(db: Db, name: SecretName): Promise<void> {
 
 export interface Sources {
   aiKey: "env" | "toki" | null;
+  anthropicKey: "env" | "toki" | null;
   github: "env" | "toki" | null;
 }
 
 /** The environment with stored secrets filled in where Vercel has none, and where each came from. */
 export async function withSecrets(db: Db, env: ServerEnv): Promise<{ env: ServerEnv; sources: Sources }> {
-  const sources: Sources = { aiKey: env.aiKey ? "env" : null, github: githubConfigured(env.github) ? "env" : null };
-  if (sources.aiKey && sources.github) return { env, sources };
+  const sources: Sources = {
+    aiKey: env.aiKey ? "env" : null,
+    anthropicKey: env.anthropicKey ? "env" : null,
+    github: githubConfigured(env.github) ? "env" : null,
+  };
+  if (sources.aiKey && sources.anthropicKey && sources.github) return { env, sources };
   const rows = await db.select<{ name: SecretName; value: string }>("server_secrets", "select=name,value");
   const next: ServerEnv = { ...env, github: { ...env.github } };
   for (const r of rows) {
@@ -64,6 +69,10 @@ export async function withSecrets(db: Db, env: ServerEnv): Promise<{ env: Server
     if (r.name === "ai_api_key" && !sources.aiKey) {
       next.aiKey = plain;
       sources.aiKey = "toki";
+    }
+    if (r.name === "anthropic_api_key" && !sources.anthropicKey) {
+      next.anthropicKey = plain;
+      sources.anthropicKey = "toki";
     }
     if (r.name === "github_app" && !sources.github) {
       try {

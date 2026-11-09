@@ -207,3 +207,23 @@ describe("server secrets", () => {
     await expect(t.service("insert into server_secrets (name, value) values ('other', 'x')")).rejects.toThrow(/check/);
   });
 });
+
+describe("Anthropic as provider", () => {
+  it("can be chosen by admins, without an endpoint address", async () => {
+    const [s] = await t.as<{ provider: string; base_url: string }>(admin, "update ai_settings set provider = 'anthropic', base_url = '', model = 'claude-opus-5-5' returning provider, base_url");
+    expect(s).toEqual({ provider: "anthropic", base_url: "" });
+    const r = await reserve(dev, 1000, 1000);
+    expect(r).toMatchObject({ provider: "anthropic", base_url: "", model: "claude-opus-5-5" });
+  });
+
+  it("still needs an address for OpenAI-compatible endpoints, and only known providers", async () => {
+    await expect(t.as(admin, "update ai_settings set provider = 'openai_compatible', base_url = ''")).rejects.toThrow(/check/);
+    await expect(t.as(admin, "update ai_settings set provider = 'other'")).rejects.toThrow(/check/);
+    expect(await t.as(dev, "update ai_settings set provider = 'anthropic' returning id")).toEqual([]);
+  });
+
+  it("keeps the Anthropic key apart from the other one", async () => {
+    await t.service("insert into server_secrets (name, value) values ('anthropic_api_key', 'v1:x') on conflict (name) do update set value = excluded.value");
+    expect(await t.service("select name from server_secrets where name = 'anthropic_api_key'")).toEqual([{ name: "anthropic_api_key" }]);
+  });
+});

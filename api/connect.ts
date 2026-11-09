@@ -53,7 +53,7 @@ async function start(ctx: Ctx, b: Record<string, unknown>) {
   const notes = typeof b.notes === "string" ? b.notes.trim().slice(0, 1000) : "";
   const gameId = isUuid(b.game_id) ? b.game_id : null;
   if (!Number.isSafeInteger(installation) || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo) || !features.length) return json({ error: "bad_request" }, 400);
-  if (!ctx.env.aiKey) return json({ error: "ai_not_configured" }, 503);
+  if (!ctx.env.aiKey && !ctx.env.anthropicKey) return json({ error: "ai_not_configured" }, 503);
   if (!githubConfigured(ctx.env.github)) return json({ error: "github_not_configured" }, 503);
   const [settings] = await ctx.db.select<{ enabled: boolean }>("ai_settings", "id=eq.1&select=enabled");
   if (!settings?.enabled) return json({ error: "ai_disabled" }, 503);
@@ -110,7 +110,7 @@ async function run(ctx: Ctx, b: Record<string, unknown>, origin: string) {
       return gh.repo(job.installation_id, job.repo);
     },
     async ai(messages, maxTokens) {
-      const c = await budgetedCompletion({ db: ctx.db, apiKey: ctx.env.aiKey, userId: ctx.user.id, feature: "connect", jobId: job.id, messages, maxTokens });
+      const c = await budgetedCompletion({ db: ctx.db, keys: { openai_compatible: ctx.env.aiKey, anthropic: ctx.env.anthropicKey }, userId: ctx.user.id, feature: "connect", jobId: job.id, messages, maxTokens });
       return c.text;
     },
     async script() {

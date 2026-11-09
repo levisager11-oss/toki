@@ -13,7 +13,8 @@ interface Reservation {
 
 export interface BudgetedCall {
   db: Db;
-  apiKey: string;
+  /** The key for each provider; the one for the provider in the settings is used. */
+  keys: Record<ProviderName, string>;
   userId: string;
   feature: "connect" | "test";
   jobId?: string | null;
@@ -24,7 +25,7 @@ export interface BudgetedCall {
 
 /** Raises DbError("ai_disabled" | "not_allowed" | "cap_reached" | "quota_reached") or AiError. */
 export async function budgetedCompletion(call: BudgetedCall): Promise<Completion & { cost: number }> {
-  if (!call.apiKey) throw new AiError("not_configured");
+  if (!Object.values(call.keys).some(Boolean)) throw new AiError("not_configured");
   // Each message also costs a few tokens of its own.
   const inputTokens = estimateTokens(call.messages.map((m) => m.content).join("\n")) + 10 * call.messages.length;
   const r = await call.db.rpc<Reservation>("ai_reserve", {
@@ -36,7 +37,7 @@ export async function budgetedCompletion(call: BudgetedCall): Promise<Completion
   });
   let result: Completion;
   try {
-    result = await complete({ provider: r.provider, baseUrl: r.base_url, model: r.model, apiKey: call.apiKey }, { messages: call.messages, maxTokens: call.maxTokens }, call.fetchImpl);
+    result = await complete({ provider: r.provider, baseUrl: r.base_url, model: r.model, apiKey: call.keys[r.provider] ?? "" }, { messages: call.messages, maxTokens: call.maxTokens }, call.fetchImpl);
   } catch (e) {
     // The endpoint may have charged for reading the request: count it, on the safe side.
     const tokens = e instanceof AiError && e.code === "not_configured" ? 0 : inputTokens;

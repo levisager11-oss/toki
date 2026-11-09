@@ -2,12 +2,13 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useI18n } from "../lib/i18n";
 import { ago } from "../lib/feedback";
 import { AiSetup } from "../components/AiSetup";
+import { ModelPicker } from "../components/ModelPicker";
 import {
   developersWithQuotas, getAiSettings, monthOverview, recentUsage, saveAiSettings, setQuota, testAi, usd,
-  type Overview, type TestResult, type UsageRow,
+  type Overview, type Provider, type TestResult, type UsageRow,
 } from "../lib/ai";
 
-type Form = { enabled: boolean; base_url: string; model: string; input_price: string; output_price: string; monthly_cap: string; default_quota: string };
+type Form = { enabled: boolean; provider: Provider; base_url: string; model: string; input_price: string; output_price: string; monthly_cap: string; default_quota: string };
 
 /** Admins: AI settings, this month's spending against the cap, and quotas per developer (/admin/ai). */
 export function AiAdmin() {
@@ -21,12 +22,15 @@ export function AiAdmin() {
   const [busy, setBusy] = useState(false);
   const [test, setTest] = useState<TestResult | "running" | null>(null);
   const [reload, setReload] = useState(0);
+  // The model whose prices the endpoint filled in, to remind the admin to check them.
+  const [pricesFrom, setPricesFrom] = useState("");
 
   useEffect(() => {
     getAiSettings()
       .then((s) =>
         setForm({
           enabled: s.enabled,
+          provider: s.provider,
           base_url: s.base_url,
           model: s.model,
           input_price: String(s.input_price || ""),
@@ -60,6 +64,7 @@ export function AiAdmin() {
     try {
       await saveAiSettings({
         enabled: form.enabled,
+        provider: form.provider,
         base_url: form.base_url.trim(),
         model: form.model.trim(),
         input_price: Number(form.input_price) || 0,
@@ -110,7 +115,7 @@ export function AiAdmin() {
         <p className="hint">{t("ai.capNote")}</p>
       </section>
 
-      <AiSetup />
+      <AiSetup provider={form.provider} />
 
       <form className="form ai-card" onSubmit={save} aria-labelledby="ai-settings-h">
         <h2 id="ai-settings-h">{t("ai.settings")}</h2>
@@ -120,15 +125,40 @@ export function AiAdmin() {
         </label>
         <small>{t("ai.enabledHelp")}</small>
         <label htmlFor="ai-provider">{t("ai.provider")}</label>
-        <select id="ai-provider" value="openai_compatible" disabled>
+        <select
+          id="ai-provider"
+          value={form.provider}
+          onChange={(e) => { setForm({ ...form, provider: e.target.value as Provider }); setPricesFrom(""); }}
+          aria-describedby="ai-provider-help"
+        >
           <option value="openai_compatible">{t("ai.providerOpenai")}</option>
+          <option value="anthropic">{t("ai.providerAnthropic")}</option>
         </select>
-        <small>{t("ai.providerLater")}</small>
+        <small id="ai-provider-help">{t("ai.providerHelp")}</small>
         <label htmlFor="ai-url">{t("ai.baseUrl")}</label>
-        <input id="ai-url" type="url" placeholder="https://" maxLength={300} value={form.base_url} onChange={set("base_url")} aria-describedby="ai-url-help" />
-        <small id="ai-url-help">{t("ai.baseUrlHelp")}</small>
+        <input
+          id="ai-url"
+          type="url"
+          placeholder={form.provider === "anthropic" ? "https://api.anthropic.com" : "https://"}
+          maxLength={300}
+          value={form.base_url}
+          onChange={set("base_url")}
+          aria-describedby="ai-url-help"
+        />
+        <small id="ai-url-help">{t(form.provider === "anthropic" ? "ai.baseUrlAnthropicHelp" : "ai.baseUrlHelp")}</small>
         <label htmlFor="ai-model">{t("ai.model")}</label>
-        <input id="ai-model" maxLength={100} value={form.model} onChange={set("model")} autoComplete="off" spellCheck={false} />
+        <input id="ai-model" maxLength={100} value={form.model} onChange={(e) => { set("model")(e); setPricesFrom(""); }} autoComplete="off" spellCheck={false} />
+        <ModelPicker
+          key={form.provider}
+          provider={form.provider}
+          baseUrl={form.base_url}
+          selected={form.model}
+          onPick={(m) => {
+            const known = m.inputPrice !== undefined && m.outputPrice !== undefined;
+            setForm({ ...form, model: m.id, ...(known ? { input_price: String(m.inputPrice), output_price: String(m.outputPrice) } : {}) });
+            setPricesFrom(known ? m.id : "");
+          }}
+        />
         <div className="pair">
           <div>
             <label htmlFor="ai-in">{t("ai.inputPrice")}</label>
@@ -140,6 +170,7 @@ export function AiAdmin() {
           </div>
         </div>
         <small>{t("ai.priceHelp")}</small>
+        {pricesFrom && <p className="check" role="status">{t("ai.models.pricesFilled", { model: pricesFrom })}</p>}
         <div className="pair">
           <div>
             <label htmlFor="ai-cap">{t("ai.cap")}</label>
