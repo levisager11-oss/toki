@@ -3,7 +3,6 @@ import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import { stopAccountSaves } from "./saves";
 import { syncAccountLikes } from "./local";
-import { usePresence } from "./presence";
 import { useBadgeUpdates } from "./useBadges";
 import type { Profile } from "./types";
 
@@ -45,7 +44,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (ready) syncAccountLikes(userId ?? null);
   }, [ready, userId]);
-  usePresence(userId);
   useBadgeUpdates(userId);
 
   useEffect(() => {

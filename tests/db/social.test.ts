@@ -268,3 +268,33 @@ describe("high scores", () => {
     expect(await t.admin("select * from game_scores where game_id = $1 and user_id = $2", [game.id, a.id])).toHaveLength(0);
   });
 });
+
+describe("ping", () => {
+  it("marks the player online and counts unread notifications and chats in one request", async () => {
+    await befriend(a, b);
+    const chat = await rpc<string>(a, "open_dm", [b.id], ["uuid"]);
+    await say(a, chat, "hello");
+    await say(a, chat, "are you there?");
+    const r = await rpc<{ notifications: number; chats: number }>(b, "ping", [game.id, true], ["uuid", "boolean"]);
+    expect(r).toEqual({ notifications: 1, chats: 1 }); // the friend request, and one chat
+    expect((await t.admin<{ game_id: string }>("select game_id from presence where user_id = $1", [b.id]))[0].game_id).toBe(game.id);
+    await rpc(b, "mark_chat_read", [chat], ["uuid"]);
+    await rpc(b, "mark_notifications_read", [null], ["bigint[]"]);
+    expect(await rpc(b, "ping", [null, false], ["uuid", "boolean"])).toEqual({ notifications: 0, chats: 0 });
+    // Not visible: online status stays as it was.
+    expect((await t.admin<{ game_id: string }>("select game_id from presence where user_id = $1", [b.id]))[0].game_id).toBe(game.id);
+  });
+
+  it("doesn't count messages from blocked players", async () => {
+    await befriend(a, b);
+    const g = await rpc<string>(a, "create_group", ["Trio", [b.id]], ["text", "uuid[]"]);
+    await befriend(b, c);
+    await rpc(b, "add_to_group", [g, c.id], ["uuid", "uuid"]);
+    await rpc(c, "mark_chat_read", [g], ["uuid"]);
+    await rpc(c, "block_user", [a.id], ["uuid"]);
+    await say(a, g, "from a blocked player");
+    expect((await rpc<{ chats: number }>(c, "ping", [null, false], ["uuid", "boolean"])).chats).toBe(0);
+    await say(b, g, "from a friend");
+    expect((await rpc<{ chats: number }>(c, "ping", [null, false], ["uuid", "boolean"])).chats).toBe(1);
+  });
+});

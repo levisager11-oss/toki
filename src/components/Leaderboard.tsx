@@ -12,6 +12,8 @@ export type ScoreEvent = { score: number; best?: number; isNew?: boolean; guest?
 /**
  * Listens for scores from the game in the frame (toki.score(n) in toki-save.js) and saves them
  * for logged-in players. Only messages from that frame and the game's own site count.
+ * To keep database requests few, scores within 1.5 seconds are combined (only the best is
+ * sent), and a score that doesn't beat the player's known best isn't sent at all.
  */
 export function useScoreBridge(frame: RefObject<HTMLIFrameElement>, game: Game | undefined, userId: string | undefined) {
   const [last, setLast] = useState<ScoreEvent | null>(null);
@@ -19,6 +21,7 @@ export function useScoreBridge(frame: RefObject<HTMLIFrameElement>, game: Game |
   const sending = useRef(Promise.resolve());
   const gameId = game?.id;
   const playUrl = game?.play_url;
+  const lowWins = game?.score_order === "low";
 
   useEffect(() => {
     setLast(null);
@@ -30,17 +33,20 @@ export function useScoreBridge(frame: RefObject<HTMLIFrameElement>, game: Game |
       return;
     }
     let alive = true;
-    const onMessage = (e: MessageEvent) => {
-      const win = frame.current?.contentWindow;
-      if (!win || e.source !== win || e.origin !== origin) return;
-      const m = e.data as { toki?: number; type?: string; data?: unknown } | null;
-      if (!m || m.toki !== 1 || m.type !== "score" || !validScore(m.data)) return;
-      const score = m.data;
-      if (!userId) return setLast({ score, guest: true });
+    let best: number | null = null; // the player's best on the server, once known
+    let waiting: number | null = null; // the best score of the last moment, not sent yet
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const beats = (a: number, b: number) => (lowWins ? a < b : a > b);
+    const send = () => {
+      const score = waiting;
+      waiting = null;
+      if (score === null) return;
+      if (best !== null && !beats(score, best)) return setLast({ score, best, isNew: false });
       // One after another, so the best score is always compared with the latest one.
       sending.current = sending.current.then(() =>
         submitScore(gameId, score).then(
           (r) => {
+            best = r.best;
             if (!alive) return;
             setLast({ score, best: r.best, isNew: r.new });
             if (r.new) setVersion((v) => v + 1);
@@ -49,12 +55,25 @@ export function useScoreBridge(frame: RefObject<HTMLIFrameElement>, game: Game |
         ),
       );
     };
+    const onMessage = (e: MessageEvent) => {
+      const win = frame.current?.contentWindow;
+      if (!win || e.source !== win || e.origin !== origin) return;
+      const m = e.data as { toki?: number; type?: string; data?: unknown } | null;
+      if (!m || m.toki !== 1 || m.type !== "score" || !validScore(m.data)) return;
+      const score = m.data;
+      if (!userId) return setLast({ score, guest: true });
+      if (waiting === null || beats(score, waiting)) waiting = score;
+      clearTimeout(timer);
+      timer = setTimeout(send, 1500);
+    };
     window.addEventListener("message", onMessage);
     return () => {
       alive = false;
+      clearTimeout(timer);
+      send(); // a score sent right before leaving still counts
       window.removeEventListener("message", onMessage);
     };
-  }, [frame, gameId, playUrl, userId]);
+  }, [frame, gameId, playUrl, userId, lowWins]);
 
   return { last, version };
 }

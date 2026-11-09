@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ANSWER_DEADLINE_MS, readRecord, SaveSync, type Cloud, type KeyValue, type SaveData } from "../src/lib/saves";
+import { ANSWER_DEADLINE_MS, UPLOAD_GAP_MS, readRecord, SaveSync, type Cloud, type KeyValue, type SaveData } from "../src/lib/saves";
 
 const GAME = "g1";
 const USER = "u1";
@@ -128,6 +128,8 @@ class Device {
 }
 
 const settle = (ms = 100) => vi.advanceTimersByTimeAsync(ms);
+/** Long enough for the next upload from a page that uploaded a moment ago. */
+const nextUpload = () => settle(UPLOAD_GAP_MS + 1000);
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -241,7 +243,7 @@ describe("SaveSync", () => {
     await settle(3000);
     // A is still open on the old version and saves.
     a.game.play({ coins: "1" });
-    await settle(3000);
+    await nextUpload();
     expect(cloud.save?.keys.level).toBe("5");
     expect(cloud.conflicts.get("A")?.keys).toEqual({ level: "2", coins: "1" });
     expect(a.conflict).toBe(true);
@@ -333,7 +335,7 @@ describe("SaveSync", () => {
     a.game.play({ level: "1" }); // its autosave
     await settle(3000);
     a.game.play({ level: "2" });
-    await settle(3000);
+    await nextUpload();
     expect(cloud.save?.keys).toEqual(progress);
     expect(a.lost).toBe(true);
     expect(cloud.conflicts.get("A")?.keys.level).toBe("2"); // kept as a backup
@@ -345,7 +347,7 @@ describe("SaveSync", () => {
     expect(a.game.storage).toEqual(progress);
     expect(a.lost).toBe(false);
     a.game.play({ level: "8" });
-    await settle(3000);
+    await nextUpload();
     expect(cloud.save?.keys.level).toBe("8");
   });
 
@@ -418,13 +420,50 @@ describe("SaveSync", () => {
       throw new Error("timeout");
     };
     a.game.play({ level: "3" });
-    await settle(3000);
+    await nextUpload();
     cloud.put = realPut;
     a.game.play({ level: "4" });
-    await settle(8000);
+    await nextUpload();
     expect(cloud.save?.keys.level).toBe("4");
     expect(cloud.conflicts.size).toBe(0);
     expect(a.conflict).toBe(false);
+  });
+
+  it("a game that saves every second uploads at most every 30 seconds, and at once on closing", async () => {
+    const cloud = new FakeCloud();
+    const a = new Device("A", cloud);
+    a.open();
+    await settle();
+    for (let i = 1; i <= 60; i++) {
+      a.game.play({ level: String(i) });
+      await settle(1000);
+    }
+    expect(cloud.puts).toBeLessThanOrEqual(3);
+    a.game.play({ level: "61" });
+    a.close();
+    await settle();
+    expect(cloud.save?.keys.level).toBe("61");
+  });
+
+  it("a save that didn't change isn't uploaded again", async () => {
+    const cloud = new FakeCloud();
+    const a = new Device("A", cloud);
+    a.open();
+    await settle();
+    a.game.play({ level: "2" });
+    await settle(3000);
+    const puts = cloud.puts;
+    a.game.play({ level: "2" }); // the same state, saved again
+    await nextUpload();
+    a.close();
+    await settle();
+    expect(cloud.puts).toBe(puts);
+    // A real change still goes up.
+    a.open();
+    await settle(3000);
+    a.game.play({ level: "3" });
+    await settle(3000);
+    expect(cloud.save?.keys.level).toBe("3");
   });
 
   it("first login keeps progress made before logging in", async () => {

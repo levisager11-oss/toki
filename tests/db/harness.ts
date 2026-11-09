@@ -41,6 +41,7 @@ create publication supabase_realtime;
 
 create schema cron;
 create function cron.schedule(job text, sched text, command text) returns bigint language sql as $$ select 1::bigint $$;
+create function cron.unschedule(job text) returns boolean language sql as $$ select true $$;
 `;
 
 /** Every database change, in the order they were applied. */
