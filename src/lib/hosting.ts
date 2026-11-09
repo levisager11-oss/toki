@@ -16,6 +16,13 @@ export interface HostingStatus {
   source?: "env" | "toki" | null;
   accountId?: string | null;
   bucket?: string | null;
+  usedBytes?: number;
+  limitBytes?: number;
+  hostedGames?: number;
+  followingGames?: number;
+  /** where the GitHub App is set up, and whether its push events can be checked */
+  github?: "env" | "toki" | null;
+  webhook?: boolean;
 }
 
 let status: Promise<HostingStatus> | null = null;

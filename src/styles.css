@@ -930,3 +930,17 @@ main.content:focus { outline: none; }
 .quick-steps li.busy { border-left-color: var(--accent); }
 .quick-head { margin-bottom: 0; }
 .quick-head .h { margin: 0; }
+
+/* admin: game hosting */
+.host-admin .ai-card { margin-bottom: 14px; }
+.host-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.host-pill { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 3px 10px; border: 1px solid var(--line); color: var(--muted); }
+.host-pill.on { border-color: #2f9e5b; color: #2f9e5b; }
+.host-pill.on::before { content: "● "; }
+.host-facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 4px 0; font-size: 14px; }
+.host-facts dt { color: var(--muted); }
+.host-facts dd { margin: 0; overflow-wrap: anywhere; }
+.host-setup { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 4px; }
+.host-setup .actions { margin-top: 10px; }
+.ai-card .steps code { font-size: 12px; overflow-wrap: anywhere; }
+.host-admin .ai-big { font-variant-numeric: normal; }
