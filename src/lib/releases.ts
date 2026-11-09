@@ -1,5 +1,6 @@
 // Release notes: what changed in each version of a game (or of Toki itself), and which
 // feedback posts the update fixed. Rules: supabase/migrations/20261109150000_release_notes.sql
+import { useEffect, useState } from "react";
 import { supabase } from "./supabase";
 import type { FeedbackKind, FeedbackStatus } from "./feedback";
 
@@ -158,4 +159,36 @@ export function nextSmallVersion(list: Release[]): string {
 export function nextVersion(last: string | undefined): string {
   const m = last ? /^(.*?)(\d+)(\D*)$/.exec(last.trim()) : null;
   return m ? `${m[1]}${Number(m[2]) + 1}${m[3]}` : "";
+}
+
+// Games with an update in the last 7 days, for the "Updated" tag on game cards.
+// Asked once per page load and shared by all cards.
+const UPDATED_DAYS = 7;
+let recent: Promise<Set<string>> | null = null;
+
+export function recentlyUpdated(): Promise<Set<string>> {
+  recent ??= Promise.resolve(
+    supabase
+      .from("game_releases")
+      .select("game_id")
+      .not("game_id", "is", null)
+      .gte("published_at", new Date(Date.now() - UPDATED_DAYS * 86_400_000).toISOString())
+      .limit(200),
+  ).then(
+    ({ data }) => new Set(((data ?? []) as { game_id: string }[]).map((r) => r.game_id)),
+    () => new Set<string>(),
+  );
+  return recent;
+}
+
+export function useRecentlyUpdated(): Set<string> {
+  const [ids, setIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    let alive = true;
+    recentlyUpdated().then((s) => alive && setIds(s));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return ids;
 }
