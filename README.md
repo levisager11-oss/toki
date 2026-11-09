@@ -1,6 +1,6 @@
 # toki
 
-A small website for browser games by Levi and friends, in English and German.
+A small website for free browser games, in English and German.
 
 - **Play:** anyone can play, without an account. Favorites and recently played are saved in the visitor's browser.
 - **Plays and likes:** a visit counts as a play after 10 seconds on a game's page (once per browser per game per day). Tapping the heart saves a game to Favorites and adds a public like. Members see plays per day on *My games*.

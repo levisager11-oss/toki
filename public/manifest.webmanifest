@@ -1,7 +1,7 @@
 {
   "name": "Toki",
   "short_name": "Toki",
-  "description": "Browser games by Levi and friends.",
+  "description": "Free browser games you can play instantly.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
