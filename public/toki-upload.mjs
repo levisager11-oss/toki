@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// Toki upload script: puts a web game on Toki (https://www.playtoki.app) from a folder.
+// Toki upload script: puts a web game on Toki (https://playtoki.app) from a folder.
 // Needs Node.js 18 or newer and nothing else.
 //
 //   TOKI_KEY=toki_… node toki-upload.mjs path/to/game-folder
 //
 // The folder holds the game's index.html (a web export from Godot, Unity, GameMaker, Phaser, …).
 // A toki.json next to it can set the title, description, controls, version and update notes:
-// see https://www.playtoki.app/agents.md. Get a key on Toki: My games → Upload keys.
+// see https://playtoki.app/agents.md. Get a key on Toki: My games → Upload keys.
 //
 // Options: --key <key> (instead of TOKI_KEY), --game <slug> (which game; else toki.json's slug,
 // else its title), --dry-run (only show what would be uploaded).
@@ -14,6 +14,8 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 
 const TOKI = (process.env.TOKI_URL || "https://www.playtoki.app").replace(/\/+$/, "");
+// The address in the links it prints (the short one forwards to www).
+const LINK = process.env.TOKI_URL ? TOKI : "https://playtoki.app";
 const SKIP = /(^|\/)(\.git|\.github|node_modules|__MACOSX|\.vscode|\.idea|\.godot|\.import)(\/|$)|(^|\/)(\.DS_Store|Thumbs\.db|desktop\.ini)$/i;
 
 const args = process.argv.slice(2);
@@ -124,7 +126,7 @@ await Promise.all(
 );
 console.log("");
 const finished = await api({ action: "finish", build_id: started.build_id, toki });
-console.log(`\n✓ Live on Toki: ${TOKI}${finished.game_url}`);
+console.log(`\n✓ Live on Toki: ${LINK}${finished.game_url}`);
 console.log(`  Plays at: ${finished.play_url}`);
 if (finished.release?.posted) console.log(`  Posted the update ${finished.release.version} on the game's Updates page.`);
-if (started.created) console.log(`  Add a cover picture and check the details: ${TOKI}/edit/${finished.slug}`);
+if (started.created) console.log(`  Add a cover picture and check the details: ${LINK}/edit/${finished.slug}`);

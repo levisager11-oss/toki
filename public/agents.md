@@ -1,6 +1,6 @@
 # Publishing a game on Toki (for AI agents)
 
-Toki (https://www.playtoki.app) is a website for free browser games. This page tells an AI agent
+Toki (https://playtoki.app) is a website for free browser games. This page tells an AI agent
 how to put a web game on Toki for a developer. Follow it step by step, and explain to the
 developer in plain words what you did.
 

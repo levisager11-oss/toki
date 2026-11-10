@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useI18n } from "../lib/i18n";
 import { supabase } from "../lib/supabase";
 import { agentPrompt, createUploadKey, githubWorkflow, hostError } from "../lib/hosting";
+import { SITE_URL } from "../lib/site";
 
 interface KeyRow {
   id: string;
@@ -23,7 +24,6 @@ export function UploadKeys() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [copied, setCopied] = useState<string | null>(null);
-  const origin = window.location.origin;
 
   const load = () =>
     supabase.from("upload_keys").select("id,name,hint,created_at,last_used_at").order("created_at").then(({ data }) => setKeys((data ?? []) as KeyRow[]));
@@ -62,8 +62,8 @@ export function UploadKeys() {
     }
   };
   const date = (s: string) => new Date(s).toLocaleDateString(lang === "de" ? "de-CH" : "en", { dateStyle: "medium" });
-  const prompt = agentPrompt(fresh, origin);
-  const workflow = githubWorkflow(origin);
+  const prompt = agentPrompt(fresh, SITE_URL);
+  const workflow = githubWorkflow(SITE_URL);
 
   return (
     <section className="panel upload-keys" id="upload-keys" aria-labelledby="keys-h">
