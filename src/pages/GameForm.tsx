@@ -19,7 +19,7 @@ import { extFor, removeGameImages, shrinkGameImage } from "../lib/gameImages";
 import { HostedUpload, type Picked } from "../components/HostedUpload";
 import { ImportFromLink } from "../components/ImportFromLink";
 import { gitConnect, gitDisconnect, hostError, unhostGame, uploadGame, useHosting, type GitChoice, type GitRow, type Imported } from "../lib/hosting";
-import { GitHubFollow } from "../components/GitHubFollow";
+import { GitHubFollow, gitFailed } from "../components/GitHubFollow";
 import { QuickAdd, type QuickCarry } from "../components/QuickAdd";
 import { MovedNotice, MoveSavesCheck, MoveToToki, type Moved } from "../components/MoveToToki";
 
@@ -311,7 +311,7 @@ export function GameForm() {
       let msg = "";
       try {
         const r = await gitConnect(res.data.id, gitChoice);
-        if (!r.ok) msg = t("git.failed", { error: r.error ?? "" });
+        if (!r.ok) msg = gitFailed(t, r.error);
       } catch (e) {
         msg = t(`host.err.${hostError(e)}`, { mb: "100 MB" });
       }
@@ -439,7 +439,7 @@ export function GameForm() {
               {wasHosted && <p className="check warn">{t("host.leaveWarn")}</p>}
               <LinkCheck url={url.trim()} isolation={isolation} />
               {orig && !wasHosted && canHost && url.trim() === orig.play_url && (
-                <MoveToToki gameId={orig.id} url={orig.play_url} onMoved={(m) => { setMoved(m); reloadWhere(orig.slug); }} />
+                <MoveToToki gameId={orig.id} slug={orig.slug} url={orig.play_url} onMoved={(m) => { setMoved(m); reloadWhere(orig.slug); }} />
               )}
             </>
           )}

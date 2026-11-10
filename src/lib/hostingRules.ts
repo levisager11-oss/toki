@@ -219,3 +219,29 @@ export function pagesRepos(playUrl: string): { repo: string; sub: string }[] {
   out.push({ repo: `${owner}/${owner}.github.io`, sub: parts.join("/") });
   return out;
 }
+
+/** A name without its dashes, dots and capitals, to compare a game with a repository: "debt-drifter" → "debtdrifter". */
+export const plainName = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+/** The name a site's address gives the game: "debtdrifter" for debtdrifter.vercel.app or www.debtdrifter.com. */
+export function siteName(playUrl: string): string {
+  try {
+    const labels = new URL(playUrl).hostname.toLowerCase().split(".");
+    return plainName(labels[0] === "www" && labels.length > 2 ? labels[1] : labels[0]);
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Which of these repositories is most likely the game's: the one its GitHub Pages address names,
+ * else one named like its site or like the game. null when none fits.
+ */
+export function guessRepo<T extends { repo: string }>(repos: T[], playUrl: string, slug: string): T | null {
+  for (const w of pagesRepos(playUrl)) {
+    const hit = repos.find((r) => r.repo.toLowerCase() === w.repo.toLowerCase());
+    if (hit) return hit;
+  }
+  if (pagesRepos(playUrl).length) return null;
+  const names = [siteName(playUrl), plainName(slug)].filter((n) => n.length >= 3);
+  return repos.find((r) => names.includes(plainName(r.repo.split("/")[1] ?? ""))) ?? null;
+}

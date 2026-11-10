@@ -136,6 +136,14 @@ export function readScan(answer: string, base: Proposal): Proposal {
 const BUILD_DIRS = ["", "docs", "public", "dist", "build", "web", "html5", "export", "exports", "www", "site", "game", "builds/web"];
 
 /**
+ * A bundler's source page (e.g. Vite's index.html loading ./src/main.ts) doesn't run as it is:
+ * the game has to be built first. `hasBuildScript`: its package.json has a "build" script.
+ */
+export function isSourcePage(page: string, hasBuildScript: boolean): boolean {
+  return /<script[^>]+src=["'][^"']*\.(tsx?|jsx)["']/i.test(page) || (hasBuildScript && /<script[^>]+src=["'](?:\.?\/)?src\//i.test(page));
+}
+
+/**
  * Which folder of a repository holds the playable game (its index.html), and whether the game
  * must be built first (then a GitHub Action does that, see agents.md).
  */
@@ -150,9 +158,7 @@ export function gameFolder(paths: string[], indexText: (path: string) => string 
   const hasBuildScript = paths.includes("package.json") && (indexText("package.json") ?? "").includes('"build"');
   for (const d of dirs) {
     const page = indexText(d ? `${d}/index.html` : "index.html") ?? "";
-    // A bundler's source page (e.g. Vite's index.html loading /src/main.ts) doesn't run as it is.
-    const source = /<script[^>]+src=["'][^"']*\.(tsx?|jsx)["']/i.test(page) || (hasBuildScript && /src=["']\/?src\//i.test(page));
-    if (!source) return { folder: d, needsBuild: false };
+    if (!isSourcePage(page, hasBuildScript)) return { folder: d, needsBuild: false };
   }
   return { folder: null, needsBuild: pages.length > 0 || hasBuildScript };
 }

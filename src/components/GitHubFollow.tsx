@@ -1,7 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../lib/i18n";
-import { githubInstallLink, githubRepos, type GitHubInfo } from "../lib/ai";
-import { gitBranches, gitDeploy, gitDisconnect, GITHUB_RETURN_KEY, hostError, type GitChoice, type GitRow } from "../lib/hosting";
+import { githubConnectLink, githubManage, githubRepos, type GitHubInfo } from "../lib/ai";
+import { gitBranches, gitDeploy, gitDisconnect, hostError, type GitChoice, type GitRow } from "../lib/hosting";
+
+/** Why an update from GitHub failed, in words where Toki knows the reason. */
+export function gitFailed(t: ReturnType<typeof useI18n>["t"], error: string | undefined): string {
+  const code = hostError(error ?? "");
+  return code === "error" ? t("git.failed", { error: error ?? "" }) : t(`host.err.${code}`, { mb: "100 MB" });
+}
 
 /**
  * "From GitHub" in the game form, like Vercel: pick a repository, a branch and the folder with
@@ -23,9 +29,25 @@ export function GitHubFollow({ gameId, row, choice, onChoice, onChanged }: {
   const [err, setErr] = useState("");
   const [editing, setEditing] = useState(!row);
 
+  const [loadFailed, setLoadFailed] = useState(false);
+  const loadRepos = () =>
+    githubRepos().then(
+      (i) => {
+        setInfo(i);
+        setLoadFailed(false);
+      },
+      () => setLoadFailed(true),
+    );
   useEffect(() => {
-    githubRepos().then(setInfo).catch(() => setInfo({ configured: false, installUrl: null }));
+    loadRepos();
   }, []);
+  // "More repositories" opens GitHub in a new tab; the list is read again when this tab is back.
+  const stopWatching = useRef<() => void>();
+  useEffect(() => () => stopWatching.current?.(), []);
+  const moreRepos = () => {
+    stopWatching.current?.();
+    stopWatching.current = githubManage(info!.installUrl!, loadRepos);
+  };
   useEffect(() => {
     setEditing(!row);
   }, [row]);
@@ -44,14 +66,7 @@ export function GitHubFollow({ gameId, row, choice, onChoice, onChanged }: {
     }
   };
 
-  const connectGitHub = () => {
-    try {
-      sessionStorage.setItem(GITHUB_RETURN_KEY, window.location.pathname);
-    } catch {
-      /* comes back to Toki Connect instead */
-    }
-    window.location.assign(githubInstallLink(info!.installUrl!));
-  };
+  const connectGitHub = () => window.location.assign(githubConnectLink(info!, window.location.pathname));
 
   const run = async (what: "deploy" | "stop") => {
     if (!gameId) return;
@@ -60,7 +75,7 @@ export function GitHubFollow({ gameId, row, choice, onChoice, onChanged }: {
     try {
       if (what === "deploy") {
         const r = await gitDeploy(gameId);
-        if (!r.ok) setErr(t("git.failed", { error: r.error ?? "" }));
+        if (!r.ok) setErr(gitFailed(t, r.error));
       } else await gitDisconnect(gameId);
     } catch (e) {
       setErr(t(`host.err.${hostError(e)}`, { mb: "100 MB" }));
@@ -98,14 +113,27 @@ export function GitHubFollow({ gameId, row, choice, onChoice, onChanged }: {
       )}
 
       {editing && (
-        !info ? (
+        loadFailed && !info ? (
+          <div className="drop">
+            <p>{t("connect.githubLoadError")}</p>
+            <button type="button" className="btn" onClick={loadRepos}>{t("tryAgain")}</button>
+          </div>
+        ) : !info ? (
           <p className="check" aria-busy="true">{t("loading")}</p>
         ) : !info.configured || !info.installUrl ? (
           <p className="check warn">{t("git.off")}</p>
-        ) : !info.repos?.length ? (
+        ) : !info.installations?.length ? (
           <div className="drop">
             <p>{t("git.connectFirst")}</p>
             <button type="button" className="btn primary" onClick={connectGitHub}>{t("connect.githubConnect")}</button>
+          </div>
+        ) : !info.repos?.length ? (
+          <div className="drop">
+            <p>{info.unreachable ? t("connect.githubLoadError") : t("connect.noRepos")}</p>
+            <div className="actions">
+              {!info.unreachable && <button type="button" className="btn primary" onClick={moreRepos}>{t("git.moreRepos")}</button>}
+              <button type="button" className="btn" onClick={loadRepos}>{t("git.refreshRepos")}</button>
+            </div>
           </div>
         ) : (
           <>
@@ -116,7 +144,11 @@ export function GitHubFollow({ gameId, row, choice, onChoice, onChanged }: {
                 <option key={`${r.installation_id}:${r.repo}`} value={`${r.installation_id}:${r.repo}`}>{r.repo}{r.private ? ` (${t("git.private")})` : ""}</option>
               ))}
             </select>
-            <small><button type="button" className="linkish" onClick={connectGitHub}>{t("git.moreRepos")}</button></small>
+            <small>
+              <button type="button" className="linkish" onClick={moreRepos}>{t("git.moreRepos")}</button>
+              {" · "}
+              <button type="button" className="linkish" onClick={loadRepos}>{t("git.refreshRepos")}</button>
+            </small>
             {choice && (
               <div className="pair">
                 <div>

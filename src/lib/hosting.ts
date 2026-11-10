@@ -47,7 +47,7 @@ export const HOST_ERRORS = [
   "no_files", "too_many_files", "too_big", "bad_file", "no_entry", "zip", "rate_limited", "storage_full", "account_full", "hosting_off",
   "missing_files", "not_allowed", "slug_taken", "no_previous", "storage_error", "too_many_keys", "upload", "error",
   "github_off", "github_error", "no_branch", "no_repo", "repo_too_big",
-  "already_hosted", "move_unreachable", "move_incomplete", "move_slow", "move_no_saves", "move_engine_saves", "not_moved",
+  "already_hosted", "move_unreachable", "move_incomplete", "move_slow", "move_no_saves", "move_engine_saves", "not_moved", "move_dynamic_files", "needs_build",
 ] as const;
 export type HostErrorCode = (typeof HOST_ERRORS)[number];
 /** The error to show: one Toki knows, "upload" when a file didn't reach Cloudflare, else "error". */
@@ -141,10 +141,23 @@ export interface MoveResult {
   saves: boolean;
   source: "github" | "site";
   github: { repo: string; branch: string; folder: string } | null;
+  /** Taken from the site: the repository whose file list helped, and how many files it added */
+  repoHelped: { repo: string; files: number } | null;
   /** A repository the game seems to come from, which Toki can't reach yet */
   suggestRepo: string | null;
+  /** File names the game builds while running that Toki couldn't look up (moved anyway) */
+  missing: string[];
 }
-export const moveToToki = (gameId: string, anyway = false) => post<MoveResult>({ action: "move", game_id: gameId, anyway });
+export interface MoveChoices {
+  /** Move although players' progress stays behind */
+  anyway?: boolean;
+  /** Move although files with names built at runtime may be missing */
+  partial?: boolean;
+  /** The game's repository, picked by the developer */
+  repo?: { installation_id: number; repo: string } | null;
+}
+export const moveToToki = (gameId: string, c: MoveChoices = {}) =>
+  post<MoveResult>({ action: "move", game_id: gameId, anyway: !!c.anyway, partial: !!c.partial, ...(c.repo ? { installation_id: c.repo.installation_id, repo: c.repo.repo } : {}) });
 /** Back to the old link after moving; the files on Toki are deleted. */
 export const moveBack = (gameId: string) => post<{ play_url: string }>({ action: "move_back", game_id: gameId });
 export interface MoveCheck {
@@ -242,8 +255,6 @@ export const gitConnect = (gameId: string, c: GitChoice) => post<{ ok: boolean; 
 export const gitDeploy = (gameId: string) => post<{ ok: boolean; error?: string; play_url?: string }>({ action: "git_deploy", game_id: gameId });
 export const gitDisconnect = (gameId: string) => post<{ ok: true }>({ action: "git_disconnect", game_id: gameId });
 
-/** Where to come back to after connecting GitHub (ConnectGitHub reads it). */
-export const GITHUB_RETURN_KEY = "toki.githubReturn";
 
 // ---------- one-click add ----------
 

@@ -9,6 +9,7 @@ import type { Db } from "./db.js";
 import { GitHubError, type GitHubClient } from "./github.js";
 import { finishUpload, HostingError, startUpload, type Deps, type HostUser } from "./hosting.js";
 import { cleanPath, MAX_GAME_BYTES, readTokiJson } from "../src/lib/hostingRules.js";
+import { isSourcePage } from "./assist/scan.js";
 
 /** Repositories with more than this (packed) can't follow; a game is at most 100 MB anyway. */
 export const MAX_TARBALL = 250 * 1024 * 1024;
@@ -109,6 +110,12 @@ export async function deployCommit(deps: Deps, gh: GitHubClient, row: GitRow, co
     if (total > MAX_GAME_BYTES) throw new HostingError("too_big");
     const tokiFile = files.find((f) => f.path === "toki.json") ?? rootToki;
     const toki = tokiFile ? readTokiJson(new TextDecoder().decode(tokiFile.data)) : {};
+    // The game's source instead of the finished game (its page loads ./src/main.ts): it would
+    // go live and not run. It has to be built first (a GitHub Action does that, see agents.md).
+    const page = files.find((f) => f.path === (toki.entry ?? "index.html"));
+    const pkg = files.find((f) => f.path === "package.json") ?? filesIn(all, "").find((f) => f.path === "package.json");
+    const hasBuild = !!pkg && new TextDecoder().decode(pkg.data).includes('"build"');
+    if (page && isSourcePage(new TextDecoder().decode(page.data.subarray(0, 200_000)), hasBuild)) throw new HostingError("needs_build");
 
     const start = await startUpload(deps, user, { game_id: row.game_id, toki, files: files.map((f) => ({ path: f.path, size: f.data.length })) });
     const byPath = new Map(files.map((f) => [f.path, f.data]));

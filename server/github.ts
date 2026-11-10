@@ -94,8 +94,14 @@ export function github(cfg: ServerEnv["github"], fetchImpl: typeof fetch = fetch
 
     async repos(installationId: number): Promise<{ repo: string; private: boolean; defaultBranch: string }[]> {
       const token = await installationToken(installationId);
-      const r = await call<{ repositories: { full_name: string; private: boolean; default_branch: string }[] }>("/installation/repositories?per_page=100", token);
-      return r.repositories.map((x) => ({ repo: x.full_name, private: x.private, defaultBranch: x.default_branch }));
+      const out: { repo: string; private: boolean; defaultBranch: string }[] = [];
+      // GitHub gives 100 at a time; accounts with more repositories need more pages.
+      for (let page = 1; page <= 10; page++) {
+        const r = await call<{ total_count: number; repositories: { full_name: string; private: boolean; default_branch: string }[] }>(`/installation/repositories?per_page=100&page=${page}`, token);
+        out.push(...r.repositories.map((x) => ({ repo: x.full_name, private: x.private, defaultBranch: x.default_branch })));
+        if (r.repositories.length < 100 || out.length >= r.total_count) break;
+      }
+      return out;
     },
 
     /** Reading and changing one repository with the installation's token. */

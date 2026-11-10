@@ -3,7 +3,9 @@
 import { brotliCompressSync } from "node:zlib";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { gzipSync } from "node:zlib";
-import { checkMove, crawlGame, findRepoBuild, moveBack, moveGame, pagesRepos, references, savesVerdict, type CrawledFile } from "../server/migrate";
+import { checkMove, crawlGame, dynamicNames, findRepo, moveBack, moveGame, pagesRepos, references, repoCandidates, savesVerdict, siteName, type CrawledFile } from "../server/migrate";
+import { deployCommit } from "../server/gitDeploy";
+import { guessRepo } from "../src/lib/hostingRules";
 import type { GitHubClient } from "../server/github";
 import { HostingError, type Deps } from "../server/hosting";
 import { fakeDb, fakeStore, tar, type Row } from "./fakes";
@@ -153,39 +155,39 @@ describe("moving a game", () => {
   const opts = () => ({ fetch: web(SITE).fetchImpl, resolve: publicDns, put: (deps as Deps & { put: typeof fetch }).put });
 
   it("puts the game live on Toki and remembers its old address for players' progress", async () => {
-    const out = await moveGame(deps, DEV, GAME, false, opts());
+    const out = await moveGame(deps, DEV, GAME, opts());
     expect(out).toMatchObject({ play_url: "https://moon-hop.playtoki.app/", from: ROOT, files: 15, saves: true });
     expect(puts).toHaveLength(15);
     expect(tables.games[0]).toMatchObject({ play_url: "https://moon-hop.playtoki.app/", hosted_site: "moon-hop", moved_from: ROOT, moved_at: "2026-11-19T10:00:00.000Z", controls: "Space to hop" });
-    await expect(moveGame(deps, DEV, GAME, false, opts())).rejects.toMatchObject({ code: "already_hosted" });
+    await expect(moveGame(deps, DEV, GAME, opts())).rejects.toMatchObject({ code: "already_hosted" });
   });
 
   it("doesn't move a game whose saves would stay behind, unless told to", async () => {
     const page = SITE[ROOT].body as string;
     const site = { ...SITE, [ROOT]: { body: page.replace('<script src="https://playtoki.app/toki-save.js"></script>', "") } };
     const o = { ...opts(), fetch: web(site).fetchImpl };
-    await expect(moveGame(deps, DEV, GAME, false, o)).rejects.toMatchObject({ code: "move_no_saves" });
+    await expect(moveGame(deps, DEV, GAME, o)).rejects.toMatchObject({ code: "move_no_saves" });
     expect(puts).toEqual([]);
     expect(tables.games[0].play_url).toBe(ROOT);
     // Saves Toki already keeps for the game also count.
     tables.game_saves.push({ game_id: GAME, user_id: "p1" });
-    expect((await moveGame(deps, DEV, GAME, false, o)).saves).toBe(true);
+    expect((await moveGame(deps, DEV, GAME, o)).saves).toBe(true);
   });
 
   it("moves anyway when the developer accepts that progress stays behind", async () => {
     const page = SITE[ROOT].body as string;
     const site = { ...SITE, [ROOT]: { body: page.replace("toki-save.js", "other.js") } };
-    const out = await moveGame(deps, DEV, GAME, true, { ...opts(), fetch: web(site).fetchImpl });
+    const out = await moveGame(deps, DEV, GAME, { ...opts(), fetch: web(site).fetchImpl, anyway: true });
     expect(out.saves).toBe(false);
     expect(tables.games[0].play_url).toBe("https://moon-hop.playtoki.app/");
   });
 
   it("only moves the developer's own games", async () => {
-    await expect(moveGame(deps, { id: "other", role: "creator" }, GAME, false, opts())).rejects.toBeInstanceOf(HostingError);
+    await expect(moveGame(deps, { id: "other", role: "creator" }, GAME, opts())).rejects.toBeInstanceOf(HostingError);
   });
 
   it("goes back to the old link", async () => {
-    await moveGame(deps, DEV, GAME, false, opts());
+    await moveGame(deps, DEV, GAME, opts());
     expect(await moveBack(deps, DEV, GAME)).toEqual({ play_url: ROOT });
     expect(tables.games[0]).toMatchObject({ play_url: ROOT, moved_from: null, moved_at: null });
     expect(tables.game_builds.every((b) => b.status === "deleting")).toBe(true);
@@ -194,7 +196,7 @@ describe("moving a game", () => {
 
   it("warns when a Godot game doesn't keep a copy of its progress for the save script", async () => {
     const site = { ...SITE, [`${ROOT}engine/moon.pck`]: { body: "GDPC user://save.dat" } };
-    await expect(moveGame(deps, DEV, GAME, false, { ...opts(), fetch: web(site).fetchImpl })).rejects.toMatchObject({ code: "move_engine_saves" });
+    await expect(moveGame(deps, DEV, GAME, { ...opts(), fetch: web(site).fetchImpl })).rejects.toMatchObject({ code: "move_engine_saves" });
     expect(tables.games[0].play_url).toBe(ROOT);
     const check = await checkMove(deps, DEV, GAME, null, { fetch: web(site).fetchImpl, resolve: publicDns });
     expect(check).toMatchObject({ ok: false, problem: "engine_storage", engine: "Godot", github: null, suggestRepo: "lu/moon-hop" });
@@ -203,7 +205,7 @@ describe("moving a game", () => {
   it("takes the game from its repository when that has the finished game, and follows it", async () => {
     tables.game_git = [];
     const gh = fakeGitHub({ "lu/moon-hop": { main: { "project.godot": "" }, "gh-pages": { "index.html": "<html>gh</html>", "index.pck": "p" } } });
-    const out = await moveGame(deps, DEV, GAME, false, { ...opts(), git: { gh, installations: [7] } });
+    const out = await moveGame(deps, DEV, GAME, { ...opts(), git: { gh, installations: [7] } });
     expect(out).toMatchObject({ source: "github", github: { repo: "lu/moon-hop", branch: "gh-pages", folder: "" }, suggestRepo: null, from: ROOT, saves: true, files: 2 });
     expect(tables.game_git[0]).toMatchObject({ repo: "lu/moon-hop", branch: "gh-pages", status: "live" });
     expect(tables.games[0]).toMatchObject({ play_url: "https://moon-hop.playtoki.app/", moved_from: ROOT });
@@ -211,13 +213,31 @@ describe("moving a game", () => {
     expect(tables.game_git).toEqual([]);
   });
 
-  it("takes the game from its site when the repository has no finished game, and suggests connecting it", async () => {
+  it("takes the game from its site when the repository has no finished game, with the files only the repository names", async () => {
     tables.game_git = [];
-    const gh = fakeGitHub({ "lu/moon-hop": { main: { "project.godot": "", "player.gd": "" } } });
-    const out = await moveGame(deps, DEV, GAME, false, { ...opts(), git: { gh, installations: [7] } });
-    expect(out).toMatchObject({ source: "site", github: null, files: 15, suggestRepo: "lu/moon-hop" });
-    const without = await moveBack(deps, DEV, GAME).then(() => moveGame(deps, DEV, GAME, false, opts()));
-    expect(without).toMatchObject({ source: "site", suggestRepo: "lu/moon-hop" });
+    // The game builds its sound names while running; the files are in the repository's public folder.
+    const site = {
+      ...SITE,
+      [`${ROOT}js/main.js`]: { body: `${SITE[`${ROOT}js/main.js`].body} const play = (n) => new Audio(\`audio/\${n}.mp3\`);`, type: "text/javascript" },
+      [`${ROOT}audio/jump.mp3`]: { body: "j", type: "audio/mpeg" },
+      [`${ROOT}audio/land.mp3`]: { body: "l", type: "audio/mpeg" },
+    };
+    const o = { ...opts(), fetch: web(site).fetchImpl };
+    // No repository to look them up in: Toki says which names, and moves nothing.
+    await expect(moveGame(deps, DEV, GAME, o)).rejects.toMatchObject({ code: "move_dynamic_files", detail: "audio/….mp3" });
+    expect(tables.games[0].play_url).toBe(ROOT);
+    // Moved anyway: the result says what may be missing.
+    expect(await moveGame(deps, DEV, GAME, { ...o, partial: true })).toMatchObject({ source: "site", files: 15, missing: ["audio/….mp3"], repoHelped: null, suggestRepo: "lu/moon-hop" });
+    await moveBack(deps, DEV, GAME);
+    // With the repository: its file list brings the sounds.
+    const gh = fakeGitHub({ "lu/moon-hop": { main: { "project.godot": "", "player.gd": "", "public/audio/jump.mp3": "", "public/audio/land.mp3": "", "public/audio/gone.mp3": "" } } });
+    const out = await moveGame(deps, DEV, GAME, { ...o, git: { gh, installations: [7] } });
+    expect(out).toMatchObject({ source: "site", github: null, files: 17, missing: [], repoHelped: { repo: "lu/moon-hop", files: 2 }, suggestRepo: null });
+    expect(tables.game_git).toEqual([]);
+  });
+
+  it("notices file names a game builds while running", () => {
+    expect(dynamicNames("load(`audio/${name}.mp3`); img.src = 'tiles/' + id + '.png'; fetch(`https://api.example.com/${x}.json`); import(`./chunk-abc.js`)")).toEqual(["audio/….mp3", "tiles/….png"]);
   });
 });
 
@@ -273,15 +293,49 @@ describe("the game's GitHub repository", () => {
 
   it("takes the finished game from gh-pages first, else from the main branch", async () => {
     const gh = fakeGitHub({ "lu/moon-hop": { main: { "project.godot": "", "src/player.gd": "" }, "gh-pages": { "index.html": "<html>", "index.pck": "p" } } });
-    expect((await findRepoBuild(gh, [7], ROOT)).found).toEqual({ installation_id: 7, repo: "lu/moon-hop", branch: "gh-pages", folder: "" });
+    expect((await findRepo(gh, [7], { play_url: ROOT })).found).toEqual({ installation_id: 7, repo: "lu/moon-hop", branch: "gh-pages", folder: "" });
     const docs = fakeGitHub({ "lu/moon-hop": { main: { "docs/index.html": "<html>", "README.md": "#" } } });
-    expect((await findRepoBuild(docs, [7], ROOT)).found).toMatchObject({ branch: "main", folder: "docs" });
+    expect((await findRepo(docs, [7], { play_url: ROOT })).found).toMatchObject({ branch: "main", folder: "docs" });
   });
 
-  it("finds no finished game in a project without a web build, and says which repository it was", async () => {
-    const gh = fakeGitHub({ "lu/moon-hop": { main: { "project.godot": "", "index.html": '<script type="module" src="/src/main.tsx"></script>', "package.json": '{"scripts":{"build":"vite build"}}' } } });
-    expect(await findRepoBuild(gh, [7], ROOT)).toEqual({ found: null, repo: "lu/moon-hop" });
-    expect(await findRepoBuild(fakeGitHub({}), [7], ROOT)).toEqual({ found: null, repo: "lu/moon-hop" });
+  const VITE = { "index.html": '<script type="module" src="./src/main.ts"></script>', "package.json": '{"scripts":{"build":"vite build"}}', "src/main.ts": "x", "public/audio/jump.mp3": "a", "public/icon.png": "i", "tests/shot.png": "t" };
+
+  it("finds no finished game in a repository that must be built first, and gives its file names instead", async () => {
+    const gh = fakeGitHub({ "lu/moon-hop": { main: VITE } });
+    expect(await findRepo(gh, [7], { play_url: ROOT })).toEqual({ found: null, repo: "lu/moon-hop", reached: true, candidates: ["audio/jump.mp3", "icon.png", "public/audio/jump.mp3", "public/icon.png"] });
+    expect(await findRepo(fakeGitHub({}), [7], { play_url: ROOT })).toEqual({ found: null, repo: "lu/moon-hop", reached: false, candidates: [] });
+  });
+
+  it("finds the repository of a game on another site by its name, or takes the one picked", async () => {
+    const gh = fakeGitHub({ "lu/debt-drifter": { main: VITE }, "lu/other": { main: { "index.html": "<html>" } } });
+    expect(siteName("https://debtdrifter.vercel.app/")).toBe("debtdrifter");
+    expect(siteName("https://www.debt-drifter.com/play/")).toBe("debtdrifter");
+    expect(await findRepo(gh, [7], { play_url: "https://debtdrifter.vercel.app/" })).toMatchObject({ found: null, repo: "lu/debt-drifter", reached: true });
+    expect(await findRepo(gh, [7], { play_url: "https://example.com/x/", slug: "debt-drifter" })).toMatchObject({ repo: "lu/debt-drifter", reached: true });
+    expect(await findRepo(gh, [7], { play_url: "https://example.com/x/", slug: "snake" })).toMatchObject({ repo: null, reached: false });
+    expect((await findRepo(gh, [7], { play_url: "https://example.com/x/", slug: "snake" }, { installation_id: 7, repo: "lu/other" })).found).toMatchObject({ repo: "lu/other", folder: "" });
+    // someone else's installation can't be picked
+    expect(await findRepo(gh, [7], { play_url: "https://example.com/x/" }, { installation_id: 8, repo: "lu/other" })).toMatchObject({ repo: null, reached: false });
+    const repos = [{ repo: "lu/other" }, { repo: "lu/debt-drifter" }];
+    expect(guessRepo(repos, "https://debtdrifter.vercel.app/", "x")).toEqual({ repo: "lu/debt-drifter" });
+    expect(guessRepo(repos, "https://lu.github.io/other/", "debt-drifter")).toEqual({ repo: "lu/other" });
+    expect(guessRepo(repos, "https://example.com/", "snake")).toBeNull();
+  });
+
+  it("asks the site for a repository's pictures, sounds and data, not for its code", () => {
+    expect(repoCandidates(["public/audio/jump.mp3", "apps/web/static/img/a.png", "assets/b.png", "src/main.ts", "package.json", "public/data.json", "node_modules/x/y.png", ".github/logo.png", "README.md", "vite.config.ts"]))
+      .toEqual(["audio/jump.mp3", "img/a.png", "data.json", "public/audio/jump.mp3", "apps/web/static/img/a.png", "assets/b.png", "public/data.json"]);
+  });
+
+  it("refuses to put a game's source live instead of the finished game", async () => {
+    const updates: Row[] = [];
+    const db = fakeDb({ games: [{ id: "g", created_by: "dev" }], profiles: [{ id: "dev", role: "creator" }], game_git: [{ game_id: "g" }], game_builds: [] });
+    const deps = { db, store: fakeStore(new Map(), new Map()), config: { accountId: "a", accessKeyId: "k", secretAccessKey: "s", bucket: "games", domain: "playtoki.app" } };
+    const out = await deployCommit(deps, fakeGitHub({ "lu/moon-hop": { main: VITE } }), { game_id: "g", installation_id: 7, repo: "lu/moon-hop", branch: "main", folder: "", created_by: "dev" });
+    expect(out).toEqual({ ok: false, error: "needs_build" });
+    expect((await db.select<Row>("game_builds", "select=id"))).toEqual([]);
+    expect((await db.select<Row>("game_git", "select=status,error"))[0]).toMatchObject({ status: "failed", error: "needs_build" });
+    void updates;
   });
 });
 

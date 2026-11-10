@@ -26,7 +26,8 @@ export interface HostUser {
 }
 
 export class HostingError extends Error {
-  constructor(readonly code: string, readonly status = 400) {
+  /** `detail`: more for the person to read (e.g. which file names), passed on as the answer's message */
+  constructor(readonly code: string, readonly status = 400, readonly detail = "") {
     super(code);
   }
 }
