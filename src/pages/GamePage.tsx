@@ -229,7 +229,9 @@ export function GamePage() {
             <button type="button" className="btn" onClick={() => setFrameRun((n) => n + 1)}>{t(saves.lost ? "saves.loadSaved" : "saves.loadNewer")}</button>
           </div>
         )}
-        {saves.status === "account" && !saves.conflict && !saves.lost && <p className="hint saved">✓ {t("saves.account")}</p>}
+        {!saves.conflict && !saves.lost && saves.status === "account" && <p className="hint saved">✓ {t("saves.account")}</p>}
+        {!saves.conflict && !saves.lost && saves.status === "saving" && <p className="hint" role="status">{t("saves.saving")}</p>}
+        {!saves.conflict && !saves.lost && saves.status === "offline" && <p className="hint" role="status">{t("saves.offline")}</p>}
         {saves.status === "device" && (
           <p className="hint saved">
             {t("saves.device")} <Link to={`/signup?next=/game/${game.slug}`}>{t("saves.signup")}</Link>
