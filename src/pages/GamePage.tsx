@@ -83,6 +83,11 @@ export function GamePage() {
     },
   });
   const inParty = isParty(useBadges().party);
+  // A friend's link, opened without an account: they play in the room, and are told once
+  // what an account would keep. After signing up they are back in the same room.
+  const [guestTold, setGuestTold] = useState(false);
+  const guestInRoom = !userId && !!joinCode && !guestTold;
+  const backHere = encodeURIComponent(`/game/${slug}${params.toString() ? `?${params}` : ""}`);
 
   useEffect(() => {
     if (game) matchIsolation(isolated);
@@ -189,6 +194,16 @@ export function GamePage() {
   return (
     <>
       <section className={`player ${inParty ? "has-party" : ""}`}>
+        {guestInRoom && (
+          <div className="check warn guest-note" role="status">
+            <p><b>{t("guest.title")}</b> {t("guest.body")}</p>
+            <div className="actions">
+              <Link to={`/signup?next=${backHere}`} className="btn primary">{t("guest.signup")}</Link>
+              <Link to={`/login?next=${backHere}`} className="btn">{t("nav.login")}</Link>
+              <button type="button" className="btn" onClick={() => setGuestTold(true)}>{t("guest.dismiss")}</button>
+            </div>
+          </div>
+        )}
         <div className={`frame ${isFull ? "is-full" : ""} ${fillScreen ? "pseudo-full" : ""}`} ref={frameWrap}>
           {pseudoFull && !landscapePhone && (
             <button type="button" className="close-full" onClick={() => setPseudoFull(false)} aria-label={t("game.exitFullscreen")}>
@@ -249,7 +264,7 @@ export function GamePage() {
         {!saves.conflict && !saves.lost && saves.status === "offline" && <p className="hint" role="status">{t("saves.offline")}</p>}
         {saves.status === "device" && (
           <p className="hint saved">
-            {t("saves.device")} <Link to={`/signup?next=/game/${game.slug}`}>{t("saves.signup")}</Link>
+            {t("saves.device")} <Link to={`/signup?next=${backHere}`}>{t("saves.signup")}</Link>
           </p>
         )}
         {freeAi && userId && !helper && (

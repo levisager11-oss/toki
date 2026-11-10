@@ -1308,7 +1308,7 @@ const en = {
   "invite.opening": "Opening a room in the game…",
   "invite.share": "Share a link",
   "invite.shareText": "Play {title} with me on Toki",
-  "invite.shareHelp": "For friends who aren't on Toki right now. The link opens the game in your room.",
+  "invite.shareHelp": "For friends who aren't on Toki right now. The link opens the game in your room, also without an account.",
   "party.title": "Party",
   "party.leader": "leads the party",
   "party.youLead": "You lead the party. Open a room in a game and your friends follow you.",
@@ -1332,6 +1332,10 @@ const en = {
   "push.failed": "That didn't work. Try again.",
   "notif.devHost": "New for your multiplayer games: your game can open a room by itself when a player invites friends. See how to add it.",
   "mp.setup.step3": "Let the game open a room by itself when Toki asks (toki.onHost). Then players only pick their friends, and friends who play together stay together as a party.",
+  "guest.title": "You're playing as a guest",
+  "guest.body": "You're in your friend's room and can play right away. Without an account, your progress is only kept on this device, your high scores don't count, and you won't stay together with your friends for the next game.",
+  "guest.signup": "Create a free account",
+  "guest.dismiss": "Play as a guest",
 };
 
 export type Key = keyof typeof en;
@@ -2644,7 +2648,7 @@ const de: Record<Key, string> = {
   "invite.opening": "Im Spiel wird ein Raum geöffnet …",
   "invite.share": "Link teilen",
   "invite.shareText": "Spiel {title} mit mir auf Toki",
-  "invite.shareHelp": "Für Freunde, die gerade nicht auf Toki sind. Der Link öffnet das Spiel in deinem Raum.",
+  "invite.shareHelp": "Für Freunde, die gerade nicht auf Toki sind. Der Link öffnet das Spiel in deinem Raum, auch ohne Konto.",
   "party.title": "Party",
   "party.leader": "führt die Party an",
   "party.youLead": "Du führst die Party an. Öffne in einem Spiel einen Raum, und deine Freunde folgen dir.",
@@ -2668,6 +2672,10 @@ const de: Record<Key, string> = {
   "push.failed": "Das hat nicht geklappt. Versuch es nochmal.",
   "notif.devHost": "Neu für deine Mehrspieler-Spiele: Dein Spiel kann selbst einen Raum öffnen, wenn ein Spieler Freunde einlädt. So baust du es ein.",
   "mp.setup.step3": "Lass das Spiel selbst einen Raum öffnen, wenn Toki darum bittet (toki.onHost). Dann wählen Spieler nur noch ihre Freunde aus, und wer zusammen spielt, bleibt als Party zusammen.",
+  "guest.title": "Du spielst als Gast",
+  "guest.body": "Du bist im Raum deines Freundes und kannst gleich losspielen. Ohne Konto bleibt dein Fortschritt nur auf diesem Gerät, deine Highscores zählen nicht, und beim nächsten Spiel bleibst du nicht mit deinen Freunden zusammen.",
+  "guest.signup": "Kostenloses Konto erstellen",
+  "guest.dismiss": "Als Gast spielen",
 };
 
 export type Lang = "en" | "de";

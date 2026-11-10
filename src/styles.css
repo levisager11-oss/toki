@@ -1030,6 +1030,9 @@ main.content:focus { outline: none; }
   .invite-pop { right: 12px; left: 12px; width: auto; bottom: calc(var(--tabbar-h, 64px) + 12px); }
 }
 @media (prefers-reduced-motion: reduce) { .invite-pop { animation: none; } }
+.guest-note { margin: 0; padding: 10px 12px; font-size: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.guest-note p { margin: 0; flex: 1 1 320px; }
+.guest-note .actions { gap: 8px; }
 .invite-share { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .invite-share .sub { flex: 1 1 180px; font-size: 13px; color: var(--muted); }
 
