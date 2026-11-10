@@ -6,19 +6,20 @@ import { useGames } from "../lib/useGames";
 import { compact, likes, myGameStats, plays } from "../lib/games";
 import { Cover } from "../components/Cover";
 import { useAiStatus } from "../lib/assist";
-import { HeartIcon, PlayIcon } from "../components/icons";
+import { ClockIcon, HeartIcon, PlayIcon } from "../components/icons";
 import { useTitle } from "../lib/useTitle";
 import { UploadKeys } from "../components/UploadKeys";
 import { useHosting } from "../lib/hosting";
 import { MultiplayerSetup } from "../components/SaveSupport";
+import { formatDuration } from "../lib/analytics";
 
 export function MyGames() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { profile } = useAuth();
   const { games, error } = useGames();
   const ai = useAiStatus();
   const hosting = useHosting();
-  const [daily, setDaily] = useState<Record<string, number[]>>({});
+  const [daily, setDaily] = useState<Record<string, { plays: number[]; seconds: number[] }>>({});
   useTitle(profile?.role === "admin" ? t("my.allTitle") : t("my.title"));
 
   useEffect(() => {
@@ -29,6 +30,19 @@ export function MyGames() {
   if (!games || !profile) return <p className="msg" aria-busy="true">{t("loading")}</p>;
   const isAdmin = profile.role === "admin";
   const list = isAdmin ? games : games.filter((g) => g.created_by === profile.id);
+  // The last 30 days over all listed games.
+  const month = list.reduce(
+    (a, g) => {
+      const d = daily[g.id];
+      if (!d) return a;
+      d.plays.forEach((n, i) => (a.plays[i] += n));
+      a.seconds += d.seconds.reduce((x, y) => x + y, 0);
+      return a;
+    },
+    { plays: Array(30).fill(0) as number[], seconds: 0 },
+  );
+  const monthPlays = month.plays.reduce((a, b) => a + b, 0);
+  const allLikes = list.reduce((a, g) => a + likes(g), 0);
 
   return (
     <section>
@@ -41,6 +55,17 @@ export function MyGames() {
           <Link to="/add" className="btn primary"><span aria-hidden="true">+</span>{t("my.add")}</Link>
         </div>
       </div>
+      {list.length > 0 && Object.keys(daily).length > 0 && (
+        <div className="stat-tiles my-overview">
+          <div className="tile">
+            <span className="label">{t("my.plays30")}</span>
+            <b>{compact(monthPlays)}</b>
+            <Spark days={month.plays} label={t("my.plays30")} />
+          </div>
+          <div className="tile"><span className="label">{t("my.time30")}</span><b>{formatDuration(month.seconds, lang)}</b></div>
+          <div className="tile"><span className="label">{t("an.likes")}</span><b>{compact(allLikes)}</b></div>
+        </div>
+      )}
       {list.length === 0 ? (
         <p className="msg">{t("my.empty")}</p>
       ) : (
@@ -59,12 +84,15 @@ export function MyGames() {
                   <Link to={`/game/${g.slug}/updates?new=1`}>{t("rel.new")}</Link>
                   {" · "}
                   <Link to={`/game/${g.slug}/feedback`}>{t("nav.feedback")}</Link>
+                  {" · "}
+                  <Link to={`/game/${g.slug}/stats`}>{t("an.title")}</Link>
                 </span>
               </div>
               <div className="stats">
                 <span title={t("stats.plays", { n: plays(g) })}><PlayIcon size={10} /> {compact(plays(g))}</span>
                 <span title={t("stats.likes", { n: likes(g) })}><HeartIcon /> {compact(likes(g))}</span>
-                {daily[g.id] && <Spark days={daily[g.id]} label={t("my.plays14")} />}
+                {daily[g.id] && <span title={t("my.time30")}><ClockIcon /> {formatDuration(daily[g.id].seconds.reduce((a, b) => a + b, 0), lang)}</span>}
+                {daily[g.id] && <Spark days={daily[g.id].plays.slice(-14)} label={t("my.plays14")} />}
               </div>
               <Link to={`/edit/${g.slug}`} className="btn">{t("game.edit")}</Link>
             </li>

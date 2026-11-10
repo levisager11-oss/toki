@@ -64,3 +64,8 @@ export const LockIcon = () => (
 export const LogoutIcon = () => (
   <svg viewBox="0 0 16 16" aria-hidden="true" width="16" height="16"><path d="M6 2H2.5v12H6M10.5 4.5 14 8l-3.5 3.5M14 8H6" fill="none" stroke="currentColor" strokeWidth="1.6" /></svg>
 );
+export const ClockIcon = () => (
+  <svg viewBox="0 0 16 16" aria-hidden="true" width="14" height="14">
+    <path d="M8 1.75a6.25 6.25 0 1 0 0 12.5 6.25 6.25 0 0 0 0-12.5ZM8 4.5V8l2.5 1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+  </svg>
+);

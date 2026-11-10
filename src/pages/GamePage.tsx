@@ -6,6 +6,7 @@ import { useAuth } from "../lib/auth";
 import { useMediaQuery } from "../lib/useMediaQuery";
 import { markPlayed, visitorId } from "../lib/local";
 import { findGame, plays, recordPlay } from "../lib/games";
+import { usePlaytime } from "../lib/analytics";
 import { useGames } from "../lib/useGames";
 import { useSaveBridge } from "../lib/saves";
 import { matchIsolation } from "../lib/isolation";
@@ -77,6 +78,8 @@ export function GamePage() {
     const id = setTimeout(() => recordPlay(gameId, visitorId()).catch(() => {}), PLAY_AFTER_MS);
     return () => clearTimeout(id);
   }, [gameId]);
+
+  usePlaytime(gameId, session?.access_token);
 
   useEffect(() => {
     if (game) markPlayed(game.slug);
@@ -203,6 +206,7 @@ export function GamePage() {
               ? <InviteFriends key={game.id} game={game} invites={invites} startOpen={!!inviteFirst} />
               : <Link to={`/login?next=/game/${game.slug}`} className="btn"><PeopleIcon />{t("invite.button")}</Link>)}
             <ShareButton path={`/game/${game.slug}`} title={game.title} />
+            {canEdit && <Link to={`/game/${game.slug}/stats`} className="btn">{t("an.title")}</Link>}
             {canEdit && <Link to={`/edit/${game.slug}`} className="btn">{t("game.edit")}</Link>}
             <button type="button" className="btn primary" onClick={fullscreen}><FullscreenIcon />{t("game.fullscreen")}</button>
           </div>
