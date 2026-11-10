@@ -35,6 +35,20 @@ const game = () => tables.games[0];
 const FILES = [{ path: "Snake/index.html", size: 100 }, { path: "Snake/game.js", size: 200 }];
 
 describe("hosting a game", () => {
+  it("remembers the link a game ran at before, so players' progress comes along", async () => {
+    game().play_url = "https://lu.itch.io/snake";
+    const s = await startUpload(deps, DEV, { game_id: "11111111-1111-4111-8111-111111111111", files: FILES });
+    uploadAll(s);
+    await finishUpload(deps, DEV, { build_id: s.build_id });
+    expect(game()).toMatchObject({ play_url: "https://snake.playtoki.app/", moved_from: "https://lu.itch.io/snake", moved_at: now.toISOString() });
+    // A new version of a game that is on Toki already doesn't change it.
+    now = new Date("2026-11-16T10:00:00Z");
+    const s2 = await startUpload(deps, DEV, { game_id: "11111111-1111-4111-8111-111111111111", files: FILES });
+    uploadAll(s2);
+    await finishUpload(deps, DEV, { build_id: s2.build_id });
+    expect(game().moved_at).toBe("2026-11-15T10:00:00.000Z");
+  });
+
   it("uploads, goes live at the game's own address and takes over toki.json", async () => {
     const s = await startUpload(deps, DEV, { game_id: "11111111-1111-4111-8111-111111111111", files: FILES });
     expect(s).toMatchObject({ site: "snake", entry: "index.html", bytes: 300 });

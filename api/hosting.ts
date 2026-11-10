@@ -14,7 +14,7 @@ import { githubConfigured } from "../server/env.js";
 import { deployCommit, type GitRow } from "../server/gitDeploy.js";
 import { github, GitHubError } from "../server/github.js";
 import { MAX_GAME_BYTES } from "../src/lib/hostingRules.js";
-import { moveBack, moveGame } from "../server/migrate.js";
+import { checkMove, moveBack, moveGame, type GitHubAccess } from "../server/migrate.js";
 
 interface Who {
   db: Db;
@@ -143,7 +143,12 @@ export async function POST(request: Request) {
         // A game at a link elsewhere: Toki downloads it from there and hosts it.
         if (!w.session) return json({ error: "not_allowed" }, 403);
         if (!isUuid(b.game_id)) return json({ error: "bad_request" }, 400);
-        return json(await moveGame(deps, w.user, b.game_id, b.anyway === true));
+        return json(await moveGame(deps, w.user, b.game_id, b.anyway === true, { git: await gitAccess(w) }));
+      case "move_check":
+        // Before an upload or a repository replaces a game's link: will players' progress come along?
+        if (!w.session) return json({ error: "not_allowed" }, 403);
+        if (!isUuid(b.game_id)) return json({ error: "bad_request" }, 400);
+        return json(await checkMove(deps, w.user, b.game_id, await gitAccess(w)));
       case "move_back":
         if (!w.session) return json({ error: "not_allowed" }, 403);
         if (!isUuid(b.game_id)) return json({ error: "bad_request" }, 400);
@@ -210,6 +215,15 @@ async function unhost(w: Who, store: ReturnType<typeof r2>, b: Record<string, un
 }
 
 // ---------- games that follow a GitHub repository ----------
+
+/** The developer's connected GitHub accounts, when the Toki GitHub App is set up and they have one. */
+async function gitAccess(w: Who): Promise<GitHubAccess | null> {
+  const { env } = await withSecrets(w.db, { ...serverEnv(), serviceKey: w.serviceKey });
+  if (!githubConfigured(env.github)) return null;
+  const installs = await w.db.select<{ installation_id: number }>("github_installations", `user_id=eq.${w.user.id}&select=installation_id`);
+  if (!installs.length) return null;
+  return { gh: github(env.github), installations: installs.map((i) => Number(i.installation_id)) };
+}
 
 const BRANCH = /^(?!.*\.\.)(?!\/)[\w./-]{1,200}$/;
 

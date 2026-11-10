@@ -1,21 +1,30 @@
 // "Move to Toki": a game that runs somewhere else (its own site, GitHub Pages, itch.io, …) moves
-// onto Toki. The server downloads the game from its address, starting at its page: everything the
-// page, its scripts and its styles point to inside the game's folder. The files then go live
-// through the same steps as any upload (server/hosting.ts), and the game keeps its page, plays,
-// likes, saves and high scores. Links to other sites (a font from a CDN, an ad script) stay as
-// they are. Only public https sites are read, never local or private addresses.
+// onto Toki, and keeps its page, plays, likes, saves and high scores. Where the files come from:
+// 1. The game's GitHub repository, when Toki's GitHub App reaches it and it holds the finished
+//    game (GitHub Pages' gh-pages branch, or a folder with a playable index.html). The game then
+//    follows the repository: every push updates it (server/gitDeploy.ts).
+// 2. Otherwise (no finished build there, e.g. only the Godot project) the site it runs on: the
+//    server downloads the game from its address, starting at its page: everything the page, its
+//    scripts and its styles point to inside the game's folder. Links to other sites (a font from a
+//    CDN, an ad script) stay as they are. Only public https sites are read, never local or
+//    private addresses.
+// Either way the files go live through the same steps as any upload (server/hosting.ts).
 //
 // Players' progress: a game keeps it in the browser, under its address, and the new address
 // can't read it. A game with Toki's save script hands it to Toki, so Toki carries it over by
 // itself (src/lib/movedSaves.ts picks it up at the old address the first time a player opens the
-// moved game). So a game moves only once it has the save script, unless the developer says to
-// move anyway (and the progress stays behind).
+// moved game). So a game moves only once it has the save script (and, for Godot and Unity, keeps
+// a copy of its progress where the script sees it), unless the developer says to move anyway.
 import { lookup } from "node:dns/promises";
-import { brotliCompressSync, gzipSync } from "node:zlib";
+import { brotliCompressSync, brotliDecompressSync, gunzipSync, gzipSync } from "node:zlib";
 import { isCheckableUrl } from "./embed-check.js";
 import { privateAddress, type Lookup } from "./assist/pages.js";
 import { finishUpload, HostingError, startUpload, type Deps, type HostUser } from "./hosting.js";
-import { cleanPath, MAX_GAME_BYTES, MAX_GAME_FILES, readTokiJson, type TokiJson } from "../src/lib/hostingRules.js";
+import { deployCommit, type GitRow } from "./gitDeploy.js";
+import type { GitHubClient } from "./github.js";
+import { gameFolder } from "./assist/scan.js";
+import { cleanPath, MAX_GAME_BYTES, MAX_GAME_FILES, pagesRepos, readTokiJson, type TokiJson } from "../src/lib/hostingRules.js";
+export { pagesRepos };
 
 /** The whole download may take this long (Vercel stops the request at 300 s). */
 export const CRAWL_MS = 200_000;
@@ -301,6 +310,98 @@ function recompress(url: string, res: Response, data: Uint8Array): Uint8Array {
   return data;
 }
 
+// ---------- will players' progress come along? ----------
+
+export type SavesProblem = "no_script" | "engine_storage" | "unreachable";
+export interface SavesVerdict {
+  ok: boolean;
+  problem: SavesProblem | null;
+  engine: "Godot" | "Unity" | null;
+}
+
+const latin1 = (b: Uint8Array) => Buffer.from(b.buffer, b.byteOffset, b.byteLength).toString("latin1");
+/** A file's bytes, unpacked when it is a packed Unity file. */
+function unpacked(path: string, data: Uint8Array): Uint8Array {
+  try {
+    if (/\.br$/i.test(path)) return new Uint8Array(brotliDecompressSync(data));
+    if (/\.gz$/i.test(path) || (/\.unityweb$/i.test(path) && data[0] === 0x1f && data[1] === 0x8b)) return new Uint8Array(gunzipSync(data));
+  } catch {
+    /* not packed after all */
+  }
+  return data;
+}
+
+/**
+ * Whether the save script at the old address can hand over players' progress. It only sees what
+ * the game keeps in localStorage. Godot and Unity keep their files in IndexedDB instead, so for
+ * them the game itself must also put a copy in localStorage (src/lib/integration.ts says how;
+ * Toki Connect adds it). Toki looks for that in the game's own code: Godot's .pck, Unity's
+ * framework and data files, and the game's pages. Saves Toki already keeps for the game count too.
+ */
+export function savesVerdict(got: Pick<Crawled, "files" | "saveScript"> | null, toki_saves: boolean): SavesVerdict {
+  if (!got) return { ok: toki_saves, problem: toki_saves ? null : "unreachable", engine: null };
+  const isGodot = got.files.some((f) => /\.pck$/i.test(f.path)) || got.files.some((f) => /\.html?$/i.test(f.path) && /GODOT_CONFIG|godot/i.test(latin1(f.data.subarray(0, 200_000))));
+  const isUnity = got.files.some((f) => /\.loader\.js$/i.test(f.path) || /\.(unityweb|data(\.br|\.gz)?)$/i.test(f.path) && /(^|\/)Build\//.test(f.path));
+  const engine = isGodot ? "Godot" : isUnity ? "Unity" : null;
+  if (toki_saves) return { ok: true, problem: null, engine };
+  if (!got.saveScript) return { ok: false, problem: "no_script", engine };
+  if (!engine) return { ok: true, problem: null, engine };
+  const own = got.files.filter((f) =>
+    !/(^|\/)toki-save[^/]*\.js$/i.test(f.path) &&
+    (engine === "Godot" ? /\.(pck|html?)$/i.test(f.path) : /\.(framework\.js|data|unityweb|html?)(\.br|\.gz)?$/i.test(f.path)),
+  );
+  const copies = own.some((f) => latin1(unpacked(f.path, f.data)).includes("localStorage"));
+  return copies ? { ok: true, problem: null, engine } : { ok: false, problem: "engine_storage", engine };
+}
+
+// ---------- the game's GitHub repository ----------
+
+export interface RepoChoice {
+  installation_id: number;
+  repo: string;
+  branch: string;
+  folder: string;
+}
+
+/**
+ * The finished game in the developer's repository, if Toki can reach it: GitHub Pages' gh-pages
+ * branch first, then the default branch; the folder of the game's address, else the folder with
+ * a playable index.html (not a bundler's source page). null when there's no finished build.
+ */
+export async function findRepoBuild(gh: GitHubClient, installations: number[], playUrl: string): Promise<{ found: RepoChoice | null; repo: string | null }> {
+  const wanted = pagesRepos(playUrl);
+  let seen: string | null = null;
+  for (const id of installations) {
+    const repos = await gh.repos(id).catch(() => []);
+    for (const w of wanted) {
+      const r = repos.find((x) => x.repo.toLowerCase() === w.repo.toLowerCase());
+      if (!r) continue;
+      seen = r.repo;
+      const repo = await gh.repo(id, r.repo);
+      const branches = await repo.branches().catch(() => [] as string[]);
+      for (const branch of [...new Set([...(branches.includes("gh-pages") ? ["gh-pages"] : []), r.defaultBranch])]) {
+        const tree = await repo.tree(branch).catch(() => []);
+        const paths = tree.filter((e) => e.type === "blob").map((e) => e.path);
+        const pages = new Map<string, string>();
+        const read = async (p: string) => {
+          if (!pages.has(p)) pages.set(p, (await repo.read(p, branch).catch(() => "")).slice(0, 60_000));
+          return pages.get(p)!;
+        };
+        // The folder of the game's address (e.g. lu.github.io/repo/play/ → play, or docs/play).
+        for (const d of w.sub ? [w.sub, `docs/${w.sub}`] : []) {
+          if (paths.includes(`${d}/index.html`) && !/<script[^>]+src=["'][^"']*\.(tsx?|jsx)["']/i.test(await read(`${d}/index.html`))) return { found: { installation_id: id, repo: r.repo, branch, folder: d }, repo: r.repo };
+        }
+        const candidates = paths.filter((p) => /(^|\/)index\.html$/i.test(p) && p.split("/").length <= 3).slice(0, 8);
+        if (paths.includes("package.json")) candidates.push("package.json");
+        for (const p of candidates) await read(p);
+        const { folder } = gameFolder(paths, (p) => pages.get(p));
+        if (folder !== null) return { found: { installation_id: id, repo: r.repo, branch, folder }, repo: r.repo };
+      }
+    }
+  }
+  return { found: null, repo: seen ?? wanted[0]?.repo ?? null };
+}
+
 // ---------- moving the game ----------
 
 interface MoveGame {
@@ -317,39 +418,118 @@ export interface MoveResult {
   from: string;
   files: number;
   bytes: number;
-  /** Players' progress comes along (the game has Toki's save script) */
+  /** Players' progress comes along */
   saves: boolean;
+  /** Where Toki took the game from: the repository (follows every push) or the site */
+  source: "github" | "site";
+  github: RepoChoice | null;
+  /** A repository the game seems to come from, which Toki can't reach (yet): connect GitHub for it */
+  suggestRepo: string | null;
 }
 
-/**
- * Downloads a game from its link and puts it live on Toki. Throws move_no_saves when the game
- * doesn't have Toki's save script (players' progress would stay behind), unless `anyway`.
- */
-export async function moveGame(deps: Deps, user: HostUser, gameId: string, anyway = false, o: CrawlOptions & { put?: typeof fetch } = {}): Promise<MoveResult> {
-  const { db } = deps;
-  const [g] = await db.select<MoveGame>("games", `id=eq.${gameId}&select=id,play_url,created_by,hosted_site,needs_isolation`);
+export interface GitHubAccess {
+  gh: GitHubClient;
+  installations: number[];
+}
+
+const hostOf = (u: string) => {
+  try {
+    return new URL(u).hostname;
+  } catch {
+    return "";
+  }
+};
+
+async function movable(deps: Deps, user: HostUser, gameId: string): Promise<MoveGame> {
+  const [g] = await deps.db.select<MoveGame>("games", `id=eq.${gameId}&select=id,play_url,created_by,hosted_site,needs_isolation`);
   if (!g) throw new HostingError("no_game", 404);
   if (user.role !== "admin" && g.created_by !== user.id) throw new HostingError("not_allowed", 403);
+  const host = hostOf(g.play_url);
   const domain = deps.config.domain;
-  const host = (() => {
-    try {
-      return new URL(g.play_url).hostname;
-    } catch {
-      return "";
-    }
-  })();
   if (host === domain || host.endsWith(`.${domain}`)) throw new HostingError("already_hosted", 409);
+  return g;
+}
 
+/** The game at its old address, and whether players' progress can come along from there. */
+async function look(deps: Deps, g: MoveGame, o: CrawlOptions): Promise<{ got: Crawled | null; verdict: SavesVerdict }> {
+  let got: Crawled | null = null;
+  try {
+    got = await crawlGame(g.play_url, o);
+  } catch (e) {
+    if (!(e instanceof HostingError) || e.code !== "move_unreachable") throw e;
+  }
+  const tokiSaves = (await deps.db.select("game_saves", `game_id=eq.${g.id}&select=game_id&limit=1`)).length > 0;
+  return { got, verdict: savesVerdict(got, tokiSaves) };
+}
+
+export interface MoveCheck extends SavesVerdict {
+  /** The finished game in a repository Toki can reach */
+  github: RepoChoice | null;
+  suggestRepo: string | null;
+}
+
+/** Before moving another way (an upload, or a repository picked in the form): will progress come along? */
+export async function checkMove(deps: Deps, user: HostUser, gameId: string, git: GitHubAccess | null, o: CrawlOptions = {}): Promise<MoveCheck> {
+  const g = await movable(deps, user, gameId);
+  const { verdict } = await look(deps, g, o);
+  const repo = git ? await findRepoBuild(git.gh, git.installations, g.play_url) : { found: null, repo: pagesRepos(g.play_url)[0]?.repo ?? null };
+  return { ...verdict, github: repo.found, suggestRepo: repo.found ? null : repo.repo };
+}
+
+const MOVE_ERRORS: Record<SavesProblem, string> = { no_script: "move_no_saves", engine_storage: "move_engine_saves", unreachable: "move_unreachable" };
+
+/**
+ * Moves a game from its link onto Toki. From its GitHub repository when that holds the finished
+ * game (then every push updates it), else from the site it runs on. Throws move_no_saves /
+ * move_engine_saves when players' progress would stay behind, unless `anyway`.
+ */
+export async function moveGame(
+  deps: Deps,
+  user: HostUser,
+  gameId: string,
+  anyway = false,
+  o: CrawlOptions & { put?: typeof fetch; git?: GitHubAccess | null } = {},
+): Promise<MoveResult> {
+  const { db } = deps;
+  const g = await movable(deps, user, gameId);
   const from = g.play_url;
-  const got = await crawlGame(from, o);
-  // Saves Toki already keeps for the game also show it has the script (e.g. bundled in a way the
-  // download doesn't spot).
-  const saves = got.saveScript || (await db.select("game_saves", `game_id=eq.${g.id}&select=game_id&limit=1`)).length > 0;
-  if (!saves && !anyway) throw new HostingError("move_no_saves", 409);
+  const repo = o.git ? await findRepoBuild(o.git.gh, o.git.installations, from) : { found: null, repo: pagesRepos(from)[0]?.repo ?? null };
+  // Loading from GitHub takes time too: then the old address only gets a shorter look.
+  const { got, verdict } = await look(deps, g, repo.found ? { ...o, deadline: Math.min(o.deadline ?? CRAWL_MS, 120_000) } : o);
+  if (!verdict.ok && !anyway) throw new HostingError(MOVE_ERRORS[verdict.problem!], 409);
+
+  let result: { play_url: string; files: number; bytes: number } | null = null;
+  let source: MoveResult["source"] = "site";
+  if (repo.found && o.git) {
+    const row: GitRow = { game_id: g.id, ...repo.found, created_by: user.id };
+    await db.insert("game_git?on_conflict=game_id", { ...row, status: "waiting", error: null, updated_at: new Date().toISOString() }, "resolution=merge-duplicates,return=minimal");
+    const out = await deployCommit(deps, o.git.gh, row, undefined, o.put);
+    if (out.ok) {
+      const [b] = await db.select<{ files: number; bytes: number }>("game_builds", `game_id=eq.${g.id}&status=eq.live&select=files,bytes`);
+      result = { play_url: out.play_url!, files: Number(b?.files ?? 0), bytes: Number(b?.bytes ?? 0) };
+      source = "github";
+    } else await db.remove("game_git", `game_id=eq.${g.id}`); // the site is the way then
+  }
+  if (!result) {
+    if (!got) throw new HostingError("move_unreachable", 422);
+    result = await uploadCrawled(deps, user, g, got, o.put ?? fetch);
+  }
+  // Remembered so players' progress can be picked up there (src/lib/movedSaves.ts).
+  await db.update("games", `id=eq.${g.id}`, { moved_from: from, moved_at: (deps.now?.() ?? new Date()).toISOString() });
+  return {
+    ...result,
+    from,
+    saves: verdict.ok,
+    source,
+    github: source === "github" ? repo.found : null,
+    suggestRepo: source === "github" ? null : repo.found?.repo ?? repo.repo,
+  };
+}
+
+async function uploadCrawled(deps: Deps, user: HostUser, g: MoveGame, got: Crawled, put: typeof fetch) {
   const toki: TokiJson = { ...got.toki, entry: got.entry };
   const start = await startUpload(deps, user, { game_id: g.id, toki, files: got.files.map((f) => ({ path: f.path, size: f.data.length })) });
   const byPath = new Map(got.files.map((f) => [f.path, f.data]));
-  const put = o.put ?? fetch;
   const queue = [...start.uploads];
   await Promise.all(
     Array.from({ length: 16 }, async () => {
@@ -364,9 +544,7 @@ export async function moveGame(deps: Deps, user: HostUser, gameId: string, anywa
     }),
   );
   const done = await finishUpload(deps, user, { build_id: start.build_id, toki, isolation: toki.isolation ?? g.needs_isolation });
-  // Remembered so players' progress can be picked up there (src/lib/movedSaves.ts).
-  await db.update("games", `id=eq.${g.id}`, { moved_from: from, moved_at: (deps.now?.() ?? new Date()).toISOString() });
-  return { play_url: done.play_url, from, files: done.files, bytes: done.bytes, saves };
+  return { play_url: done.play_url, files: done.files, bytes: done.bytes };
 }
 
 /** Didn't work out: the game goes back to its old link, and its files on Toki are deleted. */
@@ -379,6 +557,7 @@ export async function moveBack(deps: Deps, user: HostUser, gameId: string): Prom
   if (!from) throw new HostingError("not_moved", 409);
   await db.update("games", `id=eq.${g.id}`, { play_url: from, moved_from: null, moved_at: null });
   await db.update("game_builds", `game_id=eq.${g.id}`, { status: "deleting", delete_after: (deps.now?.() ?? new Date()).toISOString() });
+  await db.remove("game_git", `game_id=eq.${g.id}`);
   if (g.hosted_site) await store.remove(`sites/${g.hosted_site}.json`);
   return { play_url: from };
 }

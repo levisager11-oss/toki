@@ -21,7 +21,7 @@ import { ImportFromLink } from "../components/ImportFromLink";
 import { gitConnect, gitDisconnect, hostError, unhostGame, uploadGame, useHosting, type GitChoice, type GitRow, type Imported } from "../lib/hosting";
 import { GitHubFollow } from "../components/GitHubFollow";
 import { QuickAdd, type QuickCarry } from "../components/QuickAdd";
-import { MovedNotice, MoveToToki, type Moved } from "../components/MoveToToki";
+import { MovedNotice, MoveSavesCheck, MoveToToki, type Moved } from "../components/MoveToToki";
 
 // Developers who chose "Advanced" get the full form straight away next time (this browser only).
 const ADVANCED_KEY = "toki.addAdvanced";
@@ -93,6 +93,8 @@ export function GameForm() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   // Just moved from its link onto Toki (MoveToToki): shown with the way back.
   const [moved, setMoved] = useState<Moved | null>(null);
+  // A linked game switched to an upload or a repository: players' progress can come along, or the developer accepted it can't.
+  const [savesReady, setSavesReady] = useState(false);
   // Pictures uploaded while this form is open. The ones not saved with the game are deleted again.
   const uploaded = useRef<string[]>([]);
   const saved = useRef(false);
@@ -262,8 +264,10 @@ export function GameForm() {
     if (hosted) {
       if (fromGit ? !git && !gitChoice?.branch : !picked && !wasHosted) return setErr(t(fromGit ? "git.pickFirst" : "host.err.pickFirst"));
       if (!wasHosted && !hosting?.domain) return setErr(t("host.err.hosting_off"));
-      // Until the upload is done; the server then sets the real address.
-      playUrl = wasHosted && orig ? orig.play_url : siteUrl(siteFor(effectiveSlug), hosting!.domain!);
+      if (orig && !wasHosted && !savesReady) return setErr(t("move.checkFirst"));
+      // Until the upload is done the game keeps its address (a link elsewhere stays, so Toki can
+      // carry players' progress over from there); the server then sets the new one.
+      playUrl = orig ? orig.play_url : siteUrl(siteFor(effectiveSlug), hosting!.domain!);
     } else if (!/^https:\/\//i.test(playUrl)) return setErr(t("form.badUrl"));
     const players = Math.round(Number(maxPlayers));
     const row = {
@@ -419,6 +423,7 @@ export function GameForm() {
           {hosted ? (
             <>
               {moved && orig && <MovedNotice gameId={orig.id} moved={moved} onUndone={() => { setMoved(null); reloadWhere(orig.slug); }} />}
+              {orig && !wasHosted && <MoveSavesCheck gameId={orig.id} mode={fromGit ? "github" : "upload"} onReady={setSavesReady} />}
               {fromGit ? (
                 <GitHubFollow gameId={orig?.id} row={git} choice={gitChoice} onChoice={(c) => { setGitChoice(c); setDirty(true); }} onChanged={() => orig && loadGit(orig.id)} />
               ) : (

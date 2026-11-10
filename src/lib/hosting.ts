@@ -47,7 +47,7 @@ export const HOST_ERRORS = [
   "no_files", "too_many_files", "too_big", "bad_file", "no_entry", "zip", "rate_limited", "storage_full", "account_full", "hosting_off",
   "missing_files", "not_allowed", "slug_taken", "no_previous", "storage_error", "too_many_keys", "upload", "error",
   "github_off", "github_error", "no_branch", "no_repo", "repo_too_big",
-  "already_hosted", "move_unreachable", "move_incomplete", "move_slow", "move_no_saves", "not_moved",
+  "already_hosted", "move_unreachable", "move_incomplete", "move_slow", "move_no_saves", "move_engine_saves", "not_moved",
 ] as const;
 export type HostErrorCode = (typeof HOST_ERRORS)[number];
 /** The error to show: one Toki knows, "upload" when a file didn't reach Cloudflare, else "error". */
@@ -129,12 +129,33 @@ export async function uploadGame(gameId: string, files: PickedFile[], isolation:
   return api<UploadResult>("/api/hosting", { method: "POST", body: JSON.stringify({ action: "finish", build_id: start.build_id, toki, isolation }) });
 }
 
+const post = <T>(body: Record<string, unknown>) => api<T>("/api/hosting", { method: "POST", body: JSON.stringify(body) });
 export const rollBackGame = (gameId: string) => api<{ play_url: string }>("/api/hosting", { method: "POST", body: JSON.stringify({ action: "rollback", game_id: gameId }) });
-/** "Move to Toki": Toki downloads the game from its link and hosts it (server/migrate.ts). */
-export const moveToToki = (gameId: string, anyway = false) =>
-  api<{ play_url: string; from: string; files: number; bytes: number; saves: boolean }>("/api/hosting", { method: "POST", body: JSON.stringify({ action: "move", game_id: gameId, anyway }) });
+/** "Move to Toki": from the game's GitHub repository, or downloaded from its link (server/migrate.ts). */
+export interface MoveResult {
+  play_url: string;
+  from: string;
+  files: number;
+  bytes: number;
+  /** Players' progress comes along */
+  saves: boolean;
+  source: "github" | "site";
+  github: { repo: string; branch: string; folder: string } | null;
+  /** A repository the game seems to come from, which Toki can't reach yet */
+  suggestRepo: string | null;
+}
+export const moveToToki = (gameId: string, anyway = false) => post<MoveResult>({ action: "move", game_id: gameId, anyway });
 /** Back to the old link after moving; the files on Toki are deleted. */
-export const moveBack = (gameId: string) => api<{ play_url: string }>("/api/hosting", { method: "POST", body: JSON.stringify({ action: "move_back", game_id: gameId }) });
+export const moveBack = (gameId: string) => post<{ play_url: string }>({ action: "move_back", game_id: gameId });
+export interface MoveCheck {
+  ok: boolean;
+  problem: "no_script" | "engine_storage" | "unreachable" | null;
+  engine: "Godot" | "Unity" | null;
+  github: { repo: string; branch: string; folder: string } | null;
+  suggestRepo: string | null;
+}
+/** Before an upload or a repository replaces a game's link: will players' progress come along? */
+export const checkMove = (gameId: string) => post<MoveCheck>({ action: "move_check", game_id: gameId });
 export const unhostGame = (gameId: string) => api<{ ok: true }>("/api/hosting", { method: "POST", body: JSON.stringify({ action: "unhost", game_id: gameId }) });
 export const createUploadKey = (name: string) => api<{ id: string; key: string }>("/api/hosting", { method: "POST", body: JSON.stringify({ action: "create_key", name }) });
 
@@ -216,7 +237,6 @@ export interface GitRow extends GitChoice {
   error: string | null;
   updated_at: string;
 }
-const post = <T>(body: Record<string, unknown>) => api<T>("/api/hosting", { method: "POST", body: JSON.stringify(body) });
 export const gitBranches = (installation_id: number, repo: string) => post<{ branches: string[]; default: string }>({ action: "git_branches", installation_id, repo });
 export const gitConnect = (gameId: string, c: GitChoice) => post<{ ok: boolean; error?: string; play_url?: string }>({ action: "git_connect", game_id: gameId, ...c });
 export const gitDeploy = (gameId: string) => post<{ ok: boolean; error?: string; play_url?: string }>({ action: "git_deploy", game_id: gameId });
