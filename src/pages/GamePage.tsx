@@ -25,7 +25,10 @@ import { useFreeAi } from "../lib/assist";
 import { CloseIcon, FullscreenIcon, PeopleIcon } from "../components/icons";
 import { ShareButton } from "../components/ShareButton";
 import { InviteFriends, InviteStatus, useGameInvites, useRoomBridge } from "../components/GameInvite";
-import { maxPlayers, playUrl, roomCode } from "../lib/invites";
+import { PartyChat, usePartyOnGame } from "../components/Party";
+import { isParty } from "../lib/party";
+import { useBadges } from "../lib/useBadges";
+import { maxPlayers, partyId, playUrl, roomCode } from "../lib/invites";
 
 const LANDSCAPE_PHONE = "(orientation: landscape) and (pointer: coarse) and (max-height: 600px)";
 // A visit counts as a play after this long on the page (the server counts one per browser per day).
@@ -60,15 +63,26 @@ export function GamePage() {
   // Loads the game again, e.g. to continue from newer progress made on another device.
   const [frameRun, setFrameRun] = useState(0);
   const isolated = game?.needs_isolation === true;
-  // Play together: ?room=CODE (from a friend's invite) opens the game in that room, and
-  // ?invite=<friend> (from the friends list) invites them as soon as a room is open.
-  const [params] = useSearchParams();
+  // Play together: ?room=CODE (from a friend's invite) opens the game in that room,
+  // ?party=<id> next to it joins the party of whoever invited, and ?invite=<friend> (from
+  // the friends list) invites them as soon as a room is open.
+  const [params, setParams] = useSearchParams();
   const joinCode = game?.multiplayer ? roomCode(params.get("room")) : null;
   const src = game ? playUrl(game, joinCode) : "";
   const frameKey = `${src}|${userId ?? ""}|${frameRun}`;
-  const room = useRoomBridge(gameFrame, game, frameKey);
+  const bridge = useRoomBridge(gameFrame, game, frameKey);
   const inviteFirst = game?.multiplayer && userId && /^[0-9a-f-]{36}$/i.test(params.get("invite") ?? "") ? params.get("invite") : null;
-  const invites = useGameInvites(game, room, inviteFirst);
+  const invites = useGameInvites(game, bridge, inviteFirst);
+  usePartyOnGame({
+    game, room: bridge.room, me: userId, joinPartyId: partyId(params.get("party")), joinCode,
+    onJoined: () => {
+      // The address keeps the room (that is how the game knows it), not the party.
+      const next = new URLSearchParams(window.location.search);
+      next.delete("party");
+      setParams(next, { replace: true });
+    },
+  });
+  const inParty = isParty(useBadges().party);
 
   useEffect(() => {
     if (game) matchIsolation(isolated);
@@ -174,7 +188,7 @@ export function GamePage() {
 
   return (
     <>
-      <section className="player">
+      <section className={`player ${inParty ? "has-party" : ""}`}>
         <div className={`frame ${isFull ? "is-full" : ""} ${fillScreen ? "pseudo-full" : ""}`} ref={frameWrap}>
           {pseudoFull && !landscapePhone && (
             <button type="button" className="close-full" onClick={() => setPseudoFull(false)} aria-label={t("game.exitFullscreen")}>
@@ -200,6 +214,7 @@ export function GamePage() {
             }}
           />}
         </div>
+        <PartyChat />
         <div className="player-bar">
           <div className="info">
             <h1>{game.title}</h1>

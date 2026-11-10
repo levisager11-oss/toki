@@ -91,6 +91,11 @@ they opened in the game:
   `window.toki.room(null)` when they leave it. Toki then shows "Invite friends" next to the game.
 - When a friend accepts, Toki opens the game with `?room=CODE` in its address. Read it at the
   start (`new URLSearchParams(location.search).get("room")`) and take the player into that room.
+- If the game can open a room without the player choosing anything first, call
+  `window.toki && window.toki.onHost(fn)` once when it has loaded. Toki calls `fn` when the
+  player invites friends before a room is open: open a room in it (what the game's "host"
+  button does) and call `window.toki.room(code)` as always. Do nothing in `fn` if the player is
+  in a room already.
 - Set `"multiplayer": true` in toki.json.
 
 ## 4. Upload

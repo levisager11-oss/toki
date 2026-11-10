@@ -8,6 +8,7 @@ import { clearNotifications, listNotifications, markNotificationsRead, type Noti
 import { Avatar } from "../components/Avatar";
 import { useTitle } from "../lib/useTitle";
 import { INVITE_MS, joinPath } from "../lib/invites";
+import { PushSwitch } from "../components/PushSwitch";
 
 export function Notifications() {
   const { t, lang } = useI18n();
@@ -79,7 +80,7 @@ export function Notifications() {
         const fresh = Date.now() - new Date(n.created_at).getTime() < INVITE_MS;
         return {
           line: t(fresh ? "notif.gameInvite" : "notif.gameInviteOld", { who, title: g?.title ?? d.title ?? "" }),
-          to: g ? (fresh && d.code ? joinPath(g.slug, d.code) : `/game/${g.slug}`) : "/",
+          to: g ? (fresh && d.code ? joinPath(g.slug, d.code, d.party) : `/game/${g.slug}`) : "/",
         };
       }
       case "game_idea": {
@@ -92,7 +93,10 @@ export function Notifications() {
         return { line: t("notif.ideaReply", { who, title }), to };
       }
       case "dev_news":
-        return d.topic === "multiplayer" ? { line: t("notif.devMultiplayer"), to: "/my-games#toki-features" } : { line: t("notif.devNews"), to: "/my-games#toki-features" };
+        return {
+          line: t(d.topic === "multiplayer" ? "notif.devMultiplayer" : d.topic === "host" ? "notif.devHost" : "notif.devNews"),
+          to: "/my-games#toki-features",
+        };
       default:
         // A kind this version of Toki doesn't know yet.
         return { line: t("notif.other"), to: "/updates" };
@@ -131,6 +135,7 @@ export function Notifications() {
         </ul>
       )}
       <p className="note">{t("notif.kept")}</p>
+      <PushSwitch />
     </section>
   );
 }

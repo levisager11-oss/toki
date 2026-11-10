@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "./supabase";
 import { stopAccountSaves } from "./saves";
 import { syncAccountLikes } from "./local";
+import { forgetPush } from "./push";
 import { useBadgeUpdates } from "./useBadges";
 import type { Profile } from "./types";
 
@@ -80,6 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     stopAccountSaves(); // nothing goes up to the account on the way out
+    await forgetPush().catch(() => {}); // this device stops getting the account's invites
     await supabase.auth.signOut();
   };
 

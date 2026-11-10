@@ -13,6 +13,8 @@ export interface ServerEnv {
   serviceKey: string;
   /** webhookSecret: checks GitHub's push events (games that follow a repository); optional. */
   github: { appId: string; slug: string; privateKey: string; clientId: string; clientSecret: string; webhookSecret?: string };
+  /** The key pair that signs push notifications, when set here; otherwise Toki makes and stores one (server/push.ts). */
+  push?: { publicKey: string; privateKey: string };
 }
 
 export function serverEnv(): ServerEnv {
@@ -22,6 +24,7 @@ export function serverEnv(): ServerEnv {
     anthropicKey: e.ANTHROPIC_API_KEY ?? "",
     freeAiKey: e.FREE_AI_API_KEY ?? "",
     serviceKey: e.SUPABASE_SECRET_KEY || e.SUPABASE_SERVICE_ROLE_KEY || "",
+    push: { publicKey: e.VAPID_PUBLIC_KEY ?? "", privateKey: e.VAPID_PRIVATE_KEY ?? "" },
     github: {
       appId: e.GITHUB_APP_ID ?? "",
       slug: e.GITHUB_APP_SLUG ?? "",

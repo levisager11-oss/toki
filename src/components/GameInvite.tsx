@@ -1,45 +1,70 @@
 // Play together: invite friends into the room you opened in a multiplayer game.
 // The game keeps its own rooms; Toki only passes the room's code on (see src/lib/invites.ts).
-import { useCallback, useEffect, useRef, useState, type FormEvent, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
 import { useGames } from "../lib/useGames";
-import { invitePath, joinPath, maxPlayers, roomCode, roomFromMessage } from "../lib/invites";
+import { HOST_MESSAGE, hostFromMessage, invitePath, joinPath, maxPlayers, roomCode, roomFromMessage } from "../lib/invites";
+import { openParty } from "../lib/party";
+import { pushInvite } from "../lib/push";
 import { inviteToGame, isOnline, markNotificationsRead, myFriends, SocialError, type FriendRow, type Person } from "../lib/social";
-import { clearInvite, nudge, refreshBadges, useBadges } from "../lib/useBadges";
+import { clearInvite, nudge, refreshBadges, setParty, useBadges } from "../lib/useBadges";
 import type { Game } from "../lib/types";
 import { Avatar } from "./Avatar";
 import { CloseIcon, PeopleIcon } from "./icons";
+import { PushSwitch } from "./PushSwitch";
+import { ShareButton } from "./ShareButton";
+
+export interface RoomBridge {
+  /** The room the game says the player is in, null when they left it (or the game doesn't tell). */
+  room: string | null;
+  /** The game can open a room by itself when Toki asks (toki.onHost). */
+  canHost: boolean;
+  /** Asks the game to open a room. */
+  askHost: () => void;
+}
 
 /**
- * The room the game says the player is in: toki.room(code) in toki-save.js, null when they left
- * it (or the game doesn't tell). Only messages from the game's frame and its own site count.
- * The room is gone when the game is loaded again: by Toki (`run` changes), or by itself.
+ * What the game tells Toki about its multiplayer: toki.room(code) and toki.onHost(fn) in
+ * toki-save.js. Only messages from the game's frame and its own site count.
+ * It all starts over when the game is loaded again: by Toki (`run` changes), or by itself.
  */
-export function useRoomBridge(frame: RefObject<HTMLIFrameElement>, game: Game | undefined, run: string): string | null {
+export function useRoomBridge(frame: RefObject<HTMLIFrameElement>, game: Game | undefined, run: string): RoomBridge {
   const [room, setRoom] = useState<string | null>(null);
+  const [canHost, setCanHost] = useState(false);
   const playUrl = game?.multiplayer ? game.play_url : undefined;
+  const origin = useMemo(() => {
+    try {
+      return playUrl ? new URL(playUrl).origin : null;
+    } catch {
+      return null;
+    }
+  }, [playUrl]);
   useEffect(() => {
     setRoom(null);
-    if (!playUrl) return;
-    let origin: string;
-    try {
-      origin = new URL(playUrl).origin;
-    } catch {
-      return;
-    }
+    setCanHost(false);
+    if (!origin) return;
     const onMessage = (e: MessageEvent) => {
       const win = frame.current?.contentWindow;
       if (!win || e.source !== win || e.origin !== origin) return;
       const next = roomFromMessage(e.data);
       if (next !== undefined) setRoom(next);
+      const host = hostFromMessage(e.data);
+      if (host !== undefined) setCanHost(host);
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [frame, playUrl, run]);
-  return room;
+  }, [frame, origin, run]);
+  const askHost = useCallback(() => {
+    if (origin) frame.current?.contentWindow?.postMessage(HOST_MESSAGE, origin);
+  }, [frame, origin]);
+  return { room, canHost, askHost };
 }
+
+// The game gets this long to open the room Toki asked for; then the player is told how to.
+const HOST_WAIT_MS = 8000;
 
 // After an invite, the same friend can be invited again this much later (the server allows 15 s).
 const AGAIN_MS = 20_000;
@@ -50,6 +75,11 @@ export interface Invites {
   /** The game told the code itself. */
   fromGame: boolean;
   setTyped: (code: string | null) => void;
+  /**
+   * The game opens the room by itself: "can" when it would, "opening" while Toki waits for it,
+   * "no" when the player has to (the game can't, or didn't in time).
+   */
+  host: "can" | "opening" | "no";
   /** Friends who get an invite as soon as a room is open. */
   waiting: string[];
   /** When each friend was invited. */
@@ -64,10 +94,13 @@ export interface Invites {
 }
 
 /** Sends invites for one game; friends picked before a room is open are invited once it is. */
-export function useGameInvites(game: Game | undefined, room: string | null, startWith: string | null): Invites {
+export function useGameInvites(game: Game | undefined, bridge: RoomBridge, startWith: string | null): Invites {
   const { t } = useI18n();
   const gameId = game?.id;
+  const { room, canHost, askHost } = bridge;
   const [typed, setTyped] = useState<string | null>(null);
+  // When the game was asked to open a room; -1 once it didn't in time.
+  const [asked, setAsked] = useState(0);
   const [waiting, setWaiting] = useState<string[]>([]);
   const [sent, setSent] = useState<Record<string, number>>({});
   const [error, setError] = useState("");
@@ -94,7 +127,29 @@ export function useGameInvites(game: Game | undefined, room: string | null, star
     setSent({});
     setError("");
     setLast(null);
+    setAsked(0);
   }, [gameId]);
+
+  // Friends are picked and no room is open: the game opens one, if it can.
+  const wantsRoom = waiting.length > 0 && !code;
+  useEffect(() => {
+    // The game started again: it may be asked again.
+    if (!canHost) return setAsked(0);
+    if (!wantsRoom) return setAsked((a) => (a > 0 ? 0 : a));
+    if (asked) return;
+    askHost();
+    setAsked(Date.now());
+  }, [wantsRoom, canHost, asked, askHost]);
+  useEffect(() => {
+    if (asked <= 0) return;
+    const id = setTimeout(() => setAsked(-1), HOST_WAIT_MS);
+    return () => clearTimeout(id);
+  }, [asked]);
+  // A room is open (however it came about): next time the game may be asked again.
+  useEffect(() => {
+    if (code) setAsked(0);
+  }, [code]);
+  const host = !canHost || asked < 0 ? "no" : asked > 0 ? "opening" : "can";
 
   const send = useCallback(
     async (friendId: string, withCode: string) => {
@@ -103,6 +158,10 @@ export function useGameInvites(game: Game | undefined, room: string | null, star
       try {
         await inviteToGame(friendId, gameId, withCode);
         nudge(friendId);
+        // A friend who isn't on Toki gets it on their phone or computer, if they turned that on.
+        pushInvite(friendId);
+        // Whoever invites has a party now: the friend who accepts is in it.
+        refreshBadges();
         setSent((s) => ({ ...s, [friendId]: Date.now() }));
         setLast({ name: names[friendId] ?? "" });
       } catch (e) {
@@ -126,7 +185,7 @@ export function useGameInvites(game: Game | undefined, room: string | null, star
   };
   const setNames = useCallback((friends: Person[]) => setNameMap(Object.fromEntries(friends.map((f) => [f.id, f.username]))), []);
 
-  return { code, fromGame: !!room, setTyped, waiting, sent, error, toggle, last, names, setNames };
+  return { code, fromGame: !!room, setTyped, host, waiting, sent, error, toggle, last, names, setNames };
 }
 
 /** "Invite friends" next to the game, and the window to pick them. */
@@ -146,6 +205,8 @@ export function InviteFriends({ game, invites, startOpen }: { game: Game; invite
 
 function InviteDialog({ game, invites, onClose }: { game: Game; invites: Invites; onClose: () => void }) {
   const { t } = useI18n();
+  const { session } = useAuth();
+  const { party } = useBadges();
   const ref = useRef<HTMLDialogElement>(null);
   const [friends, setFriends] = useState<FriendRow[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -173,6 +234,19 @@ function InviteDialog({ game, invites, onClose }: { game: Game; invites: Invites
       alive = false;
     };
   }, [setNames]);
+  // The link to share brings friends into the player's party: there is one from here on.
+  const { code } = invites;
+  useEffect(() => {
+    if (!code) return;
+    let alive = true;
+    openParty(game.id, code).then((p) => alive && setParty(p), () => {});
+    return () => {
+      alive = false;
+    };
+  }, [game.id, code]);
+  const inParty = new Set(party && party.members.length > 1 ? party.members.map((m) => m.id) : []);
+  inParty.delete(session?.user.id ?? "");
+
   // "Invited" turns back into "Invite again" by itself.
   useEffect(() => {
     if (!Object.keys(invites.sent).length) return;
@@ -204,12 +278,22 @@ function InviteDialog({ game, invites, onClose }: { game: Game; invites: Invites
         </div>
 
         {invites.code ? (
-          <p className="check good">
-            {t("invite.room")} <b className="room-code">{invites.code}</b>
-            {!invites.fromGame && <> <button type="button" className="linkish" onClick={() => invites.setTyped(null)}>{t("invite.change")}</button></>}
-            <br />
-            <span className="sub">{t("invite.roomHelp")}</span>
-          </p>
+          <>
+            <p className="check good">
+              {t("invite.room")} <b className="room-code">{invites.code}</b>
+              {!invites.fromGame && <> <button type="button" className="linkish" onClick={() => invites.setTyped(null)}>{t("invite.change")}</button></>}
+              <br />
+              <span className="sub">{t("invite.roomHelp")}</span>
+            </p>
+            <div className="invite-share">
+              <ShareButton path={joinPath(game.slug, invites.code, party?.id)} title={game.title} text={t("invite.shareText", { title: game.title })} label={t("invite.share")} />
+              <span className="sub">{t("invite.shareHelp")}</span>
+            </div>
+          </>
+        ) : invites.host === "opening" ? (
+          <p className="check" role="status" aria-busy="true">{t("invite.opening")}</p>
+        ) : invites.host === "can" ? (
+          <p className="check">{t("invite.autoRoom")}</p>
         ) : (
           <>
             <ol className="invite-steps">
@@ -243,13 +327,14 @@ function InviteDialog({ game, invites, onClose }: { game: Game; invites: Invites
               const here = on && f.playing === game.id;
               const waits = invites.waiting.includes(f.id);
               const invited = now - (invites.sent[f.id] ?? 0) < AGAIN_MS;
+              const with_ = inParty.has(f.id);
               return (
                 <li key={f.id}>
                   <span className="person">
                     <Avatar person={f} online={on} />
                     <span>
                       <b>@{f.username}</b>
-                      <span className="sub">{here ? t("invite.here") : on ? t("soc.online") : t("soc.offline")}</span>
+                      <span className="sub">{with_ ? t("party.inYours") : here ? t("invite.here") : on ? t("soc.online") : t("soc.offline")}</span>
                     </span>
                   </span>
                   <button type="button" className={`btn ${waits ? "on" : ""}`} aria-pressed={waits || undefined} disabled={invited} onClick={() => invites.toggle(f.id)}>
@@ -261,6 +346,7 @@ function InviteDialog({ game, invites, onClose }: { game: Game; invites: Invites
           </ul>
         )}
         {friends && friends.length > 0 && <p className="note">{t("invite.note")}</p>}
+        <PushSwitch />
       </div>
     </dialog>
   );
@@ -271,6 +357,7 @@ export function InviteStatus({ invites }: { invites: Invites }) {
   const { t } = useI18n();
   const waiting = invites.waiting.map((id) => invites.names[id]).filter(Boolean).map((n) => `@${n}`);
   if (invites.waiting.length && !invites.code) {
+    if (invites.host !== "no") return <p className="hint invite-status" role="status">{t("invite.opening")}</p>;
     return (
       <p className="hint invite-status" role="status">
         {waiting.length ? t("invite.statusWaiting", { who: waiting.join(", ") }) : t("invite.statusWaitingAny")}
@@ -294,7 +381,7 @@ export function InvitePopup() {
     clearInvite();
     // Read now: it doesn't pop up again, and stays in the bell's list.
     markNotificationsRead([invite.id]).then(refreshBadges, () => {});
-    if (join) navigate(joinPath(game.slug, invite.code));
+    if (join) navigate(joinPath(game.slug, invite.code, invite.party));
   };
   return (
     <aside className="invite-pop" role="alert">

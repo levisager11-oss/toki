@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { invitePath, joinPath, maxPlayers, playUrl, roomCode, roomFromMessage } from "../src/lib/invites";
+import { hostFromMessage, invitePath, joinPath, maxPlayers, partyId, playUrl, roomCode, roomFromMessage } from "../src/lib/invites";
 import { readTokiJson } from "../src/lib/hostingRules";
 import { integrationGuide } from "../src/lib/integration";
 import { gameLine, task, type Job } from "../server/connect/agent";
@@ -42,6 +42,18 @@ describe("what the game tells Toki about its room", () => {
   });
 });
 
+describe("what the game tells Toki about opening rooms", () => {
+  it("is whether it can open one by itself, until it starts again", () => {
+    expect(hostFromMessage({ toki: 1, type: "host", data: true })).toBe(true);
+    expect(hostFromMessage({ toki: 1, type: "host", data: false })).toBe(false);
+    expect(hostFromMessage({ toki: 1, type: "host", data: "yes" })).toBe(false);
+    expect(hostFromMessage({ toki: 1, type: "hello" })).toBe(false);
+    for (const other of [null, "host", {}, { type: "host", data: true }, { toki: 1, type: "room", data: "ABCD" }]) {
+      expect(hostFromMessage(other)).toBeUndefined();
+    }
+  });
+});
+
 describe("the game's address for a room", () => {
   it("adds the code under the game's own name for it, keeping the rest", () => {
     expect(playUrl(game, "ABCD")).toBe("https://apex.example/play/?lang=de&room=ABCD#top");
@@ -58,6 +70,13 @@ describe("the game's address for a room", () => {
 
   it("leads to the game's page on Toki", () => {
     expect(joinPath("apex", "ABCD")).toBe("/game/apex?room=ABCD");
+    // With the party of whoever invited, when there is one.
+    const party = "22222222-2222-4222-8222-222222222222";
+    expect(joinPath("apex", "ABCD", party)).toBe(`/game/apex?room=ABCD&party=${party}`);
+    expect(joinPath("apex", "ABCD", "x&y=z")).toBe("/game/apex?room=ABCD");
+    expect(joinPath("apex", "ABCD", null)).toBe("/game/apex?room=ABCD");
+    expect(partyId(party)).toBe(party);
+    expect(partyId("nope")).toBeNull();
     expect(invitePath("apex", "11111111-1111-4111-8111-111111111111")).toBe("/game/apex?invite=11111111-1111-4111-8111-111111111111");
     expect(maxPlayers({ max_players: 4 })).toBe(4);
     expect(maxPlayers({ max_players: null })).toBeNull();
@@ -92,6 +111,7 @@ describe("Toki Connect", () => {
     expect(guide).toContain("window.toki?.room(code)");
     expect(guide).toContain("window.toki?.room(null)");
     expect(guide).toContain("?room=CODE");
+    expect(guide).toContain("window.toki?.onHost(fn)");
     const text = task(job, "/* script */");
     expect(text).toContain("add only: friend invites");
     expect(text).not.toContain("high scores (step 4");
@@ -111,12 +131,15 @@ describe("the game script", () => {
     const sent: unknown[] = [];
     const top = { postMessage: (m: unknown, origin: string) => sent.push([m, origin]) };
     const store = { length: 0, getItem: () => null, key: () => null };
-    const win: Record<string, unknown> = { localStorage: store, addEventListener() {} };
+    const listeners: ((e: unknown) => void)[] = [];
+    const win: Record<string, unknown> = { localStorage: store, addEventListener: (type: string, fn: (e: unknown) => void) => type === "message" && listeners.push(fn) };
     win.parent = inToki ? top : win;
     const doc = { referrer: "https://www.playtoki.app/game/apex", hidden: false, addEventListener() {} };
     const Storage = { prototype: { setItem() {}, removeItem() {}, clear() {} } };
     new Function("window", "location", "document", "Storage", "setTimeout", src)(win, { ancestorOrigins: [] }, doc, Storage, () => 0);
-    return { toki: win.toki as { room(code: unknown): void }, sent };
+    /** A message to the game's page: from Toki, or from anyone else. */
+    const tell = (data: unknown, fromToki = true) => listeners.forEach((fn) => fn({ data, source: fromToki ? top : {} }));
+    return { toki: win.toki as { room(code: unknown): void; onHost(fn: unknown): void }, sent, tell };
   }
 
   it("tells Toki the room, and that it closed", async () => {
@@ -134,9 +157,34 @@ describe("the game script", () => {
     ]);
   });
 
+  it("opens a room when Toki asks, if the game said it can", async () => {
+    const { toki, sent, tell } = await load(true);
+    sent.length = 0;
+    tell({ toki: 1, type: "host" }); // the game didn't say it can: nothing happens
+    let opened = 0;
+    toki.onHost(() => opened++);
+    expect(sent).toEqual([[{ toki: 1, type: "host", data: true }, "https://www.playtoki.app"]]);
+    tell({ toki: 1, type: "host" });
+    expect(opened).toBe(1);
+    // Only Toki may ask, and only with that message.
+    tell({ toki: 1, type: "host" }, false);
+    tell({ toki: 1, type: "save", data: null });
+    tell({ type: "host" });
+    expect(opened).toBe(1);
+    // A game's own error doesn't reach the page around it.
+    toki.onHost(() => { throw new Error("no server"); });
+    expect(() => tell({ toki: 1, type: "host" })).not.toThrow();
+    // The game takes it back.
+    toki.onHost(null);
+    expect(sent.at(-1)).toEqual([{ toki: 1, type: "host", data: false }, "https://www.playtoki.app"]);
+    tell({ toki: 1, type: "host" });
+    expect(opened).toBe(1);
+  });
+
   it("does nothing outside Toki", async () => {
     const { toki, sent } = await load(false);
     toki.room("ABCD");
+    toki.onHost(() => {});
     expect(sent).toEqual([]);
   });
 });

@@ -4,7 +4,11 @@ import { SITE_URL } from "../lib/site";
 import { ShareIcon } from "./icons";
 
 /** Opens the phone's share sheet, or copies the link (and says so) where there is none. */
-export function ShareButton({ path, title, text, className = "btn" }: { path: string; title: string; text?: string; className?: string }) {
+export function ShareButton({ path, title, text, className = "btn", label }: {
+  path: string; title: string; text?: string; className?: string;
+  /** What the button says instead of "Share". */
+  label?: string;
+}) {
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   useEffect(() => {
@@ -28,7 +32,7 @@ export function ShareButton({ path, title, text, className = "btn" }: { path: st
 
   return (
     <button type="button" className={className} onClick={share} aria-live="polite">
-      <ShareIcon />{copied ? t("game.copied") : t("game.share")}
+      <ShareIcon />{copied ? t("game.copied") : label ?? t("game.share")}
     </button>
   );
 }

@@ -605,7 +605,7 @@ a.author:hover { text-decoration: underline; color: var(--fg); }
 
 /* chat */
 .chat-layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: 0; border: 1px solid var(--line); background: var(--surface);
-  height: max(440px, calc(100vh - var(--top-h, 75px) - 56px)); }
+  height: max(440px, calc(100vh - var(--top-h, 75px) - var(--party-h, 0px) - 56px)); }
 /* the chat fills the screen exactly, so the page itself doesn't scroll */
 .content:has(> .chat-layout) { padding-bottom: 28px; }
 .chat-list { border-right: 1px solid var(--line); padding: 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; overflow-y: auto; }
@@ -679,7 +679,7 @@ a.author:hover { text-decoration: underline; color: var(--fg); }
 @media (max-width: 860px) {
   .chat-layout { grid-template-columns: minmax(0, 1fr); border-left: 0; border-right: 0; margin: -20px calc(-1 * max(16px, env(safe-area-inset-left, 0px))) 0; height: auto; }
   /* an open chat fills the space between the top bar and the tab bar */
-  .chat-layout.has-chat { height: calc(100dvh - var(--top-h, 117px) - var(--tabbar-h, 64px)); min-height: 300px; }
+  .chat-layout.has-chat { height: calc(100dvh - var(--top-h, 117px) - var(--party-h, 0px) - var(--tabbar-h, 64px)); min-height: 300px; }
   .content:has(> .chat-layout) { padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
   .content:has(> .chat-layout.has-chat) { padding-bottom: var(--tabbar-h, 64px); }
   .content:has(> .chat-layout.has-chat) > .foot { display: none; }
@@ -1030,6 +1030,42 @@ main.content:focus { outline: none; }
   .invite-pop { right: 12px; left: 12px; width: auto; bottom: calc(var(--tabbar-h, 64px) + 12px); }
 }
 @media (prefers-reduced-motion: reduce) { .invite-pop { animation: none; } }
+.invite-share { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.invite-share .sub { flex: 1 1 180px; font-size: 13px; color: var(--muted); }
+
+/* ---------- party: the bar on every page, the "following" notice, the chat next to the game ---------- */
+.party-bar { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; padding: 8px 28px; background: var(--surface); border-bottom: 1px solid var(--line); font-size: 14px; }
+.party-who { display: flex; align-items: center; gap: 8px; flex: none; }
+.party-faces { display: flex; align-items: center; gap: 6px; }
+.party-faces > span { display: flex; position: relative; }
+.party-faces .is-leader .avatar { outline: 2px solid var(--accent); outline-offset: 1px; }
+.party-line { flex: 1 1 220px; min-width: 0; color: var(--muted); overflow-wrap: anywhere; }
+.party-bar .actions { margin-left: auto; gap: 8px; }
+.party-bar .btn { padding-top: 5px; padding-bottom: 5px; }
+/* Up by the party bar, so it never sits on top of an invite. */
+.invite-pop.party-follow { bottom: auto; top: calc(var(--top-h, 75px) + var(--party-h, 0px) + 12px); }
+.party-chat { order: 1; display: flex; flex-direction: column; min-width: 0; }
+.party-chat-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; padding: 8px 12px; border: 1px solid var(--line); border-bottom: 0; background: var(--surface); }
+.party-chat-head .sub { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.party-chat .chat-view.compact .messages { height: 220px; }
+@media (min-width: 1180px) {
+  /* Wide screens: the chat stands next to the game and is as tall as it. */
+  .player.has-party { display: grid; grid-template-columns: minmax(0, 1fr) 320px; }
+  .player.has-party > * { grid-column: 1 / -1; }
+  .player.has-party > .frame:not(.is-full):not(.pseudo-full) { grid-column: 1; }
+  .player.has-party > .party-chat { grid-column: 2; grid-row: 1; contain: size; }
+  .player.has-party > .party-chat .chat-view { flex: 1; min-height: 0; }
+  .player.has-party > .party-chat .chat-view.compact .messages { height: auto; flex: 1 1 0; }
+}
+@media (max-width: 860px) {
+  .party-bar { padding: 8px 16px; }
+  .invite-pop.party-follow { bottom: auto; }
+}
+.push-switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 16px; padding: 10px 12px; border: 1px solid var(--line); background: var(--surface); max-width: 720px; }
+.push-switch > span { display: flex; flex-direction: column; gap: 2px; flex: 1 1 220px; min-width: 0; }
+.push-switch .sub, .push-switch .error { font-size: 13px; }
+.push-switch .sub { color: var(--muted); }
+.invite-box .push-switch { margin-top: 0; }
 
 /* ---------- stats: game stats page, My games overview, profile numbers ---------- */
 .stat-strip { display: flex; flex-wrap: wrap; gap: 0; margin: 0; border: 1px solid var(--line); background: var(--surface); }

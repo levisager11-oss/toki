@@ -6,7 +6,7 @@ import type { Role } from "./types";
 /** An i18n key for what went wrong, from the server's error. */
 export type SocialErrorKey =
   | "soc.err.banned" | "soc.err.blocked" | "soc.err.notFriends" | "soc.err.rateLimited"
-  | "soc.err.groupFull" | "soc.err.login" | "soc.err.badCode" | "error";
+  | "soc.err.groupFull" | "soc.err.login" | "soc.err.badCode" | "soc.err.partyFull" | "error";
 
 export class SocialError extends Error {
   constructor(readonly key: SocialErrorKey) {
@@ -21,6 +21,7 @@ export function socialErrorKey(error: { message?: string } | null | undefined): 
   if (m.includes("not_friends") || m.includes("not_member")) return "soc.err.notFriends";
   if (m.includes("rate_limited")) return "soc.err.rateLimited";
   if (m.includes("group_full")) return "soc.err.groupFull";
+  if (m.includes("party_full")) return "soc.err.partyFull";
   if (m.includes("login_required")) return "soc.err.login";
   if (m.includes("bad_code")) return "soc.err.badCode";
   return "error";
@@ -138,7 +139,8 @@ export async function findPlayers(q: string): Promise<Person[]> {
 
 // ---------- chat ----------
 
-export type ChatKind = "public" | "game" | "dm" | "group";
+/** "party": the chat of a party (src/lib/party.ts), which goes with it. */
+export type ChatKind = "public" | "game" | "dm" | "group" | "party";
 
 export interface ChatSummary {
   id: string;
@@ -270,8 +272,9 @@ export interface Notification {
   kind: NotificationKind;
   data: {
     post?: string; title?: string; status?: string; version?: string | null; chat?: string; game?: string; official?: boolean;
-    /** game_invite: the room's code */
+    /** game_invite: the room's code, and the party of whoever invited */
     code?: string;
+    party?: string;
     /** dev_news: what is new, e.g. "multiplayer" */
     topic?: string;
     /** game_idea: the idea, and what happened to it */
