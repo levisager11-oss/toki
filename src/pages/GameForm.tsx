@@ -40,7 +40,7 @@ const rememberAdvanced = (on: boolean) => {
     /* only a convenience */
   }
 };
-import { JOIN_PARAM, siteFor, siteUrl } from "../lib/hostingRules";
+import { isOnToki, JOIN_PARAM, siteFor, siteUrl } from "../lib/hostingRules";
 
 const MAX_IMAGE = 2 * 1024 * 1024;
 const MAX_SHOTS = 4;
@@ -198,12 +198,14 @@ export function GameForm() {
     if (hosting === null) return <p className="msg" aria-busy="true">{t("loading")}</p>;
     if (hosting.enabled && hosting.domain) return <QuickAdd hosting={hosting} onManual={toAdvanced} />;
   }
-  if (editSlug && !orig) return <p className="msg">{t("loading")}</p>;
+  // Editing waits for the hosting settings too: whether the game is on Toki depends on Toki's games domain.
+  if (editSlug && (!orig || hosting === null)) return <p className="msg">{t("loading")}</p>;
   if (orig && profile && profile.role !== "admin" && orig.created_by !== profile.id) return <p className="msg">{t("auth.noRights")}</p>;
 
   const effectiveSlug = slugEdited ? slug : slugify(title);
   // Hosted on Toki right now: its link is its own address there.
-  const wasHosted = !!orig?.hosted_site && hostOf(orig.play_url).startsWith(`${orig.hosted_site}.`);
+  // (Its own name alone isn't enough: debtdrifter.vercel.app starts like debtdrifter.playtoki.app.)
+  const wasHosted = isOnToki(orig, hosting?.domain);
   const canHost = !!hosting?.enabled && !!hosting.domain;
   const effMode = mode ?? (orig ? (git ? "github" : wasHosted ? "upload" : "link") : canHost ? "upload" : "link");
   const hosted = effMode !== "link" && (canHost || wasHosted);
@@ -608,14 +610,6 @@ export function GameForm() {
     </section>
   );
 }
-
-const hostOf = (u: string) => {
-  try {
-    return new URL(u).hostname;
-  } catch {
-    return "";
-  }
-};
 
 /** "Write with AI": the description in English and German, from what's filled in and the game's page. */
 function DescribeWithAi({ game, onUse }: { game: Parameters<typeof describeGame>[0]; onUse: (d: { en: string; de: string }) => void }) {

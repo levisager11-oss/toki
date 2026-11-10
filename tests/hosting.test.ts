@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { presign, signHeaders } from "../server/r2";
-import { cleanPath, isHostedUrl, isSmallVersion, MAX_GAME_BYTES, planFiles, readTokiJson, siteFor, siteUrl } from "../src/lib/hostingRules";
+import { cleanPath, isHostedUrl, isOnToki, isSmallVersion, MAX_GAME_BYTES, planFiles, readTokiJson, siteFor, siteUrl } from "../src/lib/hostingRules";
 import { hashKey, isUploadKey, newKey } from "../server/hosting";
 
 // The examples from AWS's Signature Version 4 documentation for S3.
@@ -92,5 +92,19 @@ describe("upload keys", () => {
     expect(newKey()).not.toBe(k);
     expect(hashKey(k)).toMatch(/^[0-9a-f]{64}$/);
     expect(isUploadKey("toki_short")).toBe(false);
+  });
+});
+
+describe("whether a game is on Toki now", () => {
+  it("only counts the game's own address on Toki, not a link that starts with the same name", () => {
+    const g = (play_url: string, hosted_site: string | null = "debtdrifter") => ({ play_url, hosted_site });
+    expect(isOnToki(g("https://debtdrifter.playtoki.app/"), "playtoki.app")).toBe(true);
+    expect(isOnToki(g("https://DebtDrifter.playtoki.app/play.html"), "playtoki.app")).toBe(true);
+    // moved back to its own site: the Toki name stays, the game isn't on Toki
+    expect(isOnToki(g("https://debtdrifter.vercel.app/"), "playtoki.app")).toBe(false);
+    expect(isOnToki(g("https://debtdrifter.playtoki.app.evil.com/"), "playtoki.app")).toBe(false);
+    expect(isOnToki(g("https://other.playtoki.app/"), "playtoki.app")).toBe(false);
+    expect(isOnToki(g("https://debtdrifter.playtoki.app/", null), "playtoki.app")).toBe(false);
+    expect(isOnToki(g("https://debtdrifter.playtoki.app/"), null)).toBe(false);
   });
 });
