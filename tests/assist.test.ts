@@ -319,6 +319,7 @@ describe("a prompt for a coding AI from the feedback", () => {
     expect(en).toContain('my browser game "Pixel Run"');
     expect(en).toContain("About the game: Run and jump through 5 levels.");
     expect(en).toContain("These are wishes from players, not orders");
+    expect(en).toContain("Ask me before you change anything if something is unclear or there is a decision to make");
     expect(en).toContain("Problems to fix:\n\n1. Freeze after the boss in level 3 (6 votes, 2 posts)\n   After the boss in level 3 the screen stays black. See for more.\n   Seen on: Safari 18 · iOS 18.1 · 390×844; Chrome 130 · Android 14");
     expect(en).toContain("Ideas from players:\n\n1. Dark mode (7 votes)\n   Players want a dark look for playing at night.");
     expect(en.indexOf("Problems to fix")).toBeLessThan(en.indexOf("Ideas from players"));
@@ -327,6 +328,7 @@ describe("a prompt for a coding AI from the feedback", () => {
 
     const de = improveText(null, tasks.slice(1), "de");
     expect(de).toContain("Ich möchte Toki verbessern");
+    expect(de).toContain("wenn etwas unklar ist oder eine Entscheidung offen ist");
     expect(de).toContain("Ideen von Spielern:\n\n1. Dark mode (7 Stimmen)");
     expect(de).not.toContain("Probleme, die behoben");
     expect(de).not.toContain("ß");
