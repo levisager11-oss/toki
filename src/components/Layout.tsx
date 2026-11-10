@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type RefObject } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate, useNavigationType, useSearchParams } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
@@ -36,7 +36,9 @@ export function Layout() {
   const navType = useNavigationType();
   const searchRef = useRef<HTMLInputElement>(null);
   const tabbarRef = useRef<HTMLElement>(null);
+  const topRef = useRef<HTMLElement>(null);
   useBottomBarFix(tabbarRef);
+  useBarHeights(topRef, tabbarRef);
   // Admins: how many applications for developer accounts wait, shown next to "Applications".
   const [openApps, setOpenApps] = useState(0);
   const isAdmin = profile?.role === "admin";
@@ -190,7 +192,7 @@ export function Layout() {
       </aside>
 
       <div className="main">
-        <header className="top">
+        <header className="top" ref={topRef}>
           <Link to="/" className="logo mobile-only"><LogoMark />toki</Link>
           <form className="search" role="search" onSubmit={onSearch}>
             <SearchIcon />
@@ -235,7 +237,7 @@ export function Layout() {
             {canCreate(profile) && (
               <>
                 <NavLink to="/my-games"><ListIcon /><span>{t("nav.myGames")}</span></NavLink>
-                <NavLink to="/add"><PlusIcon /><span>{t("nav.addGame")}</span></NavLink>
+                <NavLink to="/add"><PlusIcon /><span>{t("nav.addGameTab")}</span></NavLink>
               </>
             )}
             {profile.role === "admin" && (
@@ -249,6 +251,26 @@ export function Layout() {
       </nav>
     </div>
   );
+}
+
+/**
+ * Keeps the heights of the top bar and the phone tab bar in --top-h and --tabbar-h (0 when
+ * hidden), so a page like the chat can fill exactly the space between them.
+ */
+function useBarHeights(top: RefObject<HTMLElement | null>, bar: RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const root = document.documentElement.style;
+    const update = () => {
+      root.setProperty("--top-h", `${top.current?.offsetHeight ?? 0}px`);
+      root.setProperty("--tabbar-h", `${bar.current?.offsetHeight ?? 0}px`);
+    };
+    update();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(update);
+    if (top.current) ro.observe(top.current);
+    if (bar.current) ro.observe(bar.current);
+    return () => ro.disconnect();
+  }, [top, bar]);
 }
 
 /** true while the browser has no internet connection. */
