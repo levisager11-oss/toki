@@ -235,10 +235,6 @@ export function GamePage() {
             {t("saves.device")} <Link to={`/signup?next=/game/${game.slug}`}>{t("saves.signup")}</Link>
           </p>
         )}
-        <p className="hint">
-          {t("game.notLoading")}{" "}
-          <a href={src} target="_blank" rel="noopener noreferrer">{t("game.openDirect")} ↗</a>
-        </p>
         {freeAi && userId && !helper && (
           <p className="hint">
             <button type="button" className="linkish" onClick={() => setHelper(true)} aria-expanded={false}>{t("helper.open")}</button>
