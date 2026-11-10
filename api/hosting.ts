@@ -11,7 +11,7 @@ import { body, isUuid, json } from "../server/http.js";
 import { r2, r2Configured, R2Error, type R2Config } from "../server/r2.js";
 import { removeSecret, saveSecret, withSecrets } from "../server/secrets.js";
 import { githubConfigured } from "../server/env.js";
-import { deployCommit, type GitRow } from "../server/gitDeploy.js";
+import { deployCommit, openRepo, type GitRow } from "../server/gitDeploy.js";
 import { github, GitHubError } from "../server/github.js";
 import { MAX_GAME_BYTES } from "../src/lib/hostingRules.js";
 import { checkMove, moveBack, moveGame, type GitHubAccess } from "../server/migrate.js";
@@ -323,6 +323,7 @@ async function git(w: Who, b: Record<string, unknown>, origin: string): Promise<
   if (b.action === "git_build") {
     const [r] = await w.db.select<GitRow>("game_git", `game_id=eq.${g.id}&select=game_id,installation_id,repo,branch,folder,created_by`);
     if (!r) return json({ error: "no_repo" }, 404);
+    await openRepo(w.db, gh, r, g.created_by);
     return build(r);
   }
 
@@ -348,7 +349,10 @@ async function git(w: Who, b: Record<string, unknown>, origin: string): Promise<
     const [r] = await w.db.select<GitRow & { build: string }>("game_git", `game_id=eq.${g.id}&select=game_id,installation_id,repo,branch,folder,created_by,build`);
     if (!r) return json({ error: "no_repo" }, 404);
     // Built by GitHub Actions: the next push (or "Run workflow" on GitHub) puts it live.
-    if (r.build === "action") return build(r);
+    if (r.build === "action") {
+      await openRepo(w.db, gh, r, g.created_by);
+      return build(r);
+    }
     row = r;
   } else return json({ error: "bad_request" }, 400);
 

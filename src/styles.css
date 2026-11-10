@@ -944,6 +944,8 @@ main.content:focus { outline: none; }
 .build-info p { margin: 0; font-size: 14px; }
 .build-info .btn { margin-left: 4px; }
 .host-box .check p { margin: 0 0 4px; }
+/* The status box of a game that follows GitHub: text in lines, not the checkbox row of forms. */
+.form .host-box div.check { display: block; font-weight: 400; overflow-wrap: anywhere; }
 .host-box .sub, .key-list .sub { color: var(--muted); font-size: 13px; }
 .import-box { margin: 0 0 6px; }
 .import-row { display: flex; gap: 8px; margin-top: 8px; }

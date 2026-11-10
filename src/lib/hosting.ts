@@ -47,7 +47,7 @@ export const HOST_ERRORS = [
   "no_files", "too_many_files", "too_big", "bad_file", "no_entry", "zip", "rate_limited", "storage_full", "account_full", "hosting_off",
   "missing_files", "not_allowed", "slug_taken", "no_previous", "storage_error", "too_many_keys", "upload", "error",
   "github_off", "github_error", "no_branch", "no_repo", "repo_too_big",
-  "already_hosted", "move_unreachable", "move_incomplete", "move_slow", "move_no_saves", "move_engine_saves", "not_moved", "needs_build", "github_required", "repo_required", "cant_build",
+  "already_hosted", "move_unreachable", "move_incomplete", "move_slow", "move_no_saves", "move_engine_saves", "not_moved", "needs_build", "github_required", "repo_required", "cant_build", "repo_lost",
 ] as const;
 export type HostErrorCode = (typeof HOST_ERRORS)[number];
 /** The error to show: one Toki knows, "upload" when a file didn't reach Cloudflare, else "error". */

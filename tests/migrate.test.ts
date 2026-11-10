@@ -301,6 +301,7 @@ function fakeGitHub(repos: Record<string, Record<string, Record<string, string>>
         head: async () => ({ sha: "d".repeat(40), message: "Hop higher" }),
         tarball: async (ref: string) => gzipSync(tar(branches[ref] ?? branches["gh-pages"] ?? branches.main)),
         defaultBranch: async () => "main",
+        name: async () => name,
         openPullRequest: async (p: { files: Record<string, string>; base: string }) => {
           if (gh.failPr) throw new GitHubError("GitHub 403: Resource not accessible by integration", 403);
           prs.push(p);

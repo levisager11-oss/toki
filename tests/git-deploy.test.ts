@@ -1,9 +1,9 @@
 import { createHmac } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
-import { deployCommit, filesIn, gamesForPush, readTar, validSignature } from "../server/gitDeploy";
+import { deployCommit, filesIn, gamesForPush, openRepo, readTar, validSignature } from "../server/gitDeploy";
 import type { Db } from "../server/db";
-import type { GitHubClient } from "../server/github";
+import { GitHubError, type GitHubClient } from "../server/github";
 import type { Deps } from "../server/hosting";
 import { tar } from "./fakes";
 
@@ -86,7 +86,7 @@ describe("deploying a commit", () => {
       },
     };
     const tarball = gzipSync(tar({ "toki.json": JSON.stringify({ folder: "build" }), "build/index.html": "<html>", "build/game.js": "go()", "src/main.ts": "x" }));
-    const gh = { repo: async () => ({ tarball: async () => tarball, head: async () => ({ sha: "b".repeat(40), message: "x" }) }) } as unknown as GitHubClient;
+    const gh = { repo: async () => ({ name: async () => "lu/moon-hop", tarball: async () => tarball, head: async () => ({ sha: "b".repeat(40), message: "x" }) }) } as unknown as GitHubClient;
     const put = (async (url: string, init: RequestInit) => {
       objects.set(new URL(url).pathname.slice(1), (init.body as Uint8Array).length);
       return new Response(null, { status: 200 });
@@ -96,5 +96,64 @@ describe("deploying a commit", () => {
     expect([...objects.keys()].sort()).toEqual(["b/22222222-2222-4222-8222-222222222222/game.js", "b/22222222-2222-4222-8222-222222222222/index.html"]);
     expect(updates[0]).toMatchObject({ status: "deploying", last_sha: "c".repeat(40), last_message: "Faster" });
     expect(updates.at(-1)).toMatchObject({ status: "live", error: null });
+  });
+});
+
+describe("a game whose GitHub connection changed", () => {
+  const SHA = "a".repeat(40);
+  const row = () => ({ game_id: "g", installation_id: 7, repo: "lu/moon-hop", branch: "main", folder: "", created_by: "dev" });
+  /** game_git rows, and the connections each Toki account has */
+  const fakeDb = (installs: { user_id: string; installation_id: number }[]) => {
+    const updates: Record<string, unknown>[] = [];
+    const db = {
+      select: async (table: string, q: string) => {
+        if (table === "game_git") return [row()];
+        const id = /installation_id=eq\.(\d+)/.exec(q)?.[1];
+        const users = /user_id=in\.\(([^)]*)\)/.exec(q)?.[1]?.split(",");
+        return installs.filter((i) => (!id || String(i.installation_id) === id) && (!users || users.includes(i.user_id)));
+      },
+      update: async (_t: string, _q: string, patch: Record<string, unknown>) => void updates.push(patch),
+    } as unknown as Db;
+    return { db, updates };
+  };
+  /** GitHub where only installation 9 still exists, and the repository was renamed to "lu/Moon-Hop" */
+  const gh = (reachable = new Set([9])) =>
+    ({
+      repo: async (id: number, name: string) => {
+        if (!reachable.has(id)) throw new GitHubError("GitHub 404: Not Found", 404);
+        return { name: async () => "lu/Moon-Hop", used: name, id };
+      },
+    }) as unknown as GitHubClient;
+
+  it("switches to the developer's connection that still reaches the repository, and saves it", async () => {
+    const { db, updates } = fakeDb([{ user_id: "dev", installation_id: 7 }, { user_id: "dev", installation_id: 9 }]);
+    const r = row();
+    const repo = (await openRepo(db, gh(), r, "dev")) as unknown as { used: string; id: number };
+    expect(repo).toMatchObject({ used: "lu/Moon-Hop", id: 9 });
+    expect(r).toMatchObject({ installation_id: 9, repo: "lu/Moon-Hop" });
+    expect(updates).toEqual([{ installation_id: 9, repo: "lu/Moon-Hop" }]);
+  });
+
+  it("says so in plain words when no connection reaches it", async () => {
+    const { db } = fakeDb([{ user_id: "dev", installation_id: 7 }]);
+    await expect(openRepo(db, gh(), row(), "dev")).rejects.toMatchObject({ code: "repo_lost" });
+  });
+
+  it("doesn't switch for other problems (GitHub down)", async () => {
+    const { db } = fakeDb([{ user_id: "dev", installation_id: 9 }]);
+    const down = { repo: async () => { throw new GitHubError("GitHub 502: Bad Gateway", 502); } } as unknown as GitHubClient;
+    await expect(openRepo(db, down, row(), "dev")).rejects.toMatchObject({ status: 502 });
+  });
+
+  it("follows pushes from the developer's new connection", async () => {
+    const { db, updates } = fakeDb([{ user_id: "dev", installation_id: 9 }]);
+    const hit = await gamesForPush(db, { ref: "refs/heads/main", after: SHA, repository: { full_name: "lu/moon-hop" }, installation: { id: 9 } });
+    expect(hit?.rows).toEqual([{ ...row(), installation_id: 9 }]);
+    expect(updates).toEqual([{ installation_id: 9 }]);
+  });
+
+  it("ignores pushes from someone else's connection", async () => {
+    const { db } = fakeDb([{ user_id: "someone", installation_id: 9 }]);
+    expect(await gamesForPush(db, { ref: "refs/heads/main", after: SHA, repository: { full_name: "lu/moon-hop" }, installation: { id: 9 } })).toBeNull();
   });
 });

@@ -143,6 +143,10 @@ export function github(cfg: ServerEnv["github"], fetchImpl: typeof fetch = fetch
         async defaultBranch(): Promise<string> {
           return (await call<{ default_branch: string }>(`/repos/${repo}`, token)).default_branch;
         },
+        /** The repository's name as GitHub has it now (it follows renames), so also a check that it can be reached. */
+        async name(): Promise<string> {
+          return (await call<{ full_name: string }>(`/repos/${repo}`, token)).full_name;
+        },
         async tree(branch: string): Promise<TreeEntry[]> {
           const r = await call<{ tree: TreeEntry[] }>(`/repos/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`, token);
           return r.tree;
