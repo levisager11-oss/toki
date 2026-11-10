@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { invitePath, joinPath, maxPlayers, playUrl, roomCode } from "../src/lib/invites";
+import { invitePath, joinPath, maxPlayers, playUrl, roomCode, roomFromMessage } from "../src/lib/invites";
 import { readTokiJson } from "../src/lib/hostingRules";
 import { integrationGuide } from "../src/lib/integration";
 import { gameLine, task, type Job } from "../server/connect/agent";
@@ -19,6 +19,25 @@ describe("room codes", () => {
   it("are refused when they could be anything else", () => {
     for (const bad of ["", "  ", null, undefined, "AB CD", "a&b=c", "<b>", "x".repeat(33), "https://x.example/", "https://x.example/?room=A%20B", "javascript:alert(1)"]) {
       expect(roomCode(bad)).toBeNull();
+    }
+  });
+});
+
+describe("what the game tells Toki about its room", () => {
+  it("is the code while the player is in a room, and nothing once they left", () => {
+    expect(roomFromMessage({ toki: 1, type: "room", data: "ABCD" })).toBe("ABCD");
+    expect(roomFromMessage({ toki: 1, type: "room", data: null })).toBeNull();
+    expect(roomFromMessage({ toki: 1, type: "room", data: "not a code" })).toBeNull();
+    expect(roomFromMessage({ toki: 1, type: "room", data: 1234 })).toBeNull();
+  });
+
+  it("forgets the room when the game starts again, e.g. after reloading itself", () => {
+    expect(roomFromMessage({ toki: 1, type: "hello" })).toBeNull();
+  });
+
+  it("leaves the room alone for every other message", () => {
+    for (const other of [null, "room", 7, {}, { type: "room", data: "ABCD" }, { toki: 2, type: "room", data: "ABCD" }, { toki: 1, type: "score", data: 5 }, { toki: 1, type: "store", data: {} }]) {
+      expect(roomFromMessage(other)).toBeUndefined();
     }
   });
 });

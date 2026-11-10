@@ -25,6 +25,19 @@ export function roomCode(input: string | null | undefined, param = "room"): stri
   return ROOM_CODE.test(s) ? s : null;
 }
 
+/**
+ * What a message from the game's frame says about its room: the code, null (the player left it,
+ * or the game started again: toki-save.js says "hello" each time its page loads, e.g. when a
+ * game reloads itself for a new save), or undefined when the message isn't about rooms.
+ */
+export function roomFromMessage(data: unknown): string | null | undefined {
+  const m = data as { toki?: number; type?: string; data?: unknown } | null;
+  if (!m || typeof m !== "object" || m.toki !== 1) return undefined;
+  if (m.type === "hello") return null;
+  if (m.type !== "room") return undefined;
+  return typeof m.data === "string" && ROOM_CODE.test(m.data) ? m.data : null;
+}
+
 /** The game's address that joins this room, or its normal address without a (valid) code. */
 export function playUrl(game: Pick<Game, "play_url" | "multiplayer" | "join_param">, code: string | null): string {
   if (!code || !game.multiplayer || !ROOM_CODE.test(code)) return game.play_url;

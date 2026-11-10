@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
 import { useGames } from "../lib/useGames";
-import { invitePath, joinPath, maxPlayers, ROOM_CODE, roomCode } from "../lib/invites";
+import { invitePath, joinPath, maxPlayers, roomCode, roomFromMessage } from "../lib/invites";
 import { inviteToGame, isOnline, markNotificationsRead, myFriends, SocialError, type FriendRow, type Person } from "../lib/social";
 import { clearInvite, nudge, refreshBadges, useBadges } from "../lib/useBadges";
 import type { Game } from "../lib/types";
@@ -15,7 +15,7 @@ import { CloseIcon, PeopleIcon } from "./icons";
 /**
  * The room the game says the player is in: toki.room(code) in toki-save.js, null when they left
  * it (or the game doesn't tell). Only messages from the game's frame and its own site count.
- * `run` changes when the game is loaded again: then the room is gone.
+ * The room is gone when the game is loaded again: by Toki (`run` changes), or by itself.
  */
 export function useRoomBridge(frame: RefObject<HTMLIFrameElement>, game: Game | undefined, run: string): string | null {
   const [room, setRoom] = useState<string | null>(null);
@@ -32,9 +32,8 @@ export function useRoomBridge(frame: RefObject<HTMLIFrameElement>, game: Game | 
     const onMessage = (e: MessageEvent) => {
       const win = frame.current?.contentWindow;
       if (!win || e.source !== win || e.origin !== origin) return;
-      const m = e.data as { toki?: number; type?: string; data?: unknown } | null;
-      if (!m || m.toki !== 1 || m.type !== "room") return;
-      setRoom(typeof m.data === "string" && ROOM_CODE.test(m.data) ? m.data : null);
+      const next = roomFromMessage(e.data);
+      if (next !== undefined) setRoom(next);
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
