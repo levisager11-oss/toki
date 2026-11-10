@@ -1,17 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../lib/i18n";
-import { ApiError, githubConnectLink, githubManage, githubRepos, type GitHubInfo } from "../lib/ai";
+import { githubConnectLink, githubManage, githubRepos, type GitHubInfo } from "../lib/ai";
+import { BuildInfo } from "./GitHubFollow";
 import { checkMove, hostError, moveBack, moveToToki, type MoveCheck, type MoveResult } from "../lib/hosting";
 import { guessRepo, MAX_GAME_BYTES, pagesRepos } from "../lib/hostingRules";
 import { mbText } from "./HostedUpload";
 
 export type Moved = MoveResult;
 
-/** The developer's GitHub as Toki sees it (null while loading, or when GitHub isn't set up on Toki), and "look again". */
-function useGitHub(): [GitHubInfo | null, () => void] {
+/** The developer's GitHub as Toki sees it (null when GitHub isn't set up on Toki), "look again", and whether it has answered. */
+function useGitHub(): [GitHubInfo | null, () => void, boolean] {
   const [info, setInfo] = useState<GitHubInfo | null>(null);
+  const [loaded, setLoaded] = useState(false);
   const live = useRef(true);
-  const load = () => void githubRepos().then((i) => live.current && setInfo(i), () => {});
+  const load = () =>
+    void githubRepos().then(
+      (i) => {
+        if (!live.current) return;
+        setInfo(i);
+        setLoaded(true);
+      },
+      () => live.current && setLoaded(true),
+    );
   useEffect(() => {
     live.current = true;
     load();
@@ -19,7 +29,7 @@ function useGitHub(): [GitHubInfo | null, () => void] {
       live.current = false;
     };
   }, []);
-  return [info?.configured ? info : null, load];
+  return [info?.configured ? info : null, load, loaded];
 }
 
 /** Off to GitHub to connect it, and back to this game's "Move to Toki" afterwards. */
@@ -29,42 +39,39 @@ type Repo = NonNullable<GitHubInfo["repos"]>[number];
 const repoKey = (r: Repo) => `${r.installation_id}:${r.repo}`;
 
 /**
- * The game's repository, for a complete move. With GitHub connected: which repository is the
- * game's (Toki's guess is preselected). Toki takes the game from it when the finished game is in
- * there; when it holds the source, Toki uses its list of files to get every file from the site.
- * Not connected yet: "Connect GitHub to make it complete".
+ * The game's repository: moving needs it. Not connected yet: "Connect GitHub". Connected: which
+ * repository is the game's (Toki's guess is preselected), and a way to give Toki more of them.
  */
 function RepoPicker({ info, reload, value, onChange, hint }: { info: GitHubInfo; reload: () => void; value: string; onChange: (v: string) => void; hint: string | null }) {
   const { t } = useI18n();
   const stop = useRef<() => void>();
   useEffect(() => () => stop.current?.(), []);
-  if (!info.installUrl) return null;
   if (!info.installations?.length) {
     return (
       <div className="check move-tip">
-        <p>{hint ? t("move.githubTipRepo", { repo: hint }) : t("move.githubTip")}</p>
+        <p>{hint ? t("move.connectRepo", { repo: hint }) : t("move.connect")}</p>
         <div className="actions">
-          <button type="button" className="btn" onClick={() => connectGitHub(info)}>{t("connect.githubConnect")}</button>
+          <button type="button" className="btn primary" onClick={() => connectGitHub(info)}>{t("connect.githubConnect")}</button>
         </div>
       </div>
     );
   }
   const more = () => {
     stop.current?.();
-    stop.current = githubManage(info.installUrl!, reload);
+    stop.current = info.installUrl ? githubManage(info.installUrl, reload) : undefined;
   };
   return (
     <div className="move-repo">
       <label htmlFor="move-repo">{t("move.repo")}</label>
       <select id="move-repo" value={value} onChange={(e) => onChange(e.target.value)} aria-describedby="move-repo-help">
-        <option value="">{t("move.repoNone")}</option>
+        <option value="">{t("move.repoChoose")}</option>
         {(info.repos ?? []).map((r) => (
           <option key={repoKey(r)} value={repoKey(r)}>{r.repo}{r.private ? ` (${t("git.private")})` : ""}</option>
         ))}
       </select>
       <small id="move-repo-help">
         {value ? t("move.repoHelp") : hint ? t("move.repoMissing", { repo: hint }) : t("move.repoPick")}{" "}
-        <button type="button" className="linkish" onClick={more}>{t("git.moreRepos")}</button>
+        {info.installUrl && <button type="button" className="linkish" onClick={more}>{t("git.moreRepos")}</button>}
       </small>
     </div>
   );
@@ -103,18 +110,18 @@ function SavesWarning({ problem, engine, accepted, onAccept }: {
 }
 
 /**
- * In the form of a game that runs at a link elsewhere: "Move to Toki". Toki takes the game from
- * its GitHub repository when that holds the finished game, else from its link (with the
- * repository's list of files, so nothing is left behind), and hosts it; the game keeps its page,
- * plays, likes and high scores. Players' progress comes along by itself when the game hands it to
- * Toki's save script at its old address (src/lib/movedSaves.ts). Toki stops and asks first when
- * progress would stay behind, or when files might be missing.
+ * In the form of a game that runs at a link elsewhere: "Move to Toki". It needs GitHub connected
+ * and the game's repository picked: then Toki knows every file of the game, and the moved game
+ * follows the repository like any game on Toki (taken from the repository when the finished game
+ * is in there, else downloaded from its link and built by GitHub Actions from then on). Players'
+ * progress comes along by itself when the game hands it to Toki's save script at its old address
+ * (src/lib/movedSaves.ts); Toki stops and asks first when it would stay behind.
  */
 export function MoveToToki({ gameId, slug, url, onMoved }: { gameId: string; slug: string; url: string; onMoved: (m: Moved) => void }) {
   const { t } = useI18n();
-  const [github, reloadGitHub] = useGitHub();
+  const [github, reloadGitHub, loaded] = useGitHub();
   const pagesRepo = pagesRepos(url)[0]?.repo ?? null;
-  // The game's repository: Toki's guess until the developer picks one ("" = none).
+  // The game's repository: Toki's guess until the developer picks one.
   const [picked, setPicked] = useState<string | null>(null);
   const guess = github?.repos ? guessRepo(github.repos, url, slug) : null;
   const repoValue = picked ?? (guess ? repoKey(guess) : "");
@@ -124,61 +131,58 @@ export function MoveToToki({ gameId, slug, url, onMoved }: { gameId: string; slu
   // Players' progress wouldn't come along: why, and whether the developer accepts it.
   const [problem, setProblem] = useState<"no_script" | "engine_storage" | null>(null);
   const [accept, setAccept] = useState(false);
-  // File names the game builds while running, which Toki can't look up without its repository.
-  const [dynamic, setDynamic] = useState<string | null>(null);
-  const [partial, setPartial] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   // Opened from "Move to Toki" on My games, or back from connecting GitHub.
   useEffect(() => {
     if (location.hash === "#move") box.current?.scrollIntoView({ block: "center" });
   }, []);
   const move = async () => {
+    if (!repo) return setErr(t("move.repoFirst"));
     setBusy(true);
     setErr("");
     try {
-      onMoved(await moveToToki(gameId, { anyway: !!problem && accept, partial: dynamic !== null && partial, repo: repo ? { installation_id: repo.installation_id, repo: repo.repo } : null }));
+      onMoved(await moveToToki(gameId, { anyway: !!problem && accept, repo: { installation_id: repo.installation_id, repo: repo.repo } }));
     } catch (e) {
       const code = hostError(e);
       if (code === "move_no_saves") setProblem("no_script");
       else if (code === "move_engine_saves") setProblem("engine_storage");
-      else if (code === "move_dynamic_files") setDynamic(e instanceof ApiError ? e.detail : "");
-      else setErr(t(`host.err.${code}`, { mb: mbText(MAX_GAME_BYTES) }));
+      else if (code === "github_required") reloadGitHub();
+      else setErr(t(`host.err.${code}`, { mb: mbText(MAX_GAME_BYTES), repo: repo.repo }));
     }
     setBusy(false);
   };
-  const anyway = (!!problem && accept) || (dynamic !== null && !repo && partial);
+  const anyway = !!problem && accept;
   return (
     <div className="host-box move-box" id="move" ref={box}>
       <p className="label">{t("move.title")}</p>
       <p>{t("move.help")}</p>
       <small>{t("move.saves")}</small>
-      {github && <RepoPicker info={github} reload={reloadGitHub} value={repoValue} onChange={setPicked} hint={pagesRepo} />}
-      {problem && <SavesWarning problem={problem} engine={null} accepted={accept} onAccept={setAccept} />}
-      {dynamic !== null && !repo && (
-        <div className="check warn" role="alert">
-          <p>{t("move.dynamic", { names: dynamic || "…" })}</p>
-          <p>{github?.installations?.length ? t("move.dynamicPick") : t("move.dynamicConnect")}</p>
-          <label className="check">
-            <input type="checkbox" checked={partial} onChange={(e) => setPartial(e.target.checked)} />
-            {t("move.dynamicAccept")}
-          </label>
-        </div>
+      {!loaded ? (
+        <p className="check" aria-busy="true">{t("loading")}</p>
+      ) : !github || !github.installUrl ? (
+        <p className="check warn">{t("move.githubOff")}</p>
+      ) : (
+        <>
+          <RepoPicker info={github} reload={reloadGitHub} value={repoValue} onChange={setPicked} hint={pagesRepo} />
+          {problem && <SavesWarning problem={problem} engine={null} accepted={accept} onAccept={setAccept} />}
+          {!!github.installations?.length && (
+            <div className="actions">
+              <button type="button" className="btn primary" onClick={move} disabled={busy || !repo} aria-describedby={busy ? "move-wait" : undefined}>
+                {busy ? t("move.busy") : anyway ? t("move.anyway") : problem ? t("move.checkAgain") : t("move.button")}
+              </button>
+            </div>
+          )}
+        </>
       )}
-      <div className="actions">
-        <button type="button" className="btn primary" onClick={move} disabled={busy} aria-describedby={busy ? "move-wait" : undefined}>
-          {busy ? t("move.busy") : anyway ? t("move.anyway") : problem || (dynamic !== null && !repo) ? t("move.checkAgain") : t("move.button")}
-        </button>
-      </div>
       {busy && <p className="check" id="move-wait" aria-live="polite">{t("move.wait")}</p>}
       {err && <p className="error" role="alert">{err}</p>}
     </div>
   );
 }
 
-/** Right after moving: where the game is now, where it came from, and the way back to its link. */
+/** Right after moving: where the game is now, how it gets new versions, and the way back to its link. */
 export function MovedNotice({ gameId, moved, onUndone }: { gameId: string; moved: Moved; onUndone: () => void }) {
   const { t } = useI18n();
-  const [github] = useGitHub();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const undo = async () => {
@@ -192,6 +196,7 @@ export function MovedNotice({ gameId, moved, onUndone }: { gameId: string; moved
     }
     setBusy(false);
   };
+  const b = moved.build;
   return (
     <div className="host-box move-box" aria-live="polite">
       <p className="check good">
@@ -200,16 +205,8 @@ export function MovedNotice({ gameId, moved, onUndone }: { gameId: string; moved
       </p>
       {moved.source === "github" && moved.github && <p>{t("move.doneGithub", { repo: moved.github.repo, branch: moved.github.branch })}</p>}
       {moved.source === "site" && moved.repoHelped && <p>{t("move.doneSiteRepo", { repo: moved.repoHelped.repo, n: moved.repoHelped.files })}</p>}
-      {moved.source === "site" && <small>{t("move.updatesHow")}</small>}
-      {moved.missing.length > 0 && <p className="check warn">{t("move.doneMissing", { names: moved.missing.join(", ") })}</p>}
-      {moved.source === "site" && !moved.repoHelped && github && !github.installations?.length && github.installUrl && (
-        <div className="check move-tip">
-          <p>{moved.suggestRepo ? t("move.githubTipRepo", { repo: moved.suggestRepo }) : t("move.githubTip")}</p>
-          <div className="actions">
-            <button type="button" className="btn" onClick={() => connectGitHub(github)}>{t("connect.githubConnect")}</button>
-          </div>
-        </div>
-      )}
+      {b && "cannot" in b && <p className="check">{t("move.doneNoBuild", { engine: b.cannot === "unknown" ? t("git.thisEngine") : b.cannot })}</p>}
+      {b && !("cannot" in b) && <BuildInfo repo={b.repo} branch={b.branch} link={b.pr ?? b.manual} ready={b.ready} />}
       <small>{moved.saves ? t("move.keepOld") : t("move.savesStayed")}</small>
       <small>{t("move.checkIt")}</small>
       <div className="actions">

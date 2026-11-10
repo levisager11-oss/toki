@@ -47,7 +47,7 @@ export const HOST_ERRORS = [
   "no_files", "too_many_files", "too_big", "bad_file", "no_entry", "zip", "rate_limited", "storage_full", "account_full", "hosting_off",
   "missing_files", "not_allowed", "slug_taken", "no_previous", "storage_error", "too_many_keys", "upload", "error",
   "github_off", "github_error", "no_branch", "no_repo", "repo_too_big",
-  "already_hosted", "move_unreachable", "move_incomplete", "move_slow", "move_no_saves", "move_engine_saves", "not_moved", "move_dynamic_files", "needs_build",
+  "already_hosted", "move_unreachable", "move_incomplete", "move_slow", "move_no_saves", "move_engine_saves", "not_moved", "needs_build", "github_required", "repo_required", "cant_build",
 ] as const;
 export type HostErrorCode = (typeof HOST_ERRORS)[number];
 /** The error to show: one Toki knows, "upload" when a file didn't reach Cloudflare, else "error". */
@@ -143,21 +143,17 @@ export interface MoveResult {
   github: { repo: string; branch: string; folder: string } | null;
   /** Taken from the site: the repository whose file list helped, and how many files it added */
   repoHelped: { repo: string; files: number } | null;
-  /** A repository the game seems to come from, which Toki can't reach yet */
-  suggestRepo: string | null;
-  /** File names the game builds while running that Toki couldn't look up (moved anyway) */
-  missing: string[];
+  /** The repository holds the source: the game follows it now and GitHub Actions builds every push, or why it can't */
+  build: (BuildSetup & { repo: string; branch: string }) | { cannot: NoBuild; repo: string } | null;
 }
 export interface MoveChoices {
   /** Move although players' progress stays behind */
   anyway?: boolean;
-  /** Move although files with names built at runtime may be missing */
-  partial?: boolean;
   /** The game's repository, picked by the developer */
   repo?: { installation_id: number; repo: string } | null;
 }
 export const moveToToki = (gameId: string, c: MoveChoices = {}) =>
-  post<MoveResult>({ action: "move", game_id: gameId, anyway: !!c.anyway, partial: !!c.partial, ...(c.repo ? { installation_id: c.repo.installation_id, repo: c.repo.repo } : {}) });
+  post<MoveResult>({ action: "move", game_id: gameId, anyway: !!c.anyway, ...(c.repo ? { installation_id: c.repo.installation_id, repo: c.repo.repo } : {}) });
 /** Back to the old link after moving; the files on Toki are deleted. */
 export const moveBack = (gameId: string) => post<{ play_url: string }>({ action: "move_back", game_id: gameId });
 export interface MoveCheck {
@@ -249,10 +245,34 @@ export interface GitRow extends GitChoice {
   last_message: string | null;
   error: string | null;
   updated_at: string;
+  /** "action": GitHub Actions builds the game on every push (the repository holds the source) */
+  build?: "none" | "action";
+  /** the pull request that adds the build file, or GitHub's page to add it */
+  build_pr?: string | null;
 }
 export const gitBranches = (installation_id: number, repo: string) => post<{ branches: string[]; default: string }>({ action: "git_branches", installation_id, repo });
-export const gitConnect = (gameId: string, c: GitChoice) => post<{ ok: boolean; error?: string; play_url?: string }>({ action: "git_connect", game_id: gameId, ...c });
-export const gitDeploy = (gameId: string) => post<{ ok: boolean; error?: string; play_url?: string }>({ action: "git_deploy", game_id: gameId });
+/** GitHub Actions builds the game (its repository holds the source): the build file's pull request, or GitHub's page to add it. */
+export interface BuildSetup {
+  pr: string | null;
+  manual: string | null;
+  /** the repository has the build file already */
+  ready: boolean;
+}
+/** Engines GitHub Actions can't build (their editor needs a license): they need an exported web build. */
+export type NoBuild = "Unity" | "GameMaker" | "Construct" | "Godot C#" | "unknown";
+export interface GitResult {
+  ok: boolean;
+  error?: string;
+  play_url?: string;
+  /** The repository holds the source: GitHub Actions builds it from now on */
+  building?: BuildSetup;
+  /** with error "cant_build": which engine */
+  engine?: NoBuild;
+}
+export const gitConnect = (gameId: string, c: GitChoice) => post<GitResult>({ action: "git_connect", game_id: gameId, ...c });
+export const gitDeploy = (gameId: string) => post<GitResult>({ action: "git_deploy", game_id: gameId });
+/** Let GitHub Actions build the game on every push (server/gitBuild.ts). */
+export const gitBuild = (gameId: string) => post<GitResult>({ action: "git_build", game_id: gameId });
 export const gitDisconnect = (gameId: string) => post<{ ok: true }>({ action: "git_disconnect", game_id: gameId });
 
 

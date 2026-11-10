@@ -935,6 +935,9 @@ main.content:focus { outline: none; }
 .move-box .actions { margin-top: 2px; }
 .move-tip, .move-repo { display: flex; flex-direction: column; gap: 6px; }
 .move-repo label { margin: 0; }
+.build-info { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.build-info p { margin: 0; font-size: 14px; }
+.build-info .btn { margin-left: 4px; }
 .host-box .check p { margin: 0 0 4px; }
 .host-box .sub, .key-list .sub { color: var(--muted); font-size: 13px; }
 .import-box { margin: 0 0 6px; }

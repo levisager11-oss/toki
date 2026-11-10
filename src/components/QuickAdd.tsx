@@ -10,10 +10,11 @@ import { CATEGORIES, type Category } from "../lib/types";
 import { siteFor, siteUrl } from "../lib/hostingRules";
 import { ApiError, connectError, runJob, type ConnectJob } from "../lib/ai";
 import {
+  type BuildSetup,
   gitConnect, hostError, scanRepo, scanSample, scanUpload, startLeaderboard, uploadGame, type GitChoice, type HostingStatus, type Proposal, type ScanResult,
 } from "../lib/hosting";
 import { HostedUpload, type Picked } from "./HostedUpload";
-import { GitHubFollow } from "./GitHubFollow";
+import { BuildInfo, GitHubFollow, gitFailed } from "./GitHubFollow";
 
 type Phase = "pick" | "scanning" | "review" | "publishing" | "done";
 type Step = "create" | "files" | "leaderboard";
@@ -43,6 +44,8 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
   const [p, setP] = useState<Proposal | null>(null);
   const [leaderboard, setLeaderboard] = useState(false);
   const [err, setErr] = useState("");
+  // The repository holds the source: GitHub Actions builds it, after its build file is merged.
+  const [building, setBuilding] = useState<(BuildSetup & { repo: string; branch: string }) | null>(null);
   const [steps, setSteps] = useState<Record<Step, StepState>>({ create: "wait", files: "wait", leaderboard: "wait" });
   const [pct, setPct] = useState(0);
   const [game, setGame] = useState<{ id: string; slug: string } | null>(null);
@@ -122,14 +125,16 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
       if (kind === "upload" && picked) await uploadGame(row.id, picked.files, p.isolation, (d, total) => setPct(d / total));
       else if (git) {
         const r = await gitConnect(row.id, git);
-        if (!r.ok) throw new Error(r.error ?? "error");
+        if (!r.ok) throw new Error(r.error === "cant_build" ? gitFailed(t, r.error, r.engine) : r.error ?? "error");
+        // The repository holds the source: GitHub Actions builds it, once its build file is in.
+        if (r.building) setBuilding({ ...r.building, repo: git.repo, branch: git.branch });
       }
       set("files", "ok");
     } catch (e) {
       set("files", "fail");
       // A file that didn't reach Cloudflare is "upload"; GitHub deploys say what went wrong.
       const code = e instanceof ApiError ? e.message : kind === "github" && e instanceof Error ? e.message : "upload";
-      setErr(t(`host.err.${hostError(code)}`, { mb: "100 MB" }));
+      setErr(hostError(code) === "error" && kind === "github" && code !== "error" ? code : t(`host.err.${hostError(code)}`, { mb: "100 MB" }));
       set("leaderboard", "skip");
       invalidateGames();
       return setPhase("done");
@@ -335,6 +340,7 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
         )}
       </ol>
       {err && <p className="error" role="alert">{err}</p>}
+      {building && <BuildInfo repo={building.repo} branch={building.branch} link={building.pr ?? building.manual} ready={building.ready} />}
       {phase === "done" && game && (
         <div className="actions">
           {steps.files === "ok" && <button type="button" className="btn primary" onClick={() => navigate(`/game/${game.slug}`)}>{t("quick.open")}</button>}

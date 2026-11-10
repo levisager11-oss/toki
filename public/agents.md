@@ -110,9 +110,20 @@ picture on the edit page if toki.json has none.
 
 ## 5. Publish on every push (GitHub)
 
-Add the key as a repository secret named `TOKI_KEY` (the developer does this on GitHub:
-Settings → Secrets and variables → Actions → New repository secret), then add
-`.github/workflows/toki.yml`:
+**Easiest, no key:** on Toki, open the game's settings, choose **From GitHub** with the game's
+repository. If the repository holds the game's source (it must be built first, e.g. Vite),
+Toki offers to build it with GitHub Actions and adds `.github/workflows/toki.yml` with a pull
+request. That workflow needs no secret: it asks GitHub for a signed token for the run
+(`permissions: id-token: write`), and Toki accepts the upload only for the game that follows
+that repository and branch. The workflow runs `node toki-upload.mjs --build`, which installs the
+packages (npm, pnpm, yarn or bun), runs `build`, finds the built `index.html` (`dist`, `build`,
+`out`, …) and uploads it. Godot projects (GDScript) are exported for the web with the project's
+Godot version. Unity, GameMaker and Construct need their own editor: commit the web export to a
+folder of the repository, and choose that folder under **From GitHub**.
+
+**With an upload key** (for a game that doesn't follow its repository on Toki): add the key as a
+repository secret named `TOKI_KEY` (the developer does this on GitHub: Settings → Secrets and
+variables → Actions → New repository secret), then add `.github/workflows/toki.yml`:
 
 ```yaml
 name: Publish to Toki
@@ -127,10 +138,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-      # If the game must be built first, add the build steps here (e.g. npm ci && npm run build).
+          node-version: lts/*
       - run: curl -fsSL https://www.playtoki.app/toki-upload.mjs -o /tmp/toki-upload.mjs
-      - run: node /tmp/toki-upload.mjs .
+      # --build: install, build and upload the built game (leave it out for a game that needs no building)
+      - run: node /tmp/toki-upload.mjs --build
         env:
           TOKI_KEY: ${{ secrets.TOKI_KEY }}
 ```

@@ -139,3 +139,14 @@ describe("moving a game to Toki", () => {
     expect(row.moved_from).toBe("https://lu.github.io/moon-hop/");
   });
 });
+
+describe("games built by GitHub Actions", () => {
+  it("shows the developer how their game is built, and only the server changes it", async () => {
+    const g = await t.game(dev);
+    await t.service("insert into game_git (game_id, installation_id, repo, branch, build, build_pr) values ($1, 1, 'lu/moon-hop', 'main', 'action', 'https://github.com/lu/moon-hop/pull/3')", [g.id]);
+    expect(await t.as(dev, "select build, build_pr from game_git where game_id = $1", [g.id])).toEqual([{ build: "action", build_pr: "https://github.com/lu/moon-hop/pull/3" }]);
+    await expect(t.as(dev, "update game_git set build = 'none' where game_id = $1", [g.id])).rejects.toThrow(/permission denied/);
+    await expect(t.service("update game_git set build = 'docker' where game_id = $1", [g.id])).rejects.toThrow(/check/);
+    await expect(t.service("update game_git set build_pr = 'https://evil.example/x' where game_id = $1", [g.id])).rejects.toThrow(/check/);
+  });
+});

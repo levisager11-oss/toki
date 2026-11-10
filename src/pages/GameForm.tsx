@@ -313,7 +313,7 @@ export function GameForm() {
       let msg = "";
       try {
         const r = await gitConnect(res.data.id, gitChoice);
-        if (!r.ok) msg = gitFailed(t, r.error);
+        if (!r.ok) msg = gitFailed(t, r.error, r.engine);
       } catch (e) {
         msg = t(`host.err.${hostError(e)}`, { mb: "100 MB" });
       }
