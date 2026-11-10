@@ -21,6 +21,8 @@ export interface BudgetedCall {
   jobId?: string | null;
   messages: ChatMessage[];
   maxTokens: number;
+  /** Think less than the settings say (when the last answer ran out of tokens while thinking). */
+  thinking?: Thinking;
   fetchImpl?: typeof fetch;
 }
 
@@ -38,12 +40,13 @@ export async function budgetedCompletion(call: BudgetedCall): Promise<Completion
   });
   let result: Completion;
   try {
-    result = await complete({ provider: r.provider, baseUrl: r.base_url, model: r.model, apiKey: call.keys[r.provider] ?? "", thinking: r.thinking }, { messages: call.messages, maxTokens: call.maxTokens }, call.fetchImpl);
+    result = await complete({ provider: r.provider, baseUrl: r.base_url, model: r.model, apiKey: call.keys[r.provider] ?? "", thinking: call.thinking ?? r.thinking }, { messages: call.messages, maxTokens: call.maxTokens }, call.fetchImpl);
   } catch (e) {
     // A request the service refused with an error status wasn't worked on. Otherwise (e.g. the
     // connection broke) the service may have charged for reading it: count that, on the safe side.
     const refused = e instanceof AiError && (e.code === "not_configured" || e.status !== undefined);
-    await call.db.rpc("ai_settle", { p_id: r.id, p_input_tokens: refused ? 0 : inputTokens, p_output_tokens: 0, p_ok: false }).catch(() => {});
+    const spent = e instanceof AiError ? Math.min(e.outputTokens ?? 0, call.maxTokens) : 0;
+    await call.db.rpc("ai_settle", { p_id: r.id, p_input_tokens: refused ? 0 : inputTokens, p_output_tokens: spent, p_ok: false }).catch(() => {});
     // Why it failed, for the admin page.
     const why = e instanceof AiError ? (e.message === e.code ? e.code : `${e.code}: ${e.message}`) : "error";
     await Promise.resolve()

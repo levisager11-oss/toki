@@ -208,13 +208,13 @@ async function run(ctx: Ctx, b: Record<string, unknown>, origin: string) {
       if (!owned || job.installation_id === null) throw new DbError("not_allowed", 403);
       return gh.repo(job.installation_id, job.repo);
     },
-    async ai(messages, maxTokens) {
+    async ai(messages, maxTokens, opts) {
       // One-click runs where the admin chose the free AI: it writes the code too (no cost).
       if (job.ai === "free") {
         const c = await freeCompletion({ db: ctx.db, keys: { free: ctx.env.freeAiKey, openai: ctx.env.aiKey }, userId: ctx.user.id, feature: "connect", messages, settings: freeOnly, timeoutMs: 240_000 });
         return c.text;
       }
-      const c = await budgetedCompletion({ db: ctx.db, keys: { openai_compatible: ctx.env.aiKey, anthropic: ctx.env.anthropicKey }, userId: ctx.user.id, feature: "connect", jobId: job.id, messages, maxTokens });
+      const c = await budgetedCompletion({ db: ctx.db, keys: { openai_compatible: ctx.env.aiKey, anthropic: ctx.env.anthropicKey }, userId: ctx.user.id, feature: "connect", jobId: job.id, messages, maxTokens, thinking: opts?.thinking });
       return c.text;
     },
     ...(freeAi && job.ai !== "free"

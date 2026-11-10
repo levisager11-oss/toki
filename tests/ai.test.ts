@@ -188,6 +188,15 @@ describe("budgeted AI calls", () => {
     expect(calls[1]).toEqual({ fn: "ai_settle", args: { p_id: 7, p_input_tokens: 9, p_output_tokens: 3, p_ok: true } });
   });
 
+  it("counts the tokens a model spent thinking when it never got to an answer, and can think less", async () => {
+    const { db, calls } = fakeDb();
+    const f = reply({ choices: [{ message: { content: "" }, finish_reason: "length" }], usage: { prompt_tokens: 9, completion_tokens: 100 } });
+    const err = await budgetedCompletion({ db, keys: { openai_compatible: "k", anthropic: "" }, userId: "u", feature: "connect", messages: [{ role: "user", content: "abc" }], maxTokens: 100, thinking: "low", fetchImpl: f }).catch((e) => e);
+    expect(err).toMatchObject({ code: "empty_answer", outputTokens: 100 });
+    expect(calls[1]).toMatchObject({ fn: "ai_settle", args: { p_output_tokens: 100, p_ok: false } });
+    expect(JSON.parse((f as unknown as { mock: { calls: [string, RequestInit][] } }).mock.calls[0][1].body as string)).toMatchObject({ reasoning_effort: "low" });
+  });
+
   it("doesn't call the AI when the budget says no", async () => {
     const { db } = fakeDb({ refuse: "quota_reached" });
     const f = reply({});
@@ -420,6 +429,47 @@ describe("Toki Connect run", () => {
       throw new DbError("quota_reached", 400);
     };
     expect(await step(newJob(), f.deps)).toMatchObject({ status: "failed", error: "quota_reached" });
+  });
+
+  it("tries again with less thinking when the AI runs out of tokens while thinking", async () => {
+    const f = fixture([]);
+    const asked: (string | undefined)[] = [];
+    const answers: (string | Error)[] = [
+      new AiError("empty_answer", "The model used all its tokens before writing an answer.", undefined, 32000),
+      new AiError("empty_answer", "The model used all its tokens before writing an answer.", undefined, 32000),
+      JSON.stringify({ action: "impossible", reason: "x" }),
+    ];
+    f.deps.ai = async (_m, _t, opts) => {
+      asked.push(opts?.thinking);
+      const a = answers.shift()!;
+      if (a instanceof Error) throw a;
+      return a;
+    };
+    let job = newJob();
+    let r = await step(job, f.deps);
+    expect(r.status).toBe("working");
+    expect(r.state.feedback).toMatch(/ran out of tokens/);
+    job = { ...job, ...r };
+    r = await step(job, f.deps);
+    expect(r.status).toBe("working");
+    job = { ...job, ...r };
+    r = await step(job, f.deps);
+    expect(r).toMatchObject({ status: "failed", error: "impossible" });
+    expect(asked).toEqual([undefined, "medium", "low"]);
+  });
+
+  it("gives up when the AI still runs out of tokens with little thinking", async () => {
+    const f = fixture([]);
+    f.deps.ai = async () => {
+      throw new AiError("empty_answer", "The model used all its tokens before writing an answer.");
+    };
+    let job = newJob();
+    let r = await step(job, f.deps);
+    job = { ...job, ...r };
+    r = await step(job, f.deps);
+    job = { ...job, ...r };
+    r = await step(job, f.deps);
+    expect(r).toMatchObject({ status: "failed", error: "ai_empty_answer" });
   });
 
   it("limits the number of AI calls per run", async () => {
