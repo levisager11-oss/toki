@@ -24,13 +24,13 @@ export function IdeaMeta({ idea }: { idea: GameIdea }) {
       <IdeaStatusBadge status={idea.status} />
       <span>@{idea.author?.username ?? "?"}</span>
       <time dateTime={idea.created_at} title={new Date(idea.created_at).toLocaleString(lang === "de" ? "de-CH" : "en")}>{ago(idea.created_at, lang)}</time>
-      {idea.status === "claimed" && idea.claimer && <b>{t("idea.builtBy", { who: `@${idea.claimer.username}` })}</b>}
-      {idea.status === "done" && idea.game && <Link to={`/game/${idea.game.slug}`} className="fb-fixed">{idea.game.title}</Link>}
       {idea.reply_count > 0 && (
         <span className="fb-replies" title={t("fb.replies", { n: idea.reply_count })}>
           <ChatIcon /><span aria-hidden="true">{idea.reply_count}</span><span className="sr-only">{t("fb.replies", { n: idea.reply_count })}</span>
         </span>
       )}
+      {idea.status === "claimed" && idea.claimer && <b>{t("idea.builtBy", { who: `@${idea.claimer.username}` })}</b>}
+      {idea.status === "done" && idea.game && <Link to={`/game/${idea.game.slug}`} className="fb-fixed">{idea.game.title}</Link>}
     </span>
   );
 }

@@ -1082,11 +1082,12 @@ main.content:focus { outline: none; }
 .idea-box p { margin: 0; color: var(--muted); max-width: 60ch; }
 .idea-box .check { color: var(--fg); max-width: none; }
 /* inside the box the form lines up with the heading (on phones other forms run edge to edge) */
-.idea-box .idea-form { border: 0; border-top: 1px solid var(--line); margin: 0; padding: 4px 0 0; background: none; max-width: none; }
+.idea-box .idea-form { border: 0; border-top: 1px solid var(--line); margin: 0; padding: 4px 0 0; background: none; }
 .idea-form { max-width: 720px; }
 .idea-form small { margin-top: 4px; }
 .idea-post .fb-manage p { margin: 0; }
 .idea-post .fb-manage-row:empty { display: none; }
+.idea-tools { margin: -4px 0 0; font-size: 13px; }
 .admin-setting { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
 .admin-setting h2 { margin: 0; font-size: 18px; font-weight: 800; }
 .admin-setting .check > span { display: flex; flex-direction: column; gap: 2px; font-weight: 600; }
@@ -1096,6 +1097,11 @@ main.content:focus { outline: none; }
   .idea-box .actions { width: 100%; }
   .idea-box .actions .btn { flex: 1; padding-block: 11px; white-space: normal; text-align: center; }
   .idea-box .actions .linkish { width: 100%; text-align: center; padding: 6px 0; }
+  /* the buttons of an idea sit side by side; the game picker gets the full width above them */
+  .idea-post .fb-manage-row { align-items: stretch; }
+  .idea-post .fb-manage-row .btn { flex: 1 1 0; white-space: normal; text-align: center; }
+  .idea-post .fb-manage-row label, .idea-post .fb-manage-row .hint { flex: 1 1 100%; }
+  .idea-tools .linkish { padding: 8px 0; }
 }
 .idea-post > .fb-body { margin-left: 0; }
 .admin-setting label.check { display: flex; gap: 10px; cursor: pointer; }

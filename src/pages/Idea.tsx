@@ -160,26 +160,16 @@ export function Idea() {
               <button type="button" className="btn primary" disabled={busy} onClick={() => run(() => claimIdea(idea.id))}>{t("idea.claim")}</button>
             )}
             {idea.status === "claimed" && (isClaimer || admin) && (
-              <>
-                <button type="button" className="btn primary" disabled={busy} onClick={() => { setGameId(""); setFinishing(true); }}>{t("idea.markDone")}</button>
-                {confirmRelease ? (
-                  <>
-                    <button type="button" className="btn danger" disabled={busy} onClick={() => run(() => releaseIdea(idea.id)).then(() => setConfirmRelease(false))}>{t("idea.releaseSure")}</button>
-                    <button type="button" className="btn" onClick={() => setConfirmRelease(false)}>{t("form.cancel")}</button>
-                  </>
-                ) : (
-                  <button type="button" className="btn" disabled={busy} onClick={() => setConfirmRelease(true)}>{t(isClaimer ? "idea.release" : "idea.releaseAdmin")}</button>
-                )}
-              </>
-            )}
-            {((isAuthor && idea.status === "open") || admin) && (
-              confirmDelete ? (
+              confirmRelease ? (
                 <>
-                  <button type="button" className="btn danger" onClick={remove} disabled={busy}>{t("fb.post.confirmDelete")}</button>
-                  <button type="button" className="btn" onClick={() => setConfirmDelete(false)}>{t("form.cancel")}</button>
+                  <button type="button" className="btn danger" disabled={busy} onClick={() => run(() => releaseIdea(idea.id)).then(() => setConfirmRelease(false))}>{t(isClaimer ? "idea.releaseSure" : "idea.releaseAdminSure")}</button>
+                  <button type="button" className="btn" onClick={() => setConfirmRelease(false)}>{t("form.cancel")}</button>
                 </>
               ) : (
-                <button type="button" className="btn ghost-danger" onClick={() => setConfirmDelete(true)}>{t("idea.delete")}</button>
+                <>
+                  <button type="button" className="btn primary" disabled={busy} onClick={() => { setGameId(""); setFinishing(true); }}>{t("idea.markDone")}</button>
+                  <button type="button" className="btn" disabled={busy} onClick={() => setConfirmRelease(true)}>{t(isClaimer ? "idea.release" : "idea.releaseAdmin")}</button>
+                </>
               )
             )}
           </div>
@@ -187,6 +177,20 @@ export function Idea() {
         {idea.status === "open" && dev && <p className="hint">{t("idea.claimHint")}</p>}
       </section>
       {error && <p className="error" role="alert">{error}</p>}
+      {/* Deleting takes two taps: the first asks "for good?". Kept apart from the buttons above. */}
+      {((isAuthor && idea.status === "open") || admin) && (
+        <p className="idea-tools">
+          <button
+            type="button"
+            className={`linkish ${confirmDelete ? "danger-text" : ""}`}
+            disabled={busy}
+            onClick={() => (confirmDelete ? remove() : setConfirmDelete(true))}
+            onBlur={() => setConfirmDelete(false)}
+          >
+            {t(confirmDelete ? "idea.deleteSure" : "idea.delete")}
+          </button>
+        </p>
+      )}
 
       <Discussion idea={idea} replies={replies} setReplies={setReplies} onChanged={reload} />
     </article>
