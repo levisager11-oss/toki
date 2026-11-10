@@ -32,8 +32,10 @@ export async function GET(request: Request) {
       try {
         for (const r of await gh.repos(i.installation_id)) repos.push({ installation_id: i.installation_id, account: i.account_login, repo: r.repo, private: r.private });
       } catch (e) {
-        // The app was uninstalled on GitHub: forget the installation.
-        if (e instanceof GitHubError && (e.status === 404 || e.status === 401)) gone.push(i.installation_id);
+        // The app was uninstalled on GitHub (404): forget the installation. A 401 is about Toki's own
+        // app key (a clock difference, a key being changed), not this installation: forgetting then
+        // would throw away every developer's connection, so it only counts as "didn't answer".
+        if (e instanceof GitHubError && e.status === 404) gone.push(i.installation_id);
         // GitHub hiccuped for this account: the others still show.
         else unreachable = true;
       }
