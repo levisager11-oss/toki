@@ -191,12 +191,13 @@ async function run(ctx: Ctx, b: Record<string, unknown>, origin: string) {
     return view(ctx, job.id);
   }
   // The free AI does the easy steps, when it's set up and the admin allows it.
-  const [opts] = await ctx.db.select<{ connect_free_steps: boolean }>("ai_settings", "id=eq.1&select=connect_free_steps");
+  const [opts] = await ctx.db.select<{ connect_free_steps: boolean; max_output_tokens: number | null }>("ai_settings", "id=eq.1&select=connect_free_steps,max_output_tokens");
   const freeAi = opts?.connect_free_steps && (ctx.env.freeAiKey || ctx.env.aiKey) ? await freeSettings(ctx.db) : null;
   const gh = github(ctx.env.github);
   const freeOnly = job.ai === "free" ? await freeSettings(ctx.db) : null;
   const result = await step({ ...job, game, bug }, {
     origin: SITE_URL,
+    maxOutputTokens: opts?.max_output_tokens ?? undefined,
     async repo() {
       if (job.source === "upload") {
         const { config } = await r2Config(ctx.db, ctx.env.serviceKey);

@@ -119,6 +119,8 @@ export interface Deps {
   script(): Promise<string>;
   /** Toki's address, for the pull request text. */
   origin: string;
+  /** Most tokens the strong AI may write per step (the admin's setting); MAX_OUTPUT_TOKENS when not set. */
+  maxOutputTokens?: number;
   now?(): Date;
 }
 
@@ -136,8 +138,8 @@ export const MAX_AI_CALLS = 8;
 /** Calls the free AI may make before the strong AI takes over. */
 export const MAX_FREE_CALLS = 5;
 const EXPLORE_TOKENS = 8000;
-// Room for whole files in one answer. Only what the model really writes is paid for; the
-// budget just holds back the most one call could cost until it is done.
+// Room for whole files in one answer, unless the admin chose another limit. Only what the model
+// really writes is paid for; the budget just holds back the most one call could cost until it is done.
 export const MAX_OUTPUT_TOKENS = 32000;
 /** After the AI ran out of tokens while thinking: how much it may think on the next tries. */
 export const LESS_THINKING: Thinking[] = ["medium", "low"];
@@ -209,7 +211,7 @@ export async function step(job: Job, deps: Deps): Promise<StepResult> {
     const tries = state.outOfTokens ?? 0;
     let reply: string;
     try {
-      reply = await deps.ai(prompt(job, state, messages, script), MAX_OUTPUT_TOKENS, tries ? { thinking: LESS_THINKING[tries - 1] } : undefined);
+      reply = await deps.ai(prompt(job, state, messages, script), deps.maxOutputTokens ?? MAX_OUTPUT_TOKENS, tries ? { thinking: LESS_THINKING[tries - 1] } : undefined);
     } catch (e) {
       // A thinking model can use all its tokens for thinking and never write the answer. Try
       // again with less thinking (twice at most) instead of giving up.

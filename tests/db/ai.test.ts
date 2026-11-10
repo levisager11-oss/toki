@@ -50,6 +50,13 @@ describe("settings", () => {
     await t.as(admin, "update ai_settings set enabled = false, input_price = 0");
   });
 
+  it("let admins choose the most tokens per step from a few steps", async () => {
+    expect(await t.as(admin, "update ai_settings set max_output_tokens = 128000 returning max_output_tokens")).toEqual([{ max_output_tokens: 128000 }]);
+    await expect(t.as(admin, "update ai_settings set max_output_tokens = 5")).rejects.toThrow(/check/);
+    expect(await t.as(dev, "update ai_settings set max_output_tokens = 8000 returning id")).toEqual([]);
+    await t.as(admin, "update ai_settings set max_output_tokens = 32000");
+  });
+
   it("only let admins set quotas", async () => {
     await expect(t.as(dev, "insert into ai_quotas (user_id, monthly_usd) values ($1, 100)", [dev.id])).rejects.toThrow(/row-level security/);
     await t.as(admin, "insert into ai_quotas (user_id, monthly_usd) values ($1, 10)", [dev.id]);

@@ -458,6 +458,16 @@ describe("Toki Connect run", () => {
     expect(asked).toEqual([undefined, "medium", "low"]);
   });
 
+  it("lets the AI write as many tokens as the admin chose", async () => {
+    const f = fixture([JSON.stringify({ action: "impossible", reason: "x" }), JSON.stringify({ action: "impossible", reason: "x" })]);
+    const limits: number[] = [];
+    const ai = f.deps.ai;
+    f.deps.ai = (m, tokens, o) => (limits.push(tokens), ai(m, tokens, o));
+    await step(newJob(), f.deps);
+    await step(newJob(), { ...f.deps, maxOutputTokens: 128000 });
+    expect(limits).toEqual([32000, 128000]);
+  });
+
   it("gives up when the AI still runs out of tokens with little thinking", async () => {
     const f = fixture([]);
     f.deps.ai = async () => {

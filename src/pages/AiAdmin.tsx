@@ -6,11 +6,11 @@ import { ModelPicker } from "../components/ModelPicker";
 import { FreeAiCard } from "../components/FreeAiCard";
 import {
   ApiError, connectError, developersWithQuotas, getAiSettings, monthOverview, recentUsage, saveAiSettings, setQuota, testAi, usd,
-  THINKING, type AiSettings, type Overview, type Provider, type TestResult, type Thinking, type UsageRow,
+  OUTPUT_LIMITS, THINKING, type AiSettings, type Overview, type Provider, type TestResult, type Thinking, type UsageRow,
 } from "../lib/ai";
 import { useTitle } from "../lib/useTitle";
 
-type Form = { enabled: boolean; provider: Provider; base_url: string; model: string; input_price: string; output_price: string; monthly_cap: string; default_quota: string; thinking: Thinking; agent_enabled: boolean; agent_budget: string };
+type Form = { enabled: boolean; provider: Provider; base_url: string; model: string; input_price: string; output_price: string; monthly_cap: string; default_quota: string; thinking: Thinking; max_output_tokens: number; agent_enabled: boolean; agent_budget: string };
 
 /** Admins: AI settings, this month's spending against the cap, and quotas per developer (/admin/ai). */
 export function AiAdmin() {
@@ -47,6 +47,7 @@ export function AiAdmin() {
           monthly_cap: String(s.monthly_cap),
           default_quota: String(s.default_quota),
           thinking: s.thinking ?? "default",
+          max_output_tokens: s.max_output_tokens ?? 32000,
           agent_enabled: s.agent_enabled ?? false,
           agent_budget: String(s.agent_budget ?? 1),
         };
@@ -94,6 +95,7 @@ export function AiAdmin() {
         default_quota: defaultQuota,
         // Anthropic can't turn thinking off; "off" means the least there.
         thinking: form.provider === "anthropic" && form.thinking === "off" ? "low" : form.thinking,
+        max_output_tokens: form.max_output_tokens,
         // Managed Agents only work with Anthropic.
         agent_enabled: form.provider === "anthropic" && form.agent_enabled,
         agent_budget: Math.min(50, Math.max(0.1, Number(form.agent_budget) || 1)),
@@ -207,6 +209,11 @@ export function AiAdmin() {
           {THINKING.filter((v) => !(form.provider === "anthropic" && v === "off")).map((v) => <option key={v} value={v}>{t(`ai.free.thinking.${v}`)}</option>)}
         </select>
         <small id="ai-thinking-help">{t(form.provider === "anthropic" ? "ai.thinkingHelpAnthropic" : "ai.thinkingHelp")}</small>
+        <label htmlFor="ai-max-out">{t("ai.maxOutput")}</label>
+        <select id="ai-max-out" value={form.max_output_tokens} onChange={(e) => setForm({ ...form, max_output_tokens: Number(e.target.value) })} aria-describedby="ai-max-out-help">
+          {OUTPUT_LIMITS.map((v) => <option key={v} value={v}>{`${v / 1000}k`}</option>)}
+        </select>
+        <small id="ai-max-out-help">{t("ai.maxOutputHelp")}</small>
         {form.provider === "anthropic" && (
           <div className="ai-panel">
             <label className="fb-check">

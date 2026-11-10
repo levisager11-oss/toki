@@ -29,6 +29,7 @@ export function usd(n: number): string {
 // ---------- admins ----------
 
 export type Provider = "openai_compatible" | "anthropic";
+export const OUTPUT_LIMITS = [8000, 16000, 32000, 64000, 128000] as const;
 export const THINKING = ["default", "off", "low", "medium", "high", "xhigh", "max"] as const;
 export type Thinking = (typeof THINKING)[number];
 
@@ -43,6 +44,8 @@ export interface AiSettings {
   default_quota: number;
   /** how much the strong AI may think (Anthropic: effort) */
   thinking: Thinking;
+  /** most tokens the strong AI may write per Toki Connect step, thinking included */
+  max_output_tokens: number;
   /** Toki Connect with Claude Managed Agents (Anthropic only), and its cap per run in US dollars */
   agent_enabled: boolean;
   agent_budget: number;
@@ -69,7 +72,7 @@ export async function getAiSettings(): Promise<AiSettings> {
 }
 
 export type SettingsChange = Partial<
-  Pick<AiSettings, "enabled" | "provider" | "base_url" | "model" | "input_price" | "output_price" | "monthly_cap" | "default_quota" | "thinking" | "agent_enabled" | "agent_budget" | "free_enabled" | "free_base_url" | "free_model" | "free_thinking" | "connect_free_steps" | "quick_code_ai">
+  Pick<AiSettings, "enabled" | "provider" | "base_url" | "model" | "input_price" | "output_price" | "monthly_cap" | "default_quota" | "thinking" | "max_output_tokens" | "agent_enabled" | "agent_budget" | "free_enabled" | "free_base_url" | "free_model" | "free_thinking" | "connect_free_steps" | "quick_code_ai">
 >;
 
 export interface FreeUsage {
