@@ -3,11 +3,17 @@
 // 1. The game's GitHub repository, when Toki's GitHub App reaches it and it holds the finished
 //    game (GitHub Pages' gh-pages branch, or a folder with a playable index.html). The game then
 //    follows the repository: every push updates it (server/gitDeploy.ts).
-// 2. Otherwise (no finished build there, e.g. only the Godot project) the site it runs on: the
-//    server downloads the game from its address, starting at its page: everything the page, its
-//    scripts and its styles point to inside the game's folder. Links to other sites (a font from a
-//    CDN, an ad script) stay as they are. Only public https sites are read, never local or
-//    private addresses.
+// 2. Otherwise (no finished build there: the repository holds the source, which must be built
+//    first) the site it runs on: the server downloads the game from its address, starting at its
+//    page: everything the page, its scripts and its styles point to inside the game's folder.
+//    Games often build file names while running ("audio/" + name + ".mp3"), which reading the
+//    code can't find. So when Toki reaches the game's repository, it also asks the site for every
+//    file in the repository (a build copies its "public" folder to the site as it is). Without a
+//    repository, the developer is told which names couldn't be looked up before anything moves.
+//    Links to other sites (a font from a CDN, an ad script) stay as they are. Only public https
+//    sites are read, never local or private addresses.
+// The repository: the one the developer picked, the one a GitHub Pages address names, or one of
+// theirs named like the game or its site.
 // Either way the files go live through the same steps as any upload (server/hosting.ts).
 //
 // Players' progress: a game keeps it in the browser, under its address, and the new address
@@ -22,9 +28,9 @@ import { privateAddress, type Lookup } from "./assist/pages.js";
 import { finishUpload, HostingError, startUpload, type Deps, type HostUser } from "./hosting.js";
 import { deployCommit, type GitRow } from "./gitDeploy.js";
 import type { GitHubClient } from "./github.js";
-import { gameFolder } from "./assist/scan.js";
-import { cleanPath, MAX_GAME_BYTES, MAX_GAME_FILES, pagesRepos, readTokiJson, type TokiJson } from "../src/lib/hostingRules.js";
-export { pagesRepos };
+import { gameFolder, isSourcePage } from "./assist/scan.js";
+import { cleanPath, MAX_GAME_BYTES, MAX_GAME_FILES, pagesRepos, plainName as plain, readTokiJson, siteName, type TokiJson } from "../src/lib/hostingRules.js";
+export { pagesRepos, siteName };
 
 /** The whole download may take this long (Vercel stops the request at 300 s). */
 export const CRAWL_MS = 200_000;
@@ -46,6 +52,13 @@ export interface Crawled {
   toki: TokiJson;
   /** The game has Toki's save script, so players' progress can come along */
   saveScript: boolean;
+  /**
+   * File names the game puts together while it runs ("audio/${name}.mp3"): they aren't written
+   * out in its code, so the download can't find those files by reading it.
+   */
+  dynamic: string[];
+  /** How many of the extra names (from the game's repository) were files of the game */
+  fromExtra: number;
 }
 
 /** Toki's save script in a page or script of the game (linked, or copied in). */
@@ -57,6 +70,8 @@ export interface CrawlOptions {
   now?: () => number;
   deadline?: number;
   maxTries?: number;
+  /** More names to ask the site for: the files in the game's repository (repoCandidates) */
+  extra?: string[];
 }
 
 const dnsLookup: Lookup = async (host) => (await lookup(host, { all: true })).map((a) => a.address);
@@ -90,6 +105,22 @@ export function references(text: string, path: string): string[] {
     for (const end of [".js", ".wasm", ".pck", ".side.wasm", ".worker.js", ".audio.worklet.js", ".audio.position.worklet.js", ".icon.png", ".apple-touch-icon.png", ".png"]) add(name + end);
     if (/\.pck$/i.test(m[1])) add(m[1]);
   }
+  return [...out];
+}
+
+// Pictures, sounds and data whose names a game builds while running: `audio/${name}.mp3`, "img/" + n + ".png".
+const MEDIA = "png|jpe?g|gif|webp|avif|svg|mp3|ogg|oga|opus|wav|m4a|aac|flac|mp4|webm|json|glb|gltf|bin|atlas|fnt|ttf|otf|woff2?|txt|xml|csv|tmx|tsj|ldtk|wasm|dat";
+const TEMPLATE_NAME = new RegExp("`([^`\\n]{0,120}\\$\\{[^`\\n]{1,120}\\.(?:" + MEDIA + "))`", "gi");
+const JOINED_NAME = new RegExp(`(["'])([\\w./-]{0,80}/)\\1\\s*\\+\\s*[\\w$.\\[\\]]{1,60}\\s*\\+\\s*(["'])(\\.(?:${MEDIA}))\\3`, "gi");
+
+/** File names built at runtime in a script or page, shown the way they are written ("audio/….mp3"). */
+export function dynamicNames(text: string): string[] {
+  const out = new Set<string>();
+  for (const m of text.matchAll(TEMPLATE_NAME)) {
+    if (/^(https?:|data:|blob:)/i.test(m[1])) continue;
+    out.add(m[1].replace(/\$\{[^}]*\}/g, "…"));
+  }
+  for (const m of text.matchAll(JOINED_NAME)) out.add(`${m[2]}…${m[4]}`);
   return [...out];
 }
 
@@ -220,10 +251,12 @@ export async function crawlGame(playUrl: string, o: CrawlOptions = {}): Promise<
   files.set(entry, page.data);
   total = page.data.length;
   const tried = new Set<string>([entry]);
+  // Names from the game's repository: asked for as well, beyond the usual number of tries.
+  const extra = new Set<string>();
   const queue: string[] = [];
   const dirs = new Set<string>(["", "Build/"]);
   const enqueue = (path: string) => {
-    if (tried.has(path) || tried.size >= maxTries) return;
+    if (tried.has(path) || tried.size - extra.size >= maxTries) return;
     tried.add(path);
     queue.push(path);
   };
@@ -247,14 +280,23 @@ export async function crawlGame(playUrl: string, o: CrawlOptions = {}): Promise<
     }
   };
   let saveScript = false;
+  const dynamic = new Set<string>();
   const scan = (path: string, data: Uint8Array) => {
     if (data.length > SCAN_BYTES || !TEXT_EXT.test(path)) return;
     const text = new TextDecoder().decode(data);
     if (SAVE_SCRIPT.test(text)) saveScript = true;
+    if (/\.(html?|m?js)$/i.test(path) && dynamic.size < 20) for (const d of dynamicNames(text)) dynamic.add(d);
     for (const ref of references(text, path)) consider(ref, path);
   };
   scan(entry, page.data);
   enqueue("toki.json");
+  for (const raw of (o.extra ?? []).slice(0, MAX_GAME_FILES)) {
+    const p = cleanPath(raw);
+    if (!p || tried.has(p)) continue;
+    extra.add(p);
+    tried.add(p);
+    queue.push(p);
+  }
 
   let busy = 0;
   await Promise.all(
@@ -295,6 +337,8 @@ export async function crawlGame(playUrl: string, o: CrawlOptions = {}): Promise<
     bytes: total,
     toki,
     saveScript,
+    dynamic: [...dynamic].slice(0, 5),
+    fromExtra: [...files.keys()].filter((p) => extra.has(p)).length,
   };
 }
 
@@ -363,54 +407,96 @@ export interface RepoChoice {
   folder: string;
 }
 
+export interface RepoLook {
+  /** The finished game in the repository: the game can follow it */
+  found: RepoChoice | null;
+  /** The repository Toki looked at, or one the game seems to come from that Toki can't reach (yet) */
+  repo: string | null;
+  /** Toki reaches `repo` */
+  reached: boolean;
+  /** No finished game in it (it must be built first): the names of its files, to ask the game's site for */
+  candidates: string[];
+}
+
+// Files a build copies as they are (pictures, sounds, data), and folders whose content lands at the site's top.
+const ASSET_FILE = /\.(png|jpe?g|gif|webp|avif|svg|ico|bmp|ktx2?|basis|mp3|ogg|oga|opus|wav|m4a|aac|flac|mp4|webm|ttf|otf|woff2?|fnt|atlas|glb|gltf|obj|mtl|bin|wasm|pck|data|json|txt|xml|csv|tmx|tsj|ldtk|frag|vert|glsl|wgsl|zip|dat|webmanifest)$/i;
+const NOT_GAME = /(^|\/)(node_modules|\.git|\.github|\.vscode|tests?|__tests__|docs?)\/|(^|\/)(package(-lock)?\.json|tsconfig[^/]*\.json|[^/]*\.config\.[^/]+|vercel\.json|netlify\.toml|composer\.json|\.[^/]+)$/i;
+const STATIC_ROOT = /(?:^|\/)(?:public|static)\//gi;
+
 /**
- * The finished game in the developer's repository, if Toki can reach it: GitHub Pages' gh-pages
- * branch first, then the default branch; the folder of the game's address, else the folder with
- * a playable index.html (not a bundler's source page). null when there's no finished build.
+ * Names to ask a game's site for, from the files in its repository. A build (Vite, and most
+ * others) copies the "public" or "static" folder to the top of the site as it is, so
+ * public/audio/jump.mp3 is audio/jump.mp3 there. These are the files a game often loads by names
+ * it builds while running, which reading its code can't find.
  */
-export async function findRepoBuild(gh: GitHubClient, installations: number[], playUrl: string): Promise<{ found: RepoChoice | null; repo: string | null }> {
-  const wanted = pagesRepos(playUrl);
-  let seen: string | null = null;
-  for (const id of installations) {
-    const repos = await gh.repos(id).catch(() => []);
-    for (const w of wanted) {
-      const r = repos.find((x) => x.repo.toLowerCase() === w.repo.toLowerCase());
-      if (!r) continue;
-      seen = r.repo;
-      const repo = await gh.repo(id, r.repo);
-      const branches = await repo.branches().catch(() => [] as string[]);
-      for (const branch of [...new Set([...(branches.includes("gh-pages") ? ["gh-pages"] : []), r.defaultBranch])]) {
-        const tree = await repo.tree(branch).catch(() => []);
-        const paths = tree.filter((e) => e.type === "blob").map((e) => e.path);
-        const pages = new Map<string, string>();
-        const read = async (p: string) => {
-          if (!pages.has(p)) pages.set(p, (await repo.read(p, branch).catch(() => "")).slice(0, 60_000));
-          return pages.get(p)!;
-        };
-        // The folder of the game's address (e.g. lu.github.io/repo/play/ → play, or docs/play).
-        for (const d of w.sub ? [w.sub, `docs/${w.sub}`] : []) {
-          if (paths.includes(`${d}/index.html`) && !/<script[^>]+src=["'][^"']*\.(tsx?|jsx)["']/i.test(await read(`${d}/index.html`))) return { found: { installation_id: id, repo: r.repo, branch, folder: d }, repo: r.repo };
-        }
-        const candidates = paths.filter((p) => /(^|\/)index\.html$/i.test(p) && p.split("/").length <= 3).slice(0, 8);
-        if (paths.includes("package.json")) candidates.push("package.json");
-        for (const p of candidates) await read(p);
-        const { folder } = gameFolder(paths, (p) => pages.get(p));
-        if (folder !== null) return { found: { installation_id: id, repo: r.repo, branch, folder }, repo: r.repo };
+export function repoCandidates(paths: string[]): string[] {
+  const first: string[] = [];
+  const rest: string[] = [];
+  for (const p of paths) {
+    if (!ASSET_FILE.test(p) || NOT_GAME.test(p)) continue;
+    let cut = -1;
+    for (const m of p.matchAll(STATIC_ROOT)) cut = m.index! + m[0].length;
+    if (cut >= 0) first.push(p.slice(cut));
+    rest.push(p);
+  }
+  return [...new Set([...first, ...rest])].slice(0, 2500);
+}
+
+/**
+ * The game's repository, among those the developer's GitHub connection reaches: the one they
+ * picked, the one a GitHub Pages address names, or one named like the game or its site. With the
+ * finished game in it (GitHub Pages' gh-pages branch first, then the default branch; the folder
+ * of the game's address, else a folder with a playable index.html), the game can follow it.
+ * Without (it must be built first), its file names help to download the game from its site.
+ */
+export async function findRepo(
+  gh: GitHubClient,
+  installations: number[],
+  game: { play_url: string; slug?: string },
+  picked?: { installation_id: number; repo: string } | null,
+): Promise<RepoLook> {
+  const pages = pagesRepos(game.play_url);
+  const names = [...new Set([siteName(game.play_url), plain(game.slug ?? "")].filter((n) => n.length >= 3))];
+  const reachable: { id: number; repo: string; defaultBranch: string }[] = [];
+  for (const id of installations) for (const r of await gh.repos(id).catch(() => [])) reachable.push({ id, ...r });
+
+  const targets: { id: number; repo: string; defaultBranch: string; sub: string }[] = [];
+  const add = (r: (typeof reachable)[number] | undefined, sub = "") => {
+    if (r && !targets.some((t) => t.id === r.id && t.repo === r.repo)) targets.push({ ...r, sub });
+  };
+  if (picked) add(reachable.find((r) => r.id === picked.installation_id && r.repo.toLowerCase() === picked.repo.toLowerCase()));
+  for (const w of pages) add(reachable.find((r) => r.repo.toLowerCase() === w.repo.toLowerCase()), w.sub);
+  if (!pages.length) for (const r of reachable) if (names.includes(plain(r.repo.split("/")[1] ?? ""))) add(r);
+
+  let helper: { repo: string; candidates: string[] } | null = null;
+  for (const t of targets.slice(0, 3)) {
+    const repo = await gh.repo(t.id, t.repo);
+    const branches = await repo.branches().catch(() => [] as string[]);
+    for (const branch of [...new Set([...(branches.includes("gh-pages") ? ["gh-pages"] : []), t.defaultBranch])]) {
+      const tree = await repo.tree(branch).catch(() => []);
+      const paths = tree.filter((e) => e.type === "blob").map((e) => e.path);
+      const texts = new Map<string, string>();
+      const read = async (p: string) => {
+        if (!texts.has(p)) texts.set(p, (await repo.read(p, branch).catch(() => "")).slice(0, 60_000));
+        return texts.get(p)!;
+      };
+      // The folder of the game's address (e.g. lu.github.io/repo/play/ → play, or docs/play).
+      for (const d of t.sub ? [t.sub, `docs/${t.sub}`] : []) {
+        if (paths.includes(`${d}/index.html`) && !isSourcePage(await read(`${d}/index.html`), false)) return { found: { installation_id: t.id, repo: t.repo, branch, folder: d }, repo: t.repo, reached: true, candidates: [] };
       }
+      const wanted = paths.filter((p) => /(^|\/)index\.html$/i.test(p) && p.split("/").length <= 3).slice(0, 8);
+      if (paths.includes("package.json")) wanted.push("package.json");
+      for (const p of wanted) await read(p);
+      const { folder } = gameFolder(paths, (p) => texts.get(p));
+      if (folder !== null) return { found: { installation_id: t.id, repo: t.repo, branch, folder }, repo: t.repo, reached: true, candidates: [] };
+      if (!helper && branch === t.defaultBranch) helper = { repo: t.repo, candidates: repoCandidates(paths) };
     }
   }
-  return { found: null, repo: seen ?? wanted[0]?.repo ?? null };
+  if (helper) return { found: null, repo: helper.repo, reached: true, candidates: helper.candidates };
+  return { found: null, repo: pages[0]?.repo ?? null, reached: false, candidates: [] };
 }
 
 // ---------- moving the game ----------
-
-interface MoveGame {
-  id: string;
-  play_url: string;
-  created_by: string | null;
-  hosted_site: string | null;
-  needs_isolation: boolean;
-}
 
 export interface MoveResult {
   play_url: string;
@@ -423,8 +509,12 @@ export interface MoveResult {
   /** Where Toki took the game from: the repository (follows every push) or the site */
   source: "github" | "site";
   github: RepoChoice | null;
+  /** Taken from the site: the repository whose file list helped, and how many files it added */
+  repoHelped: { repo: string; files: number } | null;
   /** A repository the game seems to come from, which Toki can't reach (yet): connect GitHub for it */
   suggestRepo: string | null;
+  /** File names the game builds while running that Toki couldn't look up (moved anyway) */
+  missing: string[];
 }
 
 export interface GitHubAccess {
@@ -440,8 +530,17 @@ const hostOf = (u: string) => {
   }
 };
 
+interface MoveGame {
+  id: string;
+  slug: string;
+  play_url: string;
+  created_by: string | null;
+  hosted_site: string | null;
+  needs_isolation: boolean;
+}
+
 async function movable(deps: Deps, user: HostUser, gameId: string): Promise<MoveGame> {
-  const [g] = await deps.db.select<MoveGame>("games", `id=eq.${gameId}&select=id,play_url,created_by,hosted_site,needs_isolation`);
+  const [g] = await deps.db.select<MoveGame>("games", `id=eq.${gameId}&select=id,slug,play_url,created_by,hosted_site,needs_isolation`);
   if (!g) throw new HostingError("no_game", 404);
   if (user.role !== "admin" && g.created_by !== user.id) throw new HostingError("not_allowed", 403);
   const host = hostOf(g.play_url);
@@ -462,6 +561,8 @@ async function look(deps: Deps, g: MoveGame, o: CrawlOptions): Promise<{ got: Cr
   return { got, verdict: savesVerdict(got, tokiSaves) };
 }
 
+const noRepo = (playUrl: string): RepoLook => ({ found: null, repo: pagesRepos(playUrl)[0]?.repo ?? null, reached: false, candidates: [] });
+
 export interface MoveCheck extends SavesVerdict {
   /** The finished game in a repository Toki can reach */
   github: RepoChoice | null;
@@ -472,31 +573,41 @@ export interface MoveCheck extends SavesVerdict {
 export async function checkMove(deps: Deps, user: HostUser, gameId: string, git: GitHubAccess | null, o: CrawlOptions = {}): Promise<MoveCheck> {
   const g = await movable(deps, user, gameId);
   const { verdict } = await look(deps, g, o);
-  const repo = git ? await findRepoBuild(git.gh, git.installations, g.play_url) : { found: null, repo: pagesRepos(g.play_url)[0]?.repo ?? null };
+  const repo = git ? await findRepo(git.gh, git.installations, g) : noRepo(g.play_url);
   return { ...verdict, github: repo.found, suggestRepo: repo.found ? null : repo.repo };
 }
 
 const MOVE_ERRORS: Record<SavesProblem, string> = { no_script: "move_no_saves", engine_storage: "move_engine_saves", unreachable: "move_unreachable" };
 
+export interface MoveOptions extends CrawlOptions {
+  put?: typeof fetch;
+  git?: GitHubAccess | null;
+  /** The repository the developer picked for the game */
+  repo?: { installation_id: number; repo: string } | null;
+  /** Move although players' progress stays behind */
+  anyway?: boolean;
+  /** Move although some files (named at runtime) may be missing */
+  partial?: boolean;
+}
+
 /**
- * Moves a game from its link onto Toki. From its GitHub repository when that holds the finished
- * game (then every push updates it), else from the site it runs on. Throws move_no_saves /
- * move_engine_saves when players' progress would stay behind, unless `anyway`.
+ * Moves a game from its link onto Toki:
+ * - from its GitHub repository when that holds the finished game (then every push updates it);
+ * - else from the site it runs on, and when Toki reaches the game's repository (which must be
+ *   built first), also every file of the repository that the site serves: that brings the files
+ *   whose names the game builds while running, which reading its code can't find.
+ * Throws move_no_saves / move_engine_saves when players' progress would stay behind (unless
+ * `anyway`), and move_dynamic_files when the game builds file names while running and Toki has
+ * no repository to look them up in (unless `partial`).
  */
-export async function moveGame(
-  deps: Deps,
-  user: HostUser,
-  gameId: string,
-  anyway = false,
-  o: CrawlOptions & { put?: typeof fetch; git?: GitHubAccess | null } = {},
-): Promise<MoveResult> {
+export async function moveGame(deps: Deps, user: HostUser, gameId: string, o: MoveOptions = {}): Promise<MoveResult> {
   const { db } = deps;
   const g = await movable(deps, user, gameId);
   const from = g.play_url;
-  const repo = o.git ? await findRepoBuild(o.git.gh, o.git.installations, from) : { found: null, repo: pagesRepos(from)[0]?.repo ?? null };
+  const repo = o.git ? await findRepo(o.git.gh, o.git.installations, g, o.repo) : noRepo(from);
   // Loading from GitHub takes time too: then the old address only gets a shorter look.
-  const { got, verdict } = await look(deps, g, repo.found ? { ...o, deadline: Math.min(o.deadline ?? CRAWL_MS, 120_000) } : o);
-  if (!verdict.ok && !anyway) throw new HostingError(MOVE_ERRORS[verdict.problem!], 409);
+  const { got, verdict } = await look(deps, g, { ...o, extra: repo.candidates, ...(repo.found ? { deadline: Math.min(o.deadline ?? CRAWL_MS, 120_000) } : {}) });
+  if (!verdict.ok && !o.anyway) throw new HostingError(MOVE_ERRORS[verdict.problem!], 409);
 
   let result: { play_url: string; files: number; bytes: number } | null = null;
   let source: MoveResult["source"] = "site";
@@ -510,8 +621,14 @@ export async function moveGame(
       source = "github";
     } else await db.remove("game_git", `game_id=eq.${g.id}`); // the site is the way then
   }
+  let missing: string[] = [];
   if (!result) {
     if (!got) throw new HostingError("move_unreachable", 422);
+    // Names built while running, and no repository to look them up in: files would be missing.
+    if (got.dynamic.length && !repo.reached) {
+      if (!o.partial) throw new HostingError("move_dynamic_files", 409, got.dynamic.join(", "));
+      missing = got.dynamic;
+    }
     result = await uploadCrawled(deps, user, g, got, o.put ?? fetch);
   }
   // Remembered so players' progress can be picked up there (src/lib/movedSaves.ts).
@@ -522,7 +639,9 @@ export async function moveGame(
     saves: verdict.ok,
     source,
     github: source === "github" ? repo.found : null,
-    suggestRepo: source === "github" ? null : repo.found?.repo ?? repo.repo,
+    repoHelped: source === "site" && repo.reached && repo.repo && got ? { repo: repo.repo, files: got.fromExtra } : null,
+    suggestRepo: source === "github" || repo.reached ? null : repo.repo,
+    missing,
   };
 }
 
@@ -550,7 +669,7 @@ async function uploadCrawled(deps: Deps, user: HostUser, g: MoveGame, got: Crawl
 /** Didn't work out: the game goes back to its old link, and its files on Toki are deleted. */
 export async function moveBack(deps: Deps, user: HostUser, gameId: string): Promise<{ play_url: string }> {
   const { db, store } = deps;
-  const [g] = await db.select<MoveGame & { moved_from: string | null }>("games", `id=eq.${gameId}&select=id,play_url,created_by,hosted_site,needs_isolation,moved_from`);
+  const [g] = await db.select<MoveGame & { moved_from: string | null }>("games", `id=eq.${gameId}&select=id,slug,play_url,created_by,hosted_site,needs_isolation,moved_from`);
   if (!g) throw new HostingError("no_game", 404);
   if (user.role !== "admin" && g.created_by !== user.id) throw new HostingError("not_allowed", 403);
   const from = g.moved_from;

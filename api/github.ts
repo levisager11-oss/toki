@@ -15,7 +15,10 @@ export async function GET(request: Request) {
   if (!githubConfigured(ctx.env.github)) return json({ configured: false, installUrl: null, repos: [] });
   const gh = github(ctx.env.github);
   const installUrl = `https://github.com/apps/${encodeURIComponent(ctx.env.github.slug)}/installations/new`;
-  if (new URL(request.url).searchParams.get("action") !== "repos") return json({ configured: true, installUrl });
+  // "Connect GitHub" goes to GitHub's login page: unlike the install page, it always comes back
+  // to Toki, also when the app is installed already (src/lib/ai.ts).
+  const authUrl = `https://github.com/login/oauth/authorize?client_id=${encodeURIComponent(ctx.env.github.clientId)}`;
+  if (new URL(request.url).searchParams.get("action") !== "repos") return json({ configured: true, installUrl, authUrl });
 
   const installs = await ctx.db.select<{ installation_id: number; account_login: string }>(
     "github_installations",
@@ -23,17 +26,24 @@ export async function GET(request: Request) {
   );
   const repos: { installation_id: number; account: string; repo: string; private: boolean }[] = [];
   const gone: number[] = [];
-  for (const i of installs) {
-    try {
-      for (const r of await gh.repos(i.installation_id)) repos.push({ installation_id: i.installation_id, account: i.account_login, repo: r.repo, private: r.private });
-    } catch (e) {
-      // The app was uninstalled on GitHub: forget the installation.
-      if (e instanceof GitHubError && (e.status === 404 || e.status === 401)) gone.push(i.installation_id);
-      else throw e;
-    }
-  }
+  let unreachable = false;
+  await Promise.all(
+    installs.map(async (i) => {
+      try {
+        for (const r of await gh.repos(i.installation_id)) repos.push({ installation_id: i.installation_id, account: i.account_login, repo: r.repo, private: r.private });
+      } catch (e) {
+        // The app was uninstalled on GitHub (404): forget the installation. A 401 is about Toki's own
+        // app key (a clock difference, a key being changed), not this installation: forgetting then
+        // would throw away every developer's connection, so it only counts as "didn't answer".
+        if (e instanceof GitHubError && e.status === 404) gone.push(i.installation_id);
+        // GitHub hiccuped for this account: the others still show.
+        else unreachable = true;
+      }
+    }),
+  );
   if (gone.length) await ctx.db.remove("github_installations", `user_id=eq.${ctx.user.id}&installation_id=in.(${gone.join(",")})`);
-  return json({ configured: true, installUrl, installations: installs.filter((i) => !gone.includes(i.installation_id)), repos });
+  repos.sort((a, b) => a.repo.localeCompare(b.repo));
+  return json({ configured: true, installUrl, authUrl, installations: installs.filter((i) => !gone.includes(i.installation_id)), repos, unreachable });
 }
 
 /** A push to a repository: games that follow its branch get the new version (in the background). */

@@ -933,7 +933,8 @@ main.content:focus { outline: none; }
 .move-box { border: 1px solid var(--line); background: var(--surface); padding: 12px 14px; margin-top: 12px; }
 .move-box p { margin: 0; font-size: 14px; }
 .move-box .actions { margin-top: 2px; }
-.move-tip { display: flex; flex-direction: column; gap: 6px; }
+.move-tip, .move-repo { display: flex; flex-direction: column; gap: 6px; }
+.move-repo label { margin: 0; }
 .host-box .check p { margin: 0 0 4px; }
 .host-box .sub, .key-list .sub { color: var(--muted); font-size: 13px; }
 .import-box { margin: 0 0 6px; }

@@ -6,7 +6,7 @@ import { useGames } from "../lib/useGames";
 import { ago, getPost, type FeedbackPost } from "../lib/feedback";
 import { useAiStatus } from "../lib/assist";
 import {
-  ApiError, connectError, githubDisconnect, githubInstallLink, githubRepos, myBudget, myJobs, startJob, usd,
+  ApiError, connectError, githubConnectLink, githubDisconnect, githubManage, githubRepos, myBudget, myJobs, startJob, usd,
   type Budget, type ConnectJob, type Feature, type GitHubInfo,
 } from "../lib/ai";
 import { useTitle } from "../lib/useTitle";
@@ -111,7 +111,7 @@ export function Connect() {
         ) : !gh.installations?.length ? (
           <>
             <p className="hint">{t("connect.githubHelp")}</p>
-            <button type="button" className="btn primary" onClick={() => window.location.assign(githubInstallLink(gh.installUrl!))}><GitHubMark />{t("connect.githubConnect")}</button>
+            <button type="button" className="btn primary" onClick={() => window.location.assign(githubConnectLink(gh))}><GitHubMark />{t("connect.githubConnect")}</button>
           </>
         ) : (
           <>
@@ -126,7 +126,9 @@ export function Connect() {
               ))}
             </ul>
             {!gh.repos?.length && <p className="hint">{t("connect.noRepos")}</p>}
-            <button type="button" className="linkish" onClick={() => window.location.assign(githubInstallLink(gh.installUrl!))}>{t("connect.githubMore")}</button>
+            {gh.unreachable && <p className="check warn">{t("connect.githubLoadError")}</p>}
+            {/* GitHub's page for this never comes back to Toki: it opens in a new tab, and the list is read again on return. */}
+            <button type="button" className="linkish" onClick={() => githubManage(gh.installUrl!, () => setReload((n) => n + 1))}>{t("connect.githubMore")}</button>
           </>
         )}
       </section>

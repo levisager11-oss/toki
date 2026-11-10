@@ -53,7 +53,7 @@ async function who(request: Request): Promise<Who | Response> {
 }
 
 function failed(e: unknown): Response {
-  if (e instanceof HostingError) return json({ error: e.code }, e.status);
+  if (e instanceof HostingError) return json(e.detail ? { error: e.code, message: e.detail.slice(0, 300) } : { error: e.code }, e.status);
   if (e instanceof R2Error) return json({ error: "storage_error", message: e.message.slice(0, 200) }, 502);
   return json({ error: "error" }, 500);
 }
@@ -143,7 +143,14 @@ export async function POST(request: Request) {
         // A game at a link elsewhere: Toki downloads it from there and hosts it.
         if (!w.session) return json({ error: "not_allowed" }, 403);
         if (!isUuid(b.game_id)) return json({ error: "bad_request" }, 400);
-        return json(await moveGame(deps, w.user, b.game_id, b.anyway === true, { git: await gitAccess(w) }));
+        return json(
+          await moveGame(deps, w.user, b.game_id, {
+            git: await gitAccess(w),
+            anyway: b.anyway === true,
+            partial: b.partial === true,
+            repo: typeof b.installation_id === "number" && typeof b.repo === "string" && /^[\w.-]+\/[\w.-]+$/.test(b.repo) ? { installation_id: b.installation_id, repo: b.repo } : null,
+          }),
+        );
       case "move_check":
         // Before an upload or a repository replaces a game's link: will players' progress come along?
         if (!w.session) return json({ error: "not_allowed" }, 403);

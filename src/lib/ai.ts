@@ -245,7 +245,12 @@ export async function myBudget(): Promise<Budget> {
 
 export interface GitHubInfo {
   configured: boolean;
+  /** GitHub's page for installing the Toki app, or choosing its repositories */
   installUrl: string | null;
+  /** GitHub's login page for the Toki app: where "Connect GitHub" goes */
+  authUrl?: string | null;
+  /** Some connected account didn't answer just now: its repositories are missing from the list */
+  unreachable?: boolean;
   installations?: { installation_id: number; account_login: string }[];
   repos?: { installation_id: number; account: string; repo: string; private: boolean }[];
 }
@@ -261,25 +266,75 @@ export async function githubDisconnect(installationId: number): Promise<void> {
   if (error) throw error;
 }
 
-/** Remembered while the person is on GitHub, to check that the answer belongs to this visit. */
+// Connecting GitHub. GitHub only sends people back to Toki from two places: its login page
+// ("Authorize Toki"), always, and its install page, only the first time the app is installed on an
+// account. So "Connect GitHub" goes to the login page: it works whether the app is installed yet
+// or not. Only when it turns out nothing is installed, Toki sends the person on to the install
+// page (src/pages/ConnectGitHub.tsx). Choosing more repositories happens on a GitHub page that
+// never comes back, so that opens in a new tab and Toki looks again when its own tab is shown.
+
+/** Remembered while the person is on GitHub: the answer must belong to this visit, and where to go after. */
 const STATE_KEY = "toki.githubState";
-export function githubInstallLink(installUrl: string): string {
+const STATE_MS = 30 * 60_000;
+function newState(back: string | null): string {
   const state = crypto.randomUUID();
   try {
-    sessionStorage.setItem(STATE_KEY, state);
+    // localStorage, not sessionStorage: GitHub's answer sometimes arrives in another tab
+    // (after logging in to GitHub, or in a phone's installed app).
+    localStorage.setItem(STATE_KEY, JSON.stringify({ state, at: Date.now(), back }));
   } catch {
-    /* without session storage the check below fails and asks to try again */
+    /* without storage the check below fails and offers to try again */
   }
-  return `${installUrl}?state=${encodeURIComponent(state)}`;
+  return state;
 }
-export function githubStateMatches(state: string | null): boolean {
+
+/** "Connect GitHub": GitHub's login page. `back`: the page on Toki to return to afterwards. */
+export function githubConnectLink(info: Pick<GitHubInfo, "authUrl" | "installUrl">, back: string | null = null): string {
+  const state = encodeURIComponent(newState(back));
+  return info.authUrl ? `${info.authUrl}&state=${state}` : `${info.installUrl}?state=${state}`;
+}
+/** Installing the Toki app on a GitHub account for the first time. */
+export function githubInstallLink(installUrl: string, back: string | null = null): string {
+  return `${installUrl}?state=${encodeURIComponent(newState(back))}`;
+}
+/** Whether GitHub's answer belongs to a visit started here (in the last half hour), and where to go after. */
+export function githubStateCheck(state: string | null): { ok: boolean; back: string | null } {
   try {
-    const saved = sessionStorage.getItem(STATE_KEY);
-    sessionStorage.removeItem(STATE_KEY);
-    return !!state && state === saved;
+    const saved = JSON.parse(localStorage.getItem(STATE_KEY) ?? "null") as { state?: string; at?: number; back?: string | null } | null;
+    const fresh = !!saved && typeof saved.at === "number" && Date.now() - saved.at < STATE_MS;
+    const back = fresh && typeof saved!.back === "string" ? saved!.back : null;
+    if (!state || !fresh || saved!.state !== state) return { ok: false, back };
+    localStorage.removeItem(STATE_KEY);
+    return { ok: true, back };
   } catch {
-    return false;
+    return { ok: false, back: null };
   }
+}
+
+/**
+ * "Add repositories": GitHub's page for choosing what the Toki app may use, in a new tab. GitHub
+ * doesn't come back from it, so `onBack` runs each time Toki's tab is shown again (for ten
+ * minutes). Returns a function that stops that.
+ */
+export function githubManage(installUrl: string, onBack: () => void): () => void {
+  window.open(installUrl, "_blank", "noopener");
+  const started = Date.now();
+  let last = 0;
+  const back = () => {
+    const now = Date.now();
+    if (document.visibilityState !== "visible" || now - started < 1500 || now - last < 1500) return;
+    last = now;
+    onBack();
+  };
+  const stop = () => {
+    clearTimeout(end);
+    window.removeEventListener("focus", back);
+    document.removeEventListener("visibilitychange", back);
+  };
+  const end = setTimeout(stop, 10 * 60_000);
+  window.addEventListener("focus", back);
+  document.addEventListener("visibilitychange", back);
+  return stop;
 }
 
 export type Feature = "saves" | "scores" | "multiplayer" | "fix";
