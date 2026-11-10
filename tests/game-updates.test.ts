@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { GAME_UPDATES, gameUpdate, updateInstructions, updateKeys, updateState, type GameUpdate } from "../src/lib/gameUpdates";
+import { GAME_UPDATES, gameUpdate, ownConnection, updateConnectPath, updateInstructions, updateKeys, updateState, type GameUpdate } from "../src/lib/gameUpdates";
 import type { ConnectJob } from "../src/lib/ai";
 import { uploadFeatures } from "../server/connect/agent";
 
@@ -17,7 +17,9 @@ describe("updates for developers' games", () => {
     expect(new Set(GAME_UPDATES.map((u) => u.topic)).size).toBe(GAME_UPDATES.length);
     for (const u of GAME_UPDATES) {
       expect(u.topic).toMatch(/^[a-z][a-z0-9_]{0,29}$/); // notify_developers' rule
-      expect(u.since).toMatch(/^\d{4}-\d\d-\d\d$/);
+      // A moment, not a day: runs from earlier that day didn't know about the update.
+      expect(u.since).toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\d(:\d\d)?Z$/);
+      expect(Number.isNaN(new Date(u.since).getTime())).toBe(false);
       expect(u.only.length).toBeGreaterThan(20);
       // Once in English and once in German.
       for (const key of Object.values(updateKeys(u.topic))) expect(i18n.split(`"${key}":`).length - 1).toBe(2);
@@ -42,7 +44,7 @@ describe("updates for developers' games", () => {
 });
 
 describe("where a game stands with an update", () => {
-  const state = (jobs: ConnectJob[], update: GameUpdate = host) => updateState(update, "g1", jobs).state;
+  const state = (jobs: ConnectJob[], update: GameUpdate = host, repo: string | null = null) => updateState(update, { id: "g1", repo }, jobs).state;
 
   it("follows the developer's newest Toki Connect run for that game", () => {
     expect(state([])).toBe("todo");
@@ -61,7 +63,34 @@ describe("where a game stands with an update", () => {
     expect(state([job({ game_id: null })])).toBe("todo");
     expect(state([job({ features: ["scores"] })])).toBe("todo");
     expect(state([job({ created_at: "2026-11-09T10:00:00Z", pr_url: "https://github.com/dev/game/pull/1" })])).toBe("todo");
-    expect(state([job({ created_at: "2026-11-10T00:00:01Z" })])).toBe("already");
+    // The same day, but before the update went live (a pull request for friend invites, without onHost).
+    expect(state([job({ created_at: "2026-11-10T21:03:20Z", pr_url: "https://github.com/dev/game/pull/2" })])).toBe("todo");
+    expect(state([job({ created_at: "2026-11-10T22:08:32Z" })])).toBe("already");
+  });
+});
+
+describe("a run started on the Connect page without choosing the game", () => {
+  it("counts for the game whose repository it changed", () => {
+    const loose = job({ game_id: null, repo: "Dev/Apex", status: "working" });
+    expect(updateState(host, { id: "g1", repo: "dev/apex" }, [loose]).state).toBe("run");
+    expect(updateState(host, { id: "g1", repo: "dev/other" }, [loose]).state).toBe("todo");
+    expect(updateState(host, { id: "g1", repo: null }, [loose]).state).toBe("todo");
+    // A run that names another game doesn't count, even on the same repository.
+    expect(updateState(host, { id: "g1", repo: "dev/apex" }, [job({ game_id: "g2", repo: "dev/apex" })]).state).toBe("todo");
+  });
+});
+
+describe("starting an update in one click", () => {
+  it("uses the logged-in account's own GitHub connection to the game's repository", () => {
+    const repos = [{ installation_id: 7, repo: "dev/other" }, { installation_id: 9, repo: "Dev/Apex" }];
+    expect(ownConnection(repos, "dev/apex")).toBe(9);
+    // Only another account can reach it (e.g. an older account of the same developer).
+    expect(ownConnection(repos, "dev/gone")).toBeNull();
+    expect(ownConnection(undefined, "dev/apex")).toBeNull();
+  });
+
+  it("falls back to the Connect page with the update and the game filled in", () => {
+    expect(updateConnectPath(host, "g1")).toBe("/connect?update=host&game=g1");
   });
 });
 

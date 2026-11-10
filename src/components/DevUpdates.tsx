@@ -4,7 +4,7 @@ import snippet from "../../public/toki-save.js?raw";
 import { useI18n, type Key } from "../lib/i18n";
 import { useAiStatus } from "../lib/assist";
 import { ApiError, connectError, myJobs, type ConnectJob } from "../lib/ai";
-import { GAME_UPDATES, NoSource, startUpdate, updateInstructions, updateKeys, updateState, type GameUpdate } from "../lib/gameUpdates";
+import { GAME_UPDATES, gameRepos, NoSource, startUpdate, updateConnectPath, updateInstructions, updateKeys, updateState, type GameUpdate } from "../lib/gameUpdates";
 import type { Game } from "../lib/types";
 
 /**
@@ -16,40 +16,48 @@ import type { Game } from "../lib/types";
 export function DevUpdates({ games }: { games: Game[] }) {
   const { t } = useI18n();
   const [jobs, setJobs] = useState<ConnectJob[]>([]);
+  const [repos, setRepos] = useState<Record<string, { repo: string; branch: string }>>({});
   const updates = GAME_UPDATES.map((u) => ({ update: u, games: games.filter(u.applies) })).filter((x) => x.games.length > 0);
-  const any = updates.length > 0;
+  const ids = [...new Set(updates.flatMap((x) => x.games.map((g) => g.id)))].sort().join(",");
   useEffect(() => {
-    if (any) myJobs().then(setJobs, () => {});
-  }, [any]);
-  if (!any) return null;
+    if (!ids) return;
+    myJobs().then(setJobs, () => {});
+    gameRepos(ids.split(",")).then(setRepos, () => {});
+  }, [ids]);
+  if (!updates.length) return null;
   return (
     <section className="dev-updates" aria-labelledby="dev-updates-h">
       <div className="sechead"><h2 id="dev-updates-h">{t("devup.title")}</h2></div>
       <p className="hint">{t("devup.lead")}</p>
-      {updates.map((x) => <UpdateCard key={x.update.topic} update={x.update} games={x.games} jobs={jobs} />)}
+      {updates.map((x) => <UpdateCard key={x.update.topic} update={x.update} games={x.games} jobs={jobs} repos={repos} />)}
     </section>
   );
 }
 
-function UpdateCard({ update, games, jobs }: { update: GameUpdate; games: Game[]; jobs: ConnectJob[] }) {
+function UpdateCard({ update, games, jobs, repos }: {
+  update: GameUpdate; games: Game[]; jobs: ConnectJob[];
+  /** The repository each game follows, if it follows one. */
+  repos: Record<string, { repo: string; branch: string }>;
+}) {
   const { t, lang } = useI18n();
   const navigate = useNavigate();
   // Toki Connect writes code with the strong AI: without it, the instructions are the way.
   const connect = useAiStatus().strong;
   const keys = updateKeys(update.topic);
   const [busy, setBusy] = useState("");
-  const [err, setErr] = useState("");
+  // The error and the game it is about, so it shows under that game.
+  const [err, setErr] = useState<{ game: string; text: string } | null>(null);
   const [copied, setCopied] = useState(false);
 
   const start = async (game: Game) => {
     setBusy(game.id);
-    setErr("");
+    setErr(null);
     try {
-      navigate(`/connect/${(await startUpdate(update, game, lang)).id}`);
+      navigate(`/connect/${(await startUpdate(update, game, repos[game.id], lang)).id}`);
     } catch (e) {
-      // Toki doesn't know where this game's code is: the developer picks the repository.
-      if (e instanceof NoSource) return navigate(`/connect?add=${update.feature}&game=${game.id}`);
-      setErr(t(`connect.err.${connectError(e instanceof ApiError ? e.message : "error")}`));
+      // Toki can't reach this game's code with this account: the developer picks the repository.
+      if (e instanceof NoSource) return navigate(updateConnectPath(update, game.id));
+      setErr({ game: game.id, text: t(`connect.err.${connectError(e instanceof ApiError ? e.message : "error")}`) });
       setBusy("");
     }
   };
@@ -69,7 +77,7 @@ function UpdateCard({ update, games, jobs }: { update: GameUpdate; games: Game[]
       <p>{t(keys.text as Key)}</p>
       <ul className="dev-update-games">
         {games.map((g) => {
-          const s = updateState(update, g.id, jobs);
+          const s = updateState(update, { id: g.id, repo: repos[g.id]?.repo }, jobs);
           const again = s.state === "todo" || s.state === "failed";
           return (
             <li key={g.id}>
@@ -86,11 +94,11 @@ function UpdateCard({ update, games, jobs }: { update: GameUpdate; games: Game[]
                   {busy === g.id ? t("connect.starting") : t("devup.connect")}
                 </button>
               )}
+              {err?.game === g.id && <p className="error" role="alert">{err.text}</p>}
             </li>
           );
         })}
       </ul>
-      {err && <p className="error" role="alert">{err}</p>}
       <div className="actions">
         <button type="button" className="btn" onClick={copy} aria-live="polite">{copied ? t("saveSupport.copied") : t("saveSupport.copyAgent")}</button>
         <span className="sub">{t(connect ? "devup.copyHelp" : "devup.copyOnly")}</span>

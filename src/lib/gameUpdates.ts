@@ -7,7 +7,7 @@
 // Each entry needs its texts in src/lib/i18n.tsx: devup.<topic>.title, devup.<topic>.text and
 // devup.<topic>.notif, in both languages.
 import { supabase } from "./supabase";
-import { api, type ConnectJob, type Feature } from "./ai";
+import { api, githubRepos, type ConnectJob, type Feature } from "./ai";
 import { integrationGuide } from "./integration";
 import type { Game } from "./types";
 
@@ -16,7 +16,10 @@ export interface GameUpdate {
   topic: string;
   /** What Toki Connect adds for it (a feature in server/connect/agent.ts). */
   feature: Exclude<Feature, "fix">;
-  /** The day it came out. Toki Connect runs before that day don't count as "updated". */
+  /**
+   * When it went live (an ISO time, UTC). Toki Connect runs from before then didn't know about
+   * it, so they don't count as "updated".
+   */
   since: string;
   /** The games it is for. */
   applies: (game: Pick<Game, "multiplayer">) => boolean;
@@ -29,7 +32,7 @@ export const GAME_UPDATES: GameUpdate[] = [
   {
     topic: "host",
     feature: "multiplayer",
-    since: "2026-11-10",
+    since: "2026-11-10T22:01:00Z",
     applies: (g) => g.multiplayer === true,
     only: 'This time, add only `toki.onHost` from step 5 ("Let Toki open a room"), so the game opens a room by itself when Toki asks. The rest of step 5 is in the game already: keep it as it is. The script from step 1 must be the current one: replace an older copy that has no toki.onHost.',
   },
@@ -52,29 +55,60 @@ export const updateInstructions = (update: GameUpdate, script: string) => `${int
  */
 export type UpdateState = { state: "todo" } | { state: "run" | "pr" | "live" | "already" | "failed"; job: ConnectJob };
 
-export function updateState(update: GameUpdate, gameId: string, jobs: ConnectJob[]): UpdateState {
-  const since = new Date(`${update.since}T00:00:00Z`).getTime();
-  const job = jobs.find((j) => j.game_id === gameId && j.features.includes(update.feature) && new Date(j.created_at).getTime() >= since);
+export function updateState(update: GameUpdate, game: { id: string; repo?: string | null }, jobs: ConnectJob[]): UpdateState {
+  const since = new Date(update.since).getTime();
+  // A run for this game, or one on its repository that wasn't told the game (started on the Connect page).
+  const repo = game.repo?.toLowerCase();
+  const ours = (j: ConnectJob) => j.game_id === game.id || (!j.game_id && !!repo && j.repo.toLowerCase() === repo);
+  const job = jobs.find((j) => ours(j) && j.features.includes(update.feature) && new Date(j.created_at).getTime() >= since);
   if (!job) return { state: "todo" };
   if (job.status === "working" || job.status === "question") return { state: "run", job };
   if (job.status === "failed") return { state: "failed", job };
   return { state: job.pr_url ? "pr" : job.source === "upload" ? "live" : "already", job };
 }
 
-/** The game has no code Toki can reach: the developer picks the repository on the Connect page. */
+/** The repository each game follows (games that follow none are left out). */
+export async function gameRepos(gameIds: string[]): Promise<Record<string, { repo: string; branch: string }>> {
+  if (!gameIds.length) return {};
+  const { data } = await supabase.from("game_git").select("game_id, repo, branch").in("game_id", gameIds);
+  return Object.fromEntries(((data ?? []) as { game_id: string; repo: string; branch: string }[]).map((r) => [r.game_id, { repo: r.repo, branch: r.branch }]));
+}
+
+/**
+ * Toki can't reach the game's code with the logged-in account: the developer picks the
+ * repository on the Connect page (where they can also connect GitHub).
+ */
 export class NoSource extends Error {}
+
+/**
+ * The GitHub connection of the logged-in account that can reach this repository. Not the one
+ * the game follows its repository with: that may belong to another account (e.g. an older one
+ * of the same developer), and Toki Connect only works with the account's own connections.
+ */
+export function ownConnection(repos: { installation_id: number; repo: string }[] | undefined, repo: string): number | null {
+  const r = repos?.find((x) => x.repo.toLowerCase() === repo.toLowerCase());
+  return r ? r.installation_id : null;
+}
+
+/** Where the Connect page starts this update for a game, when it can't be started in one click. */
+export const updateConnectPath = (update: GameUpdate, gameId: string) => `/connect?update=${update.topic}&game=${gameId}`;
 
 /**
  * Starts Toki Connect adding an update to a game, with what Toki knows about the game's code:
  * the GitHub repository and branch it follows (the change comes as a pull request), or its
  * files uploaded to Toki (the change goes live as the next version).
  */
-export async function startUpdate(update: GameUpdate, game: Pick<Game, "id" | "hosted_site">, lang: "en" | "de"): Promise<ConnectJob> {
-  const { data: git } = await supabase.from("game_git").select("installation_id, repo, branch").eq("game_id", game.id).maybeSingle();
+export async function startUpdate(update: GameUpdate, game: Pick<Game, "id" | "hosted_site">, git: { repo: string; branch: string } | undefined, lang: "en" | "de"): Promise<ConnectJob> {
   const run = { action: "start", features: [update.feature], notes: update.only, game_id: game.id, lang };
-  const source = git
-    ? { installation_id: (git as { installation_id: number }).installation_id, repo: (git as { repo: string }).repo, branch: (git as { branch: string }).branch }
-    : game.hosted_site ? { source: "upload" } : null;
-  if (!source) throw new NoSource();
+  let source: Record<string, unknown>;
+  if (git) {
+    const installation = ownConnection((await githubRepos().catch(() => null))?.repos, git.repo);
+    if (installation === null) throw new NoSource();
+    source = { installation_id: installation, repo: git.repo, branch: git.branch };
+  } else if (game.hosted_site) {
+    source = { source: "upload" };
+  } else {
+    throw new NoSource();
+  }
   return (await api<{ job: ConnectJob }>("/api/connect", { method: "POST", body: JSON.stringify({ ...run, ...source }) })).job;
 }
