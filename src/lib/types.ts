@@ -39,6 +39,12 @@ export interface Game {
   score_format?: "points" | "time";
   /** The game only runs with cross-origin isolation (e.g. Godot 4 with threads). Off for most games. */
   needs_isolation?: boolean;
+  /** The game has multiplayer rooms that friends can be invited into. */
+  multiplayer?: boolean;
+  /** How many can play together, if the developer said. */
+  max_players?: number | null;
+  /** The name of the room code in the game's own invite links: <game>?room=ABCD. */
+  join_param?: string;
   /** The game's address name when Toki hosts it (<site>.playtoki.app). Only the server sets it. */
   hosted_site?: string | null;
   author?: { username: string } | null;

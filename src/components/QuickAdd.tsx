@@ -100,7 +100,7 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
         .insert({
           slug, title: p.title, description: p.description, description_de: p.description_de || null, controls: p.controls, category: p.category,
           engine: p.engine || null, cover: coverFor(slug, null), play_url: siteUrl(siteFor(slug), hosting.domain), needs_isolation: p.isolation,
-          score_order: p.score_order, score_format: p.score_format, screenshots: [], created_by: profile.id,
+          score_order: p.score_order, score_format: p.score_format, multiplayer: p.multiplayer, screenshots: [], created_by: profile.id,
         })
         .select("id, slug")
         .single();
@@ -263,6 +263,10 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
             <label className="check">
               <input type="checkbox" checked={p.isolation} onChange={(e) => field("isolation")(e.target.checked)} />
               {t("form.isolation")}
+            </label>
+            <label className="check">
+              <input type="checkbox" checked={p.multiplayer === true} onChange={(e) => field("multiplayer")(e.target.checked)} />
+              {t("form.multiplayer")}
             </label>
             {kind === "github" && git && (
               <>

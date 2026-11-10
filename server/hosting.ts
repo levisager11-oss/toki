@@ -249,6 +249,9 @@ export async function finishUpload(deps: Deps, user: HostUser, b: Record<string,
   if (toki.engine) patch.engine = toki.engine;
   if (toki.score_order) patch.score_order = toki.score_order;
   if (toki.score_format) patch.score_format = toki.score_format;
+  if (toki.multiplayer !== undefined) patch.multiplayer = toki.multiplayer;
+  if (toki.max_players) patch.max_players = toki.max_players;
+  if (toki.join_param) patch.join_param = toki.join_param;
   const cover = picture(toki.cover_image, base);
   if (cover) patch.thumbnail_url = cover;
   const shots = toki.screenshots?.map((s) => picture(s, base)).filter((s): s is string => !!s);

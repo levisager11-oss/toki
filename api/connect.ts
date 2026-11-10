@@ -113,7 +113,7 @@ async function start(ctx: Ctx, b: Record<string, unknown>) {
   const feedbackId = isUuid(b.feedback_id) ? b.feedback_id : null;
   const features: Feature[] = feedbackId
     ? ["fix"]
-    : Array.isArray(b.features) ? [...new Set(b.features.filter((f): f is Feature => f === "saves" || f === "scores"))] : [];
+    : Array.isArray(b.features) ? [...new Set(b.features.filter((f): f is Feature => f === "saves" || f === "scores" || f === "multiplayer"))] : [];
   const notes = typeof b.notes === "string" ? b.notes.trim().slice(0, 1000) : "";
   let gameId = isUuid(b.game_id) ? b.game_id : null;
   if (feedbackId) {
@@ -173,7 +173,7 @@ async function run(ctx: Ctx, b: Record<string, unknown>, origin: string) {
 
   let game: Job["game"] = null;
   if (job.game_id) {
-    [game] = await ctx.db.select<NonNullable<Job["game"]>>("games", `id=eq.${job.game_id}&select=title,score_order,score_format`);
+    [game] = await ctx.db.select<NonNullable<Job["game"]>>("games", `id=eq.${job.game_id}&select=title,score_order,score_format,join_param`);
   }
   let bug: Bug | null = null;
   if (job.feedback_id) {
@@ -247,6 +247,10 @@ async function saveStep(ctx: Ctx, job: Row, result: StepResult): Promise<boolean
     lease_until: null,
     updated_at: new Date().toISOString(),
   });
+  // Friend invites were added: the game's page offers "Invite friends" from now on.
+  if (rows.length && result.status === "done" && job.features.includes("multiplayer") && job.game_id) {
+    await ctx.db.update("games", `id=eq.${job.game_id}`, { multiplayer: true }).catch(() => {});
+  }
   return rows.length > 0;
 }
 

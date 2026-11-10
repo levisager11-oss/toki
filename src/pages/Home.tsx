@@ -8,7 +8,7 @@ import { Cover } from "../components/Cover";
 import { GameCard, GameGrid, GridSkeleton, Plays, RecentItem } from "../components/GameCard";
 import { useAuth } from "../lib/auth";
 import { suggestions, useFreeAi, type Suggestion } from "../lib/assist";
-import { PlayIcon } from "../components/icons";
+import { PeopleIcon, PlayIcon } from "../components/icons";
 import { useLatestUpdates } from "../lib/releases";
 import { Avatar } from "../components/Avatar";
 import { isOnline, myFriends, type FriendRow } from "../lib/social";
@@ -44,6 +44,18 @@ export function Home() {
       },
       { replace: true, preventScrollReset: true },
     );
+  // Only games to play together with friends.
+  const multi = params.get("mp") === "1";
+  const setMulti = (on: boolean) =>
+    setParams(
+      (p) => {
+        const next = new URLSearchParams(p);
+        if (on) next.set("mp", "1");
+        else next.delete("mp");
+        return next;
+      },
+      { replace: true, preventScrollReset: true },
+    );
   const [sort, setSortState] = useState<Sort>(savedSort);
   const updates = useLatestUpdates();
   const setSort = (v: Sort) => {
@@ -66,9 +78,10 @@ export function Home() {
     [games, recentSlugs],
   );
   const cats = useMemo(() => [...new Set((games ?? []).map((g) => g.category))].sort(), [games]);
+  const anyMulti = useMemo(() => (games ?? []).some((g) => g.multiplayer), [games]);
   const shown = useMemo(
-    () => sortGames((games ?? []).filter((g) => (cat === "all" || g.category === cat) && matches(g, q, t(`cat.${g.category}`))), sort, updates),
-    [games, cat, q, t, sort, updates],
+    () => sortGames((games ?? []).filter((g) => (cat === "all" || g.category === cat) && (!multi || g.multiplayer) && matches(g, q, t(`cat.${g.category}`))), sort, updates),
+    [games, cat, multi, q, t, sort, updates],
   );
 
   if (error) return <p className="msg">{t("error")}</p>;
@@ -115,12 +128,19 @@ export function Home() {
               </select>
             </label>
           )}
-          {cats.length > 1 && (
+          {(cats.length > 1 || anyMulti) && (
             <div className="chips" role="group">
-              <button type="button" className={cat === "all" ? "on" : ""} aria-pressed={cat === "all"} onClick={() => setCat("all")}>{t("home.allCategories")}</button>
-              {cats.map((c) => (
-                <button type="button" key={c} className={cat === c ? "on" : ""} aria-pressed={cat === c} onClick={() => setCat(c)}>{t(`cat.${c}`)}</button>
-              ))}
+              {cats.length > 1 && (
+                <>
+                  <button type="button" className={cat === "all" ? "on" : ""} aria-pressed={cat === "all"} onClick={() => setCat("all")}>{t("home.allCategories")}</button>
+                  {cats.map((c) => (
+                    <button type="button" key={c} className={cat === c ? "on" : ""} aria-pressed={cat === c} onClick={() => setCat(c)}>{t(`cat.${c}`)}</button>
+                  ))}
+                </>
+              )}
+              {anyMulti && (
+                <button type="button" className={`multi-chip ${multi ? "on" : ""}`} aria-pressed={multi} onClick={() => setMulti(!multi)}><PeopleIcon size={13} />{t("game.multiplayer")}</button>
+              )}
             </div>
           )}
         </div>

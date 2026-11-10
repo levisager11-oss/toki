@@ -39,6 +39,10 @@ export const KeyIcon = () => (
 export const CloseIcon = () => (
   <svg viewBox="0 0 16 16" aria-hidden="true" width="18" height="18"><path d="M3 3l10 10M13 3 3 13" fill="none" stroke="currentColor" strokeWidth="1.8" /></svg>
 );
+/** Two players: multiplayer, playing with friends. */
+export const PeopleIcon = ({ size = 16 }: { size?: number }) => (
+  <svg viewBox="0 0 16 16" aria-hidden="true" width={size} height={size}><path d="M6 7.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5ZM1.5 13.5c.4-2.4 2.1-3.7 4.5-3.7s4.1 1.3 4.5 3.7M10.5 7.2a2.2 2.2 0 1 0-.6-4.3M12 9.9c1.4.4 2.3 1.6 2.6 3.6" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" /></svg>
+);
 export const ShareIcon = () => (
   <svg viewBox="0 0 16 16" aria-hidden="true" width="16" height="16"><path d="M8 10V2M4.5 5.5 8 2l3.5 3.5M3 9v5h10V9" fill="none" stroke="currentColor" strokeWidth="1.6" /></svg>
 );

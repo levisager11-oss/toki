@@ -4,7 +4,8 @@ import { useI18n } from "../lib/i18n";
 import { compact, plays } from "../lib/games";
 import { Cover } from "./Cover";
 import { FavButton } from "./FavButton";
-import { PlayIcon } from "./icons";
+import { PeopleIcon, PlayIcon } from "./icons";
+import { maxPlayers } from "../lib/invites";
 import { recentlyUpdated, useLatestUpdates } from "../lib/releases";
 
 const by = (g: Game) => (g.author ? `@${g.author.username}` : "Toki");
@@ -27,6 +28,19 @@ export function Plays({ game }: { game: Game }) {
   );
 }
 
+/** A small "play together" mark on a game's picture, with the number of players if known. */
+function MultiTag({ game }: { game: Game }) {
+  const { t } = useI18n();
+  const n = maxPlayers(game);
+  const label = n ? t("game.playersUpTo", { n }) : t("game.multiplayer");
+  return (
+    <span className="tag multi" title={label}>
+      <PeopleIcon size={12} />
+      {n && <span aria-hidden="true">{n}</span>}
+    </span>
+  );
+}
+
 export function GameCard({ game }: { game: Game }) {
   const { t } = useI18n();
   const updated = recentlyUpdated(useLatestUpdates().get(game.id));
@@ -36,10 +50,12 @@ export function GameCard({ game }: { game: Game }) {
         <Cover slug={game.slug} cover={game.cover} image={game.thumbnail_url} animate="hover" />
         <span className="tag">{t(`cat.${game.category}`)}</span>
         {isNew(game) ? <span className="tag new">{t("game.new")}</span> : updated && <span className="tag new">{t("game.updated")}</span>}
+        {game.multiplayer && <MultiTag game={game} />}
       </Link>
       <div className="row">
         <div className="info">
           <Link to={`/game/${game.slug}`} className="title">{game.title}</Link>
+          {game.multiplayer && <span className="sr-only">{maxPlayers(game) ? t("game.playersUpTo", { n: maxPlayers(game)! }) : t("game.multiplayer")}</span>}
           <span className="sub">
             {game.author ? <Link to={`/u/${game.author.username}`} className="author">@{game.author.username}</Link> : "Toki"}
             {game.engine ? ` · ${game.engine}` : ""}

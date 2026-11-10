@@ -48,6 +48,8 @@ build). Every field is optional:
   "screenshots": ["shots/1.png", "shots/2.png"],
   "score_order": "high",
   "score_format": "points",
+  "multiplayer": true,
+  "max_players": 4,
   "isolation": false,
   "entry": "index.html",
   "folder": "build"
@@ -65,6 +67,9 @@ build). Every field is optional:
 - `cover_image`, `screenshots`: paths of pictures inside the uploaded folder (or https links).
 - `score_order`/`score_format`: whether a higher or lower score is better, and points or a time
   in milliseconds.
+- `multiplayer`: `true` only for games with online rooms that other players join with a code
+  (see "Play together" below). `max_players`: how many can play in one room. `join_param`: the
+  name of the room code in the game's invite links, when it isn't `room`.
 - `isolation`: only for games that need cross-origin isolation (Godot 4 with threads, some Unity
   builds). Leave it out otherwise.
 
@@ -75,6 +80,18 @@ build). Every field is optional:
   `localStorage` follows the player to other devices.
 - **High scores**: call `window.toki && window.toki.score(points)` when a round ends (for times:
   milliseconds). Outside Toki it does nothing.
+
+### Play together (only games with online rooms)
+
+Toki doesn't replace the game's multiplayer. It brings a player's Toki friends into the room
+they opened in the game:
+
+- When the player has opened or joined a room, call `window.toki && window.toki.room(code)` with
+  the room's code (letters, digits, `-` and `_`, at most 32 characters). Call
+  `window.toki.room(null)` when they leave it. Toki then shows "Invite friends" next to the game.
+- When a friend accepts, Toki opens the game with `?room=CODE` in its address. Read it at the
+  start (`new URLSearchParams(location.search).get("room")`) and take the player into that room.
+- Set `"multiplayer": true` in toki.json.
 
 ## 4. Upload
 

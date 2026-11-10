@@ -10,6 +10,7 @@ import {
 import { useAuth } from "../lib/auth";
 import { Avatar } from "../components/Avatar";
 import { useTitle } from "../lib/useTitle";
+import { InviteToGame } from "../components/GameInvite";
 
 export function Friends() {
   const { t, lang } = useI18n();
@@ -137,6 +138,7 @@ export function Friends() {
                 </Link>
                 <div className="actions">
                   {g && <Link to={`/game/${g.slug}`} className="btn">{t("soc.join")}</Link>}
+                  {on && <InviteToGame friend={f} />}
                   <button type="button" className="btn" disabled={busy === f.id} onClick={() => act(f.id, async () => navigate(`/chat/${await openDm(f.id)}`))}>{t("soc.message")}</button>
                 </div>
               </li>

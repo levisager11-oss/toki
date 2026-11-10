@@ -36,6 +36,7 @@ export function SaveSupport({ open, gameId }: { open?: boolean; gameId?: string 
       <ul className="save-points">
         <li>{t("saveSupport.saves")}</li>
         <li>{t("saveSupport.scores")}</li>
+        <li>{t("saveSupport.multiplayer")}</li>
       </ul>
       {connect && (
         <div className="save-connect">
@@ -55,6 +56,50 @@ export function SaveSupport({ open, gameId }: { open?: boolean; gameId?: string 
       </div>
       <small>{t("saveSupport.other")}</small>
       <pre><code>{code}</code></pre>
+    </details>
+  );
+}
+
+/**
+ * For developers: how friends get invited into their game's multiplayer rooms, and the two ways
+ * to add it (Toki Connect, or instructions for an AI agent working in the game's code).
+ */
+export function MultiplayerSetup({ open, gameId, id }: { open?: boolean; gameId?: string; id?: string }) {
+  const { t } = useI18n();
+  const [copied, setCopied] = useState(false);
+  const connect = useAiStatus().strong;
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(`${agentPrompt}\nThis time, add only step 5 (play together). The script from step 1 must be in the page as well: add it if it's missing, and replace an older copy that has no toki.room.\n`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard blocked */
+    }
+  };
+  return (
+    <details className="save-support" id={id} open={open}>
+      <summary>
+        <b>{t("mp.setup.title")}</b>
+        <span>{t("mp.setup.lead")}</span>
+      </summary>
+      <p>{t("mp.setup.how")}</p>
+      <ol className="save-points">
+        <li>{t("mp.setup.step1")}</li>
+        <li>{t("mp.setup.step2")}</li>
+      </ol>
+      {connect && (
+        <div className="save-connect">
+          <p>{t("mp.setup.connect")}</p>
+          <Link to={`/connect?add=multiplayer${gameId ? `&game=${gameId}` : ""}`} className="btn primary">{t("mp.setup.connectGo")}</Link>
+        </div>
+      )}
+      <div className="actions">
+        <button type="button" className="btn" onClick={copy} aria-live="polite">
+          {copied ? t("saveSupport.copied") : t("saveSupport.copyAgent")}
+        </button>
+      </div>
+      <small>{t("mp.setup.script")}</small>
     </details>
   );
 }
