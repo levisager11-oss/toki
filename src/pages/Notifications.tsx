@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { useI18n } from "../lib/i18n";
+import { useI18n, type Key } from "../lib/i18n";
+import { gameUpdate, updateKeys } from "../lib/gameUpdates";
 import { useGames } from "../lib/useGames";
 import { ago } from "../lib/feedback";
 import { refreshBadges, useBadges } from "../lib/useBadges";
@@ -93,10 +94,9 @@ export function Notifications() {
         return { line: t("notif.ideaReply", { who, title }), to };
       }
       case "dev_news":
-        return {
-          line: t(d.topic === "multiplayer" ? "notif.devMultiplayer" : d.topic === "host" ? "notif.devHost" : "notif.devNews"),
-          to: "/my-games#toki-features",
-        };
+        // An update for their games (src/lib/gameUpdates.ts) leads to its card, with the one-click update.
+        if (gameUpdate(d.topic)) return { line: t(updateKeys(d.topic!).notif as Key), to: `/my-games#update-${d.topic}` };
+        return { line: t(d.topic === "multiplayer" ? "notif.devMultiplayer" : "notif.devNews"), to: "/my-games#toki-features" };
       default:
         // A kind this version of Toki doesn't know yet.
         return { line: t("notif.other"), to: "/updates" };

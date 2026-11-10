@@ -212,9 +212,11 @@ function NewRun({ repos, games, initialGame, fix, lang, onStarted }: {
   useEffect(() => {
     if (known) setGame((g) => g || initialGame);
   }, [known, initialGame]);
-  // "Add friend invites" from the news for developers starts with just that ticked.
-  const [features, setFeatures] = useState<Feature[]>(() =>
-    new URLSearchParams(location.search).get("add") === "multiplayer" ? ["multiplayer"] : ["saves", "scores"]);
+  // Coming from an update for developers' games (?add=…): just that one is ticked.
+  const [features, setFeatures] = useState<Feature[]>(() => {
+    const add = new URLSearchParams(location.search).get("add");
+    return add === "multiplayer" || add === "scores" || add === "saves" ? [add] : ["saves", "scores"];
+  });
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");

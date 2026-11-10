@@ -1,0 +1,76 @@
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+import { GAME_UPDATES, gameUpdate, updateInstructions, updateKeys, updateState, type GameUpdate } from "../src/lib/gameUpdates";
+import type { ConnectJob } from "../src/lib/ai";
+import { uploadFeatures } from "../server/connect/agent";
+
+const i18n = readFileSync(new URL("../src/lib/i18n.tsx", import.meta.url), "utf8");
+const host = gameUpdate("host")!;
+const job = (over: Partial<ConnectJob>): ConnectJob => ({
+  id: "j", repo: "dev/game", features: ["multiplayer"], notes: "", status: "done", messages: [], pr_url: null, error: null, error_detail: null,
+  game_id: "g1", feedback_id: null, engine: "steps", source: "github", created_at: "2026-11-12T10:00:00Z", updated_at: "2026-11-12T10:05:00Z", ...over,
+});
+
+describe("updates for developers' games", () => {
+  it("each have a topic the database takes, a day, and their texts in both languages", () => {
+    expect(GAME_UPDATES.length).toBeGreaterThan(0);
+    expect(new Set(GAME_UPDATES.map((u) => u.topic)).size).toBe(GAME_UPDATES.length);
+    for (const u of GAME_UPDATES) {
+      expect(u.topic).toMatch(/^[a-z][a-z0-9_]{0,29}$/); // notify_developers' rule
+      expect(u.since).toMatch(/^\d{4}-\d\d-\d\d$/);
+      expect(u.only.length).toBeGreaterThan(20);
+      // Once in English and once in German.
+      for (const key of Object.values(updateKeys(u.topic))) expect(i18n.split(`"${key}":`).length - 1).toBe(2);
+    }
+  });
+
+  it("are for the games they change something in", () => {
+    expect(host.applies({ multiplayer: true })).toBe(true);
+    expect(host.applies({ multiplayer: false })).toBe(false);
+    expect(host.applies({})).toBe(false);
+    expect(gameUpdate("nothing")).toBeUndefined();
+    expect(gameUpdate(undefined)).toBeUndefined();
+  });
+
+  it("come with instructions that say what to add this time", () => {
+    const text = updateInstructions(host, "/* script */");
+    expect(text).toContain("window.toki?.onHost(fn)"); // the guide explains it
+    expect(text).toContain("/* script */"); // and brings the current script
+    expect(text.trimEnd().endsWith(host.only)).toBe(true);
+    expect(host.only).toContain("toki.onHost");
+  });
+});
+
+describe("where a game stands with an update", () => {
+  const state = (jobs: ConnectJob[], update: GameUpdate = host) => updateState(update, "g1", jobs).state;
+
+  it("follows the developer's newest Toki Connect run for that game", () => {
+    expect(state([])).toBe("todo");
+    expect(state([job({ status: "working" })])).toBe("run");
+    expect(state([job({ status: "question" })])).toBe("run");
+    expect(state([job({ pr_url: "https://github.com/dev/game/pull/3" })])).toBe("pr");
+    expect(state([job({ source: "upload" })])).toBe("live");
+    expect(state([job({})])).toBe("already"); // finished without a pull request: the game had it
+    expect(state([job({ status: "failed" })])).toBe("failed");
+    // Newest first: a run that worked after one that failed.
+    expect(state([job({ pr_url: "https://github.com/dev/game/pull/4" }), job({ status: "failed" })])).toBe("pr");
+  });
+
+  it("doesn't count other games, other features, or runs from before the update", () => {
+    expect(state([job({ game_id: "g2" })])).toBe("todo");
+    expect(state([job({ game_id: null })])).toBe("todo");
+    expect(state([job({ features: ["scores"] })])).toBe("todo");
+    expect(state([job({ created_at: "2026-11-09T10:00:00Z", pr_url: "https://github.com/dev/game/pull/1" })])).toBe("todo");
+    expect(state([job({ created_at: "2026-11-10T00:00:01Z" })])).toBe("already");
+  });
+});
+
+describe("a run on a game uploaded to Toki", () => {
+  it("adds high scores or what multiplayer games tell Toki, never the script itself", () => {
+    expect(uploadFeatures(["multiplayer"])).toEqual(["multiplayer"]);
+    expect(uploadFeatures(["scores", "multiplayer", "scores"])).toEqual(["scores", "multiplayer"]);
+    expect(uploadFeatures(["saves", "fix", 7])).toEqual(["scores"]);
+    expect(uploadFeatures(undefined)).toEqual(["scores"]);
+    expect(uploadFeatures("multiplayer")).toEqual(["scores"]);
+  });
+});

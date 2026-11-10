@@ -12,6 +12,7 @@ import { UploadKeys } from "../components/UploadKeys";
 import { useHosting } from "../lib/hosting";
 import { isHostedUrl } from "../lib/hostingRules";
 import { MultiplayerSetup } from "../components/SaveSupport";
+import { DevUpdates } from "../components/DevUpdates";
 import { formatDuration } from "../lib/analytics";
 
 export function MyGames() {
@@ -106,6 +107,7 @@ export function MyGames() {
           ))}
         </ul>
       )}
+      <DevUpdates games={list} />
       {list.length > 0 && <MultiplayerSetup id="toki-features" open={location.hash === "#toki-features"} />}
       {hosting?.enabled && <UploadKeys />}
     </section>
