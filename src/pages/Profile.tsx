@@ -15,6 +15,7 @@ import type { Game } from "../lib/types";
 import { NotFound } from "./NotFound";
 import { useTitle } from "../lib/useTitle";
 import { ShareButton } from "../components/ShareButton";
+import { formatDuration } from "../lib/analytics";
 
 /** A player's page: /u/:username */
 export function Profile() {
@@ -75,6 +76,8 @@ export function Profile() {
   const playing = p.playing ? byId.get(p.playing) : undefined;
   const online = isOnline(p.last_seen);
   const login = `/login?next=${encodeURIComponent(location.pathname)}`;
+  const most = (p.most_played ?? []).filter((m) => byId.has(m.game_id));
+  const topSeconds = Math.max(1, ...most.map((m) => m.seconds));
 
   const act = async (fn: () => Promise<unknown>) => {
     setErr("");
@@ -146,6 +149,37 @@ export function Profile() {
       {err && <p className="error" role="alert">{err}</p>}
       {p.relation === "self" && p.banned_until && new Date(p.banned_until) > new Date() && (
         <p className="check warn">{t("soc.bannedUntil", { date: new Date(p.banned_until).toLocaleString(lang === "de" ? "de-CH" : "en") })}</p>
+      )}
+
+      {p.stats && (
+        <dl className="stat-strip">
+          <div><dt>{t("prof.playtime")}</dt><dd>{formatDuration(p.stats.seconds, lang)}</dd></div>
+          <div><dt>{t("prof.gamesPlayed")}</dt><dd>{p.stats.games}</dd></div>
+          <div><dt>{t("score.best")}</dt><dd>{p.stats.scores}</dd></div>
+          <div><dt>{t("nav.favorites")}</dt><dd>{p.stats.likes}</dd></div>
+          {made.length > 0 && <div><dt>{t("prof.gamesMade")}</dt><dd>{made.length}</dd></div>}
+        </dl>
+      )}
+
+      {most.length > 0 && (
+        <section>
+          <div className="sechead"><h2>{t("prof.mostPlayed")}</h2></div>
+          <ul className="table scores most-played">
+            {most.map((m) => {
+              const g = byId.get(m.game_id)!;
+              return (
+                <li key={m.game_id}>
+                  <Cover slug={g.slug} cover={g.cover} image={g.thumbnail_url} />
+                  <div className="info">
+                    <Link to={`/game/${g.slug}`} className="title">{g.title}</Link>
+                    <span className="meter" aria-hidden="true"><i style={{ width: `${Math.max(3, (m.seconds / topSeconds) * 100)}%` }} /></span>
+                  </div>
+                  <b className="score">{formatDuration(m.seconds, lang)}</b>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
       )}
 
       {made.length > 0 && (

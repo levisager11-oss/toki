@@ -12,6 +12,7 @@ import { loadPage } from "./lib/reload";
 // Pages most visitors don't open load on demand, so players download less.
 const Login = lazy(loadPage(() => import("./pages/Login").then((m) => ({ default: m.Login }))));
 const Signup = lazy(loadPage(() => import("./pages/Signup").then((m) => ({ default: m.Signup }))));
+const GameStats = lazy(loadPage(() => import("./pages/GameStats").then((m) => ({ default: m.GameStats }))));
 const MyGames = lazy(loadPage(() => import("./pages/MyGames").then((m) => ({ default: m.MyGames }))));
 const GameForm = lazy(loadPage(() => import("./pages/GameForm").then((m) => ({ default: m.GameForm }))));
 const Account = lazy(loadPage(() => import("./pages/Account").then((m) => ({ default: m.Account }))));
@@ -46,6 +47,7 @@ export function App() {
           <Route path="favorites" element={<Favorites />} />
           <Route path="game/:slug" element={<GamePage />} />
           <Route path="game/:slug/feedback" element={<Later><FeedbackBoard /></Later>} />
+          <Route path="game/:slug/stats" element={<RequireMember><Later><GameStats /></Later></RequireMember>} />
           <Route path="game/:slug/updates" element={<Later><Releases /></Later>} />
           <Route path="updates" element={<Later><Releases /></Later>} />
           <Route path="feedback" element={<Later><FeedbackBoard /></Later>} />

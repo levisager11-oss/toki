@@ -37,11 +37,16 @@ export async function myLikes(): Promise<string[] | null> {
   return error ? null : (data as { slug: string }[]).map((r) => r.slug);
 }
 
-/** Plays per day for the last 14 days (oldest first), keyed by game id. */
-export async function myGameStats(): Promise<Record<string, number[]>> {
+/** Plays and seconds played per day for the last 30 days (oldest first), keyed by game id. */
+export async function myGameStats(): Promise<Record<string, { plays: number[]; seconds: number[] }>> {
   const { data, error } = await supabase.rpc("my_game_stats");
   if (error) throw error;
-  return Object.fromEntries((data as { game_id: string; daily: number[] }[]).map((r) => [r.game_id, r.daily]));
+  return Object.fromEntries(
+    (data as { game_id: string; daily: number[]; seconds?: number[] }[]).map((r) => [
+      r.game_id,
+      { plays: r.daily, seconds: r.seconds ?? r.daily.map(() => 0) },
+    ]),
+  );
 }
 
 /** The game at this address: its current slug, or (for links from before a rename) an old one. */

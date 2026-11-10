@@ -57,11 +57,15 @@ export interface ProfilePage extends Person {
   friend_count: number;
   /** liked games, newest first */
   likes: string[];
+  /** Playtime (seconds), games played, high scores and favorites. Missing before the playtime update. */
+  stats?: { seconds: number; games: number; scores: number; likes: number };
   banned_until?: string | null;
   // Only for the player themself and their friends:
   last_seen?: string | null;
   playing?: string | null;
   recent?: string[];
+  /** Up to 6 games with the most playtime, most first. */
+  most_played?: { game_id: string; seconds: number }[];
 }
 
 export const getProfile = (username: string) => rpc<ProfilePage | null>("get_profile", { p_username: username });
