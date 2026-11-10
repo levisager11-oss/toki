@@ -9,7 +9,7 @@ import type { Db } from "./db.js";
 import { decrypt } from "./secrets.js";
 import { r2, r2Configured, type R2, type R2Config } from "./r2.js";
 import {
-  isSmallVersion, KEEP_PREVIOUS_DAYS, MAX_GAME_BYTES, planFiles, readTokiJson, siteFor, siteUrl, type PlanError, type TokiJson,
+  isHostedUrl, isSmallVersion, KEEP_PREVIOUS_DAYS, MAX_GAME_BYTES, planFiles, readTokiJson, siteFor, siteUrl, type PlanError, type TokiJson,
 } from "../src/lib/hostingRules.js";
 
 /** All games together stay below Cloudflare's free 10 GB. */
@@ -74,8 +74,9 @@ interface GameRow {
   needs_isolation: boolean;
   thumbnail_url: string | null;
   screenshots: string[];
+  play_url?: string;
 }
-const GAME_COLS = "id,slug,title,created_by,hosted_site,needs_isolation,thumbnail_url,screenshots";
+const GAME_COLS = "id,slug,title,created_by,hosted_site,needs_isolation,thumbnail_url,screenshots,play_url";
 
 export function slugify(title: string): string {
   return title.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40).replace(/-+$/, "");
@@ -241,6 +242,12 @@ export async function finishUpload(deps: Deps, user: HostUser, b: Record<string,
   const playUrl = siteUrl(build.site, config.domain, build.entry);
   const base = siteUrl(build.site, config.domain);
   const patch: Record<string, unknown> = { play_url: playUrl, needs_isolation: isolation };
+  // The game ran at a link elsewhere until now: Toki remembers it, so players' progress comes
+  // along from there (src/lib/movedSaves.ts), however the game moved (upload, GitHub, Move to Toki).
+  if (game.play_url && /^https:\/\//i.test(game.play_url) && !isHostedUrl(game.play_url, config.domain)) {
+    patch.moved_from = game.play_url.slice(0, 500);
+    patch.moved_at = now.toISOString();
+  }
   if (toki.title) patch.title = toki.title;
   if (toki.description) patch.description = toki.description;
   if (toki.description_de) patch.description_de = toki.description_de;

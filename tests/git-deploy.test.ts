@@ -5,40 +5,7 @@ import { deployCommit, filesIn, gamesForPush, readTar, validSignature } from "..
 import type { Db } from "../server/db";
 import type { GitHubClient } from "../server/github";
 import type { Deps } from "../server/hosting";
-
-/** A tar the way GitHub makes them: a global pax header, one top folder, pax for long names. */
-function tar(files: Record<string, string>): Uint8Array {
-  const blocks: Buffer[] = [];
-  const header = (name: string, size: number, type: string) => {
-    const h = Buffer.alloc(512);
-    h.write(name.slice(0, 100), 0);
-    h.write("0000644\0", 100);
-    h.write(size.toString(8).padStart(11, "0") + "\0", 124);
-    h.write(type, 156);
-    h.write("ustar\0", 257);
-    h.fill(32, 148, 156);
-    let sum = 0;
-    for (const b of h) sum += b;
-    h.write(sum.toString(8).padStart(6, "0") + "\0 ", 148);
-    return h;
-  };
-  const add = (name: string, body: Buffer, type: string) => {
-    blocks.push(header(name, body.length, type), body, Buffer.alloc((512 - (body.length % 512)) % 512));
-  };
-  add("pax_global_header", Buffer.from("52 comment=0123456789012345678901234567890123456789\n"), "g");
-  for (const [name, text] of Object.entries(files)) {
-    const full = `lu-moon-hop-0123456/${name}`;
-    if (full.length > 100) {
-      const rec = `path=${full}\n`;
-      let len = rec.length + 3;
-      len = rec.length + String(len).length + 1;
-      add("PaxHeader", Buffer.from(`${len} ${rec}`), "x");
-    }
-    add(full.slice(0, 100), Buffer.from(text), "0");
-  }
-  blocks.push(Buffer.alloc(1024));
-  return Buffer.concat(blocks);
-}
+import { tar } from "./fakes";
 
 describe("reading a repository", () => {
   const long = `${"deep/".repeat(25)}x.js`;

@@ -194,3 +194,28 @@ export function readTokiJson(raw: unknown): TokiJson {
 
 /** A small fix (1.2.1) shows under its main version; see 20261113090000_small_releases.sql. */
 export const isSmallVersion = (v: string) => /^v?\d+\.\d+\.[1-9]\d*$/i.test(v.trim());
+
+/** For a GitHub Pages address: the repositories it may come from, and the folder inside. */
+export function pagesRepos(playUrl: string): { repo: string; sub: string }[] {
+  let u: URL;
+  try {
+    u = new URL(playUrl);
+  } catch {
+    return [];
+  }
+  const m = /^([a-z0-9-]+)\.github\.io$/i.exec(u.hostname);
+  if (!m) return [];
+  const owner = m[1];
+  const parts = u.pathname.split("/").filter(Boolean).map((p) => {
+    try {
+      return decodeURIComponent(p);
+    } catch {
+      return p;
+    }
+  });
+  if (parts.length && /\.html?$/i.test(parts[parts.length - 1])) parts.pop();
+  const out: { repo: string; sub: string }[] = [];
+  if (parts[0] && /^[\w.-]+$/.test(parts[0])) out.push({ repo: `${owner}/${parts[0]}`, sub: parts.slice(1).join("/") });
+  out.push({ repo: `${owner}/${owner}.github.io`, sub: parts.join("/") });
+  return out;
+}
