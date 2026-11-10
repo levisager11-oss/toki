@@ -82,6 +82,15 @@ export function Notifications() {
           to: g ? (fresh && d.code ? joinPath(g.slug, d.code) : `/game/${g.slug}`) : "/",
         };
       }
+      case "game_idea": {
+        const title = d.title ?? "";
+        const to = `/ideas/${d.idea}`;
+        if (d.event === "new") return { line: t("notif.ideaNew", { who, title }), to };
+        if (d.event === "claimed") return { line: t("notif.ideaClaimed", { who, title }), to };
+        if (d.event === "released") return { line: t("notif.ideaReleased", { title }), to };
+        if (d.event === "done") return { line: t("notif.ideaDone", { who, title }), to };
+        return { line: t("notif.ideaReply", { who, title }), to };
+      }
       case "dev_news":
         return d.topic === "multiplayer" ? { line: t("notif.devMultiplayer"), to: "/my-games#toki-features" } : { line: t("notif.devNews"), to: "/my-games#toki-features" };
       default:

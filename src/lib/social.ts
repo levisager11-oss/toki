@@ -261,7 +261,9 @@ export type NotificationKind =
   /** a friend invites you into their room in a multiplayer game */
   | "game_invite"
   /** Toki can do something new for developers' games */
-  | "dev_news";
+  | "dev_news"
+  /** a game idea: proposed (to developers), a reply, claimed, given back or done */
+  | "game_idea";
 
 export interface Notification {
   id: number;
@@ -272,6 +274,9 @@ export interface Notification {
     code?: string;
     /** dev_news: what is new, e.g. "multiplayer" */
     topic?: string;
+    /** game_idea: the idea, and what happened to it */
+    idea?: string;
+    event?: "new" | "reply" | "claimed" | "released" | "done";
   };
   created_at: string;
   read_at: string | null;

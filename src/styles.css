@@ -1073,3 +1073,28 @@ main.content:focus { outline: none; }
   .stat-strip > div { flex-basis: 50%; border-bottom: 1px solid var(--line); }
   .bars { height: 140px; gap: 1px; }
 }
+
+/* game ideas: "Missing a game you want?" on the home page */
+.idea-box { border: 1px solid var(--fg); border-left: 6px solid var(--accent); background: var(--surface); padding: 20px 22px; display: flex; flex-direction: column; gap: 14px; }
+.idea-box-head { display: flex; align-items: center; justify-content: space-between; gap: 16px 28px; flex-wrap: wrap; }
+.idea-box-txt { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.idea-box h2 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -.01em; }
+.idea-box p { margin: 0; color: var(--muted); max-width: 60ch; }
+.idea-box .check { color: var(--fg); max-width: none; }
+.idea-box .idea-form { border: 0; border-top: 1px solid var(--line); padding: 4px 0 0; background: none; }
+.idea-form { max-width: 720px; }
+.idea-form small { margin-top: 4px; }
+.idea-post .fb-manage p { margin: 0; }
+.idea-post .fb-manage-row:empty { display: none; }
+.admin-setting { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+.admin-setting h2 { margin: 0; font-size: 18px; font-weight: 800; }
+.admin-setting .check > span { display: flex; flex-direction: column; gap: 2px; font-weight: 600; }
+.admin-setting .check .sub { font-weight: 400; }
+@media (max-width: 860px) {
+  .idea-box { padding: 16px; }
+  .idea-box .actions { width: 100%; }
+  .idea-box .actions .btn { flex: 1; padding-block: 11px; white-space: normal; text-align: center; }
+  .idea-box .actions .linkish { width: 100%; text-align: center; padding: 6px 0; }
+}
+.idea-post > .fb-body { margin-left: 0; }
+.admin-setting label.check { display: flex; gap: 10px; cursor: pointer; }
