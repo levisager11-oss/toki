@@ -90,9 +90,12 @@ export interface HelpTurn {
   role: "user" | "assistant";
   content: string;
 }
-/** The game helper's answer to the conversation so far (the last turn is the player's question). */
-export const askHelper = (gameId: string | null, messages: HelpTurn[], lang: Lang) =>
-  assist<{ text: string }>({ action: "help", game_id: gameId, messages, lang }).then((r) => r.text);
+/**
+ * The game helper's answer to the conversation so far (the last turn is the player's question).
+ * progress: the player's save in this game as short text (saveSummary), and when the game made it.
+ */
+export const askHelper = (gameId: string | null, messages: HelpTurn[], lang: Lang, progress?: { save: string; saved_at: number }) =>
+  assist<{ text: string }>({ action: "help", game_id: gameId, messages, lang, ...progress }).then((r) => r.text);
 
 export interface GameHelp {
   notes: string;

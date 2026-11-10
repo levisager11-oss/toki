@@ -4,6 +4,8 @@
 //
 // Whatever the AI reads comes from the database, never from the request: posts, replies and chat
 // messages are read with the account's own login, so row level security decides what it may see.
+// (Only a player's own words come with the request: their question to the game helper, and their
+// own save in that game as this browser has it.)
 // Each account may make only so many free calls an hour per feature (ai_free_take).
 import { createHash } from "node:crypto";
 import { AiError } from "../server/ai/provider.js";
@@ -13,7 +15,8 @@ import {
   similarPrompt, suggestPrompt, translatePrompt, type CatalogGame, type InboxPost, type Lang,
 } from "../server/assist/prompts.js";
 import { linksIn, readPage } from "../server/assist/pages.js";
-import { cleanTurns, guideFiles, helpPrompt, learnPrompt, type HelpGame } from "../server/assist/help.js";
+import { cleanTurns, guideFiles, helpPrompt, learnPrompt, scoreText, type HelpGame, type HelpPlayer } from "../server/assist/help.js";
+import { MAX_SAVE_SUMMARY } from "../src/lib/saveSummary.js";
 import { pickFiles } from "../server/connect/files.js";
 import { errorDetail } from "../server/connect/agent.js";
 import { DbError, userDb, type Db } from "../server/db.js";
@@ -397,13 +400,29 @@ async function help(ctx: Ctx, b: Record<string, unknown>, lang: Lang) {
   const turns = cleanTurns(b.messages);
   if (!turns.length) return json({ error: "bad_request" }, 400);
   let game: HelpGame | null = null;
+  let player: HelpPlayer | null = null;
   if (isUuid(b.game_id)) {
-    const [g] = await ctx.db.select<{ title: string; slug: string; category: string; description: string; description_de: string | null; controls: string; author: { username: string } | null }>(
+    const [g] = await ctx.db.select<{ title: string; slug: string; category: string; description: string; description_de: string | null; controls: string; score_format: string; author: { username: string } | null }>(
       "games",
-      `id=eq.${b.game_id}&select=title,slug,category,description,description_de,controls,author:profiles!games_created_by_fkey(username)`,
+      `id=eq.${b.game_id}&select=title,slug,category,description,description_de,controls,score_format,author:profiles!games_created_by_fkey(username)`,
     );
     if (!g) return json({ error: "not_found" }, 404);
-    const [h] = await ctx.db.select<{ notes: string; guide: string }>("game_help", `game_id=eq.${b.game_id}&select=notes,guide`);
+    const mine = `game_id=eq.${b.game_id}&user_id=eq.${ctx.user.id}`;
+    // Where the player is: their save as the game page has it, and their best score and playtime.
+    const [[h], [best], [time]] = await Promise.all([
+      ctx.db.select<{ notes: string; guide: string }>("game_help", `game_id=eq.${b.game_id}&select=notes,guide`),
+      ctx.db.select<{ score: number }>("game_scores", `${mine}&select=score`).catch(() => []),
+      ctx.db.select<{ seconds: number }>("playtime", `${mine}&select=seconds`).catch(() => []),
+    ]);
+    const save = str(b.save, MAX_SAVE_SUMMARY);
+    const ago = typeof b.saved_at === "number" ? Math.round((Date.now() - b.saved_at) / 1000) : NaN;
+    player = {
+      save,
+      // The time is from the player's device: only used when it makes sense.
+      savedAgo: save && ago >= 0 && ago < 400 * 86_400 ? ago : null,
+      best: best ? scoreText(Number(best.score), g.score_format) : null,
+      seconds: time?.seconds ?? 0,
+    };
     game = {
       title: g.title,
       slug: g.slug,
@@ -415,7 +434,7 @@ async function help(ctx: Ctx, b: Record<string, unknown>, lang: Lang) {
       guide: h?.guide ?? "",
     };
   }
-  const answer = await ask(ctx, "help", helpPrompt(game, turns, lang), 0.3);
+  const answer = await ask(ctx, "help", helpPrompt(game, turns, lang, player), 0.3);
   const text = plain(answer, 3000);
   return text ? json({ text }) : json({ error: "ai_empty_answer" }, 502);
 }
