@@ -84,6 +84,19 @@ export const describeGame = (g: { title: string; category: string; engine: strin
 
 /** gameId: one game, "toki" (Toki's own board, admins), or null for all the account's games. */
 export const summarizeInbox = (gameId: string | null, lang: Lang) => assist<{ text: string }>({ action: "summary", game_id: gameId, lang }).then((r) => r.text);
+
+export type SkipReason = "unclear" | "spam" | "off_topic" | "answered" | "unsafe" | "other";
+export interface ImprovePrompt {
+  /** the prompt to give to an AI that works on the code; "" when no post was useful */
+  prompt: string;
+  /** open posts read, and how many of them are in the prompt */
+  total: number;
+  used: number;
+  /** posts left out, and why */
+  skipped: { id: string; title: string; why: SkipReason }[];
+}
+/** gameId: a game, or "toki" for Toki itself (admins). */
+export const improvePrompt = (gameId: string, lang: Lang) => assist<ImprovePrompt>({ action: "improve", game_id: gameId, lang });
 export const summarizeApplication = (id: string, lang: Lang) => assist<{ text: string }>({ action: "application", id, lang }).then((r) => r.text);
 
 export interface HelpTurn {

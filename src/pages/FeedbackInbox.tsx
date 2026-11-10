@@ -10,6 +10,7 @@ import {
 } from "../lib/feedback";
 import { ListSkeleton, PostRow, useStatusLabel } from "../components/FeedbackBits";
 import { SummaryButton } from "../components/AiBits";
+import { PromptButton } from "../components/PromptButton";
 import { summarizeInbox } from "../lib/assist";
 import { useTitle } from "../lib/useTitle";
 
@@ -51,6 +52,12 @@ export function FeedbackInbox() {
     [posts, game],
   );
   const summary = useMemo(() => summarize(ofGame), [ofGame]);
+  // A prompt is for one game's code: the chosen game, or the only one with feedback.
+  const promptFor = useMemo(() => {
+    if (game) return game;
+    const withPosts = new Set((posts ?? []).map((p) => p.game_id ?? TOKI));
+    return withPosts.size === 1 ? [...withPosts][0] : "";
+  }, [game, posts]);
   const shown = ofGame.filter(
     (p) =>
       (!kind || p.kind === kind) &&
@@ -92,6 +99,7 @@ export function FeedbackInbox() {
       ) : (
         <>
           <SummaryButton key={game} label={t("fb.inbox.aiSummary")} load={() => summarizeInbox(game || null, lang)} />
+          <PromptButton key={`p${promptFor}`} gameId={promptFor} />
           <div className="fb-tiles">
             {tile("reply", summary.needsReply, t("fb.inbox.needsReply"), onlyNeedsReply, () => {
               setOnlyNeedsReply(!onlyNeedsReply);

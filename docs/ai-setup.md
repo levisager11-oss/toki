@@ -65,8 +65,10 @@ It does the small helpers (`api/assist.ts`, prompts in `server/assist/prompts.ts
 - **You might like:** game suggestions on the home page, from what a player liked and played
   (saved for a day per account).
 - For developers: **release note drafts** (from a few words, the ticked feedback and the commits
-  on GitHub since the last update), **game descriptions** in both languages, and a **summary of
-  the feedback inbox**. For admins: a **summary of a developer application** (with what its links show).
+  on GitHub since the last update), **game descriptions** in both languages, a **summary of
+  the feedback inbox**, and a **prompt for a coding AI** made from a game's open feedback (the free AI
+  sorts out posts that don't help and puts the same wishes together; Toki writes the prompt around
+  its tasks, without the players' own words or links: `improvePrompt` in `server/assist/prompts.ts`). For admins: a **summary of a developer application** (with what its links show).
 - **Toki Connect's easy steps** (if ticked): it reads the code and asks the developer; only the
   step that writes the change uses the strong AI. If the free AI fails, the strong AI takes over.
 
