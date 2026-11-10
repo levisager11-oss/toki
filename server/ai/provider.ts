@@ -37,6 +37,8 @@ export class AiError extends Error {
     message: string = code,
     /** The HTTP status when the service answered with an error (it then didn't work on the request). */
     readonly status?: number,
+    /** Output tokens the service still charged for (e.g. thinking that never got to an answer). */
+    readonly outputTokens?: number,
   ) {
     super(message);
   }
@@ -192,7 +194,8 @@ async function openaiCompatible(
   const { text, usage } = answer;
   if (!text.trim()) {
     // Thinking models can use all their tokens for thinking and never get to the answer.
-    throw new AiError("empty_answer", answer.finish === "length" ? "The model used all its tokens before writing an answer." : "empty_answer");
+    if (answer.finish === "length") throw new AiError("empty_answer", "The model used all its tokens before writing an answer.", undefined, usage?.completion_tokens ?? req.maxTokens);
+    throw new AiError("empty_answer");
   }
   const known = typeof usage?.prompt_tokens === "number" && typeof usage?.completion_tokens === "number";
   return {

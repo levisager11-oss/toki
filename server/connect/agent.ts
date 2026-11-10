@@ -12,7 +12,7 @@
 // A run either adds Toki features (saves, high scores, friend invites for multiplayer) or fixes
 // a bug from a feedback post.
 import { integrationGuide } from "../../src/lib/integration.js";
-import { AiError, type ChatMessage } from "../ai/provider.js";
+import { AiError, type ChatMessage, type Thinking } from "../ai/provider.js";
 import { DbError } from "../db.js";
 import { GitHubError, type TreeEntry } from "../github.js";
 import { applyEdits, MAX_FILE, parseAiJson, pickFiles, readable } from "./files.js";
@@ -51,6 +51,8 @@ export interface JobState {
   askRounds?: number;
   fixes?: number;
   badAnswers?: number;
+  /** How often the strong AI ran out of tokens while thinking; each time it thinks less. */
+  outOfTokens?: number;
   /** Toki's note to the AI about its last answer (e.g. edits that didn't apply). */
   feedback?: string;
   /** "explore": the free AI reads and asks; "decide": the strong AI (only it changes code). */
@@ -110,13 +112,15 @@ export interface RepoAccess {
 export interface Deps {
   repo(): Promise<RepoAccess>;
   /** One AI call within the developer's budget (the strong AI); returns the answer text. */
-  ai(messages: ChatMessage[], maxTokens: number): Promise<string>;
+  ai(messages: ChatMessage[], maxTokens: number, opts?: { thinking?: Thinking }): Promise<string>;
   /** One call to the free AI, when it may do the easy steps. */
   free?(messages: ChatMessage[], maxTokens: number): Promise<string>;
   /** public/toki-save.js */
   script(): Promise<string>;
   /** Toki's address, for the pull request text. */
   origin: string;
+  /** Most tokens the strong AI may write per step (the admin's setting); MAX_OUTPUT_TOKENS when not set. */
+  maxOutputTokens?: number;
   now?(): Date;
 }
 
@@ -134,9 +138,11 @@ export const MAX_AI_CALLS = 8;
 /** Calls the free AI may make before the strong AI takes over. */
 export const MAX_FREE_CALLS = 5;
 const EXPLORE_TOKENS = 8000;
-// Room for whole files in one answer. Only what the model really writes is paid for; the
-// budget just holds back the most one call could cost until it is done.
+// Room for whole files in one answer, unless the admin chose another limit. Only what the model
+// really writes is paid for; the budget just holds back the most one call could cost until it is done.
 export const MAX_OUTPUT_TOKENS = 32000;
+/** After the AI ran out of tokens while thinking: how much it may think on the next tries. */
+export const LESS_THINKING: Thinking[] = ["medium", "low"];
 
 /** Error codes the page explains to the developer. */
 export function errorCode(e: unknown): string {
@@ -202,7 +208,18 @@ export async function step(job: Job, deps: Deps): Promise<StepResult> {
     if (deps.free) state.phase = "decide";
     if ((state.aiCalls ?? 0) >= MAX_AI_CALLS) return fail("too_many_steps");
 
-    const reply = await deps.ai(prompt(job, state, messages, script), MAX_OUTPUT_TOKENS);
+    const tries = state.outOfTokens ?? 0;
+    let reply: string;
+    try {
+      reply = await deps.ai(prompt(job, state, messages, script), deps.maxOutputTokens ?? MAX_OUTPUT_TOKENS, tries ? { thinking: LESS_THINKING[tries - 1] } : undefined);
+    } catch (e) {
+      // A thinking model can use all its tokens for thinking and never write the answer. Try
+      // again with less thinking (twice at most) instead of giving up.
+      if (!(e instanceof AiError && e.code === "empty_answer" && tries < LESS_THINKING.length)) throw e;
+      state.aiCalls = (state.aiCalls ?? 0) + 1;
+      state.outOfTokens = tries + 1;
+      return retry("Your last answer ran out of tokens while you were thinking, before you wrote the JSON. Think briefly, then write the JSON answer. Keep edits small: use search/replace edits instead of whole files.");
+    }
     state.aiCalls = (state.aiCalls ?? 0) + 1;
     let a: Record<string, unknown>;
     try {

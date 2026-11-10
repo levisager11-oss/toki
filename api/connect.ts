@@ -191,12 +191,13 @@ async function run(ctx: Ctx, b: Record<string, unknown>, origin: string) {
     return view(ctx, job.id);
   }
   // The free AI does the easy steps, when it's set up and the admin allows it.
-  const [opts] = await ctx.db.select<{ connect_free_steps: boolean }>("ai_settings", "id=eq.1&select=connect_free_steps");
+  const [opts] = await ctx.db.select<{ connect_free_steps: boolean; max_output_tokens: number | null }>("ai_settings", "id=eq.1&select=connect_free_steps,max_output_tokens");
   const freeAi = opts?.connect_free_steps && (ctx.env.freeAiKey || ctx.env.aiKey) ? await freeSettings(ctx.db) : null;
   const gh = github(ctx.env.github);
   const freeOnly = job.ai === "free" ? await freeSettings(ctx.db) : null;
   const result = await step({ ...job, game, bug }, {
     origin: SITE_URL,
+    maxOutputTokens: opts?.max_output_tokens ?? undefined,
     async repo() {
       if (job.source === "upload") {
         const { config } = await r2Config(ctx.db, ctx.env.serviceKey);
@@ -208,13 +209,13 @@ async function run(ctx: Ctx, b: Record<string, unknown>, origin: string) {
       if (!owned || job.installation_id === null) throw new DbError("not_allowed", 403);
       return gh.repo(job.installation_id, job.repo);
     },
-    async ai(messages, maxTokens) {
+    async ai(messages, maxTokens, opts) {
       // One-click runs where the admin chose the free AI: it writes the code too (no cost).
       if (job.ai === "free") {
         const c = await freeCompletion({ db: ctx.db, keys: { free: ctx.env.freeAiKey, openai: ctx.env.aiKey }, userId: ctx.user.id, feature: "connect", messages, settings: freeOnly, timeoutMs: 240_000 });
         return c.text;
       }
-      const c = await budgetedCompletion({ db: ctx.db, keys: { openai_compatible: ctx.env.aiKey, anthropic: ctx.env.anthropicKey }, userId: ctx.user.id, feature: "connect", jobId: job.id, messages, maxTokens });
+      const c = await budgetedCompletion({ db: ctx.db, keys: { openai_compatible: ctx.env.aiKey, anthropic: ctx.env.anthropicKey }, userId: ctx.user.id, feature: "connect", jobId: job.id, messages, maxTokens, thinking: opts?.thinking });
       return c.text;
     },
     ...(freeAi && job.ai !== "free"
