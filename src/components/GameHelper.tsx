@@ -3,6 +3,8 @@ import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
 import { askHelper, assistError, type HelpTurn } from "../lib/assist";
+import { browserStorage, readRecord } from "../lib/saves";
+import { saveSummary } from "../lib/saveSummary";
 import { AiText } from "./AiBits";
 
 const MAX_TURNS = 20;
@@ -28,6 +30,13 @@ export function GameHelper({ game, onClose }: { game: { id: string; title: strin
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const list = useRef<HTMLDivElement>(null);
+  // The player's progress as the game last saved it on this device, so hints fit where they are.
+  const progress = () => {
+    const rec = session ? readRecord(browserStorage, session.user.id, game.id) : null;
+    const save = rec ? saveSummary(rec.save.keys) : "";
+    return save ? { save, saved_at: rec!.save.t } : undefined;
+  };
+  const [hasSave] = useState(() => !!progress());
 
   useEffect(() => {
     try {
@@ -48,7 +57,7 @@ export function GameHelper({ game, onClose }: { game: { id: string; title: strin
     setBusy(true);
     setErr("");
     try {
-      const answer = await askHelper(game.id, next, lang);
+      const answer = await askHelper(game.id, next, lang, progress());
       setTurns([...next, { role: "assistant", content: answer }]);
     } catch (e) {
       setErr(t(`assist.err.${assistError(e)}`));
@@ -59,7 +68,7 @@ export function GameHelper({ game, onClose }: { game: { id: string; title: strin
     setBusy(false);
   };
 
-  const starters = [t("helper.q.stuck"), t("helper.q.controls"), t("helper.q.saves")];
+  const starters = [t("helper.q.stuck"), ...(hasSave ? [t("helper.q.next")] : []), t("helper.q.controls"), t("helper.q.saves")];
 
   return (
     <section className="ai-box helper" aria-labelledby="helper-h">
@@ -79,7 +88,7 @@ export function GameHelper({ game, onClose }: { game: { id: string; title: strin
           <div className="helper-list" ref={list} aria-live="polite">
             {turns.length === 0 && (
               <>
-                <p className="hint">{t("helper.lead")}</p>
+                <p className="hint">{t("helper.lead")}{hasSave && ` ${t("helper.seesSave")}`}</p>
                 <div className="chips helper-starters">
                   {starters.map((s) => <button key={s} type="button" onClick={() => send(undefined, s)} disabled={busy}>{s}</button>)}
                 </div>

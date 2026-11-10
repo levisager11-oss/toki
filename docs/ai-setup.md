@@ -73,7 +73,10 @@ It does the small helpers (`api/assist.ts`, prompts in `server/assist/prompts.ts
 - **Ask AI (game helper):** a button on every game's page opens a small chat under the game for
   players who are stuck or have a question about Toki. It answers from the game's description and
   controls, the developer's tips, a short player's guide it learned once from the game's GitHub
-  repository, and a guide to Toki (`server/assist/help.ts`). Developers set it up at the bottom of
+  repository, and a guide to Toki (`server/assist/help.ts`). It also knows where the asking player
+  is: the game page sends their save in this game as short text (`src/lib/saveSummary.ts`: at most
+  6000 characters, long lists and packed data shortened, logins and e-mail addresses left out), and
+  the server adds their best score and playtime. Developers set it up at the bottom of
   their game's form ("AI helper for players"): tips, and "Learn from GitHub" (one call, saved in
   `game_help`; "Learn again" after an update).
 
