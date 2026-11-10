@@ -560,9 +560,9 @@ describe("stored secrets", async () => {
     expect((await withSecrets(db, env())).sources.aiKey).toBeNull();
   });
 
-  it("ask GitHub for an app that reads code, opens pull requests and reports pushes", () => {
+  it("ask GitHub for an app that reads code, opens pull requests, adds the build file and reports pushes", () => {
     const m = githubManifest("https://www.playtoki.app");
-    expect(m.default_permissions).toEqual({ contents: "write", pull_requests: "write", metadata: "read" });
+    expect(m.default_permissions).toEqual({ contents: "write", pull_requests: "write", metadata: "read", workflows: "write" });
     expect(m.callback_urls).toEqual(["https://www.playtoki.app/connect/github"]);
     expect(m.redirect_url).toBe("https://www.playtoki.app/admin/ai");
     expect(m.request_oauth_on_install).toBe(true);

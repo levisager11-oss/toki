@@ -15,6 +15,8 @@ import { deployCommit, type GitRow } from "../server/gitDeploy.js";
 import { github, GitHubError } from "../server/github.js";
 import { MAX_GAME_BYTES } from "../src/lib/hostingRules.js";
 import { checkMove, moveBack, moveGame, type GitHubAccess } from "../server/migrate.js";
+import { ACTIONS_ISSUER, ActionsAuthError, gameForAction, looksLikeJwt, verifyActionToken, type ActionClaims } from "../server/actionsAuth.js";
+import { buildKind, setUpBuild, type BuildSetup } from "../server/gitBuild.js";
 
 interface Who {
   db: Db;
@@ -22,9 +24,14 @@ interface Who {
   user: HostUser & { username: string };
   /** Logged in on the website (not with an upload key) */
   session: boolean;
+  /** A GitHub Actions run (no key): it may only upload to this game, for this commit */
+  action?: { game_id: string; repo: string; branch: string; sha: string };
 }
 
-/** The account behind a login (Bearer <Supabase token>) or an upload key (Bearer toki_…). */
+/**
+ * The account behind a login (Bearer <Supabase token>), an upload key (Bearer toki_…), or a
+ * GitHub Actions run of a game Toki builds with GitHub Actions (Bearer <GitHub's signed token>).
+ */
 async function who(request: Request): Promise<Who | Response> {
   const env = serverEnv();
   if (!env.serviceKey) return json({ error: "not_configured" }, 503);
@@ -34,6 +41,24 @@ async function who(request: Request): Promise<Who | Response> {
   const db = serviceDb(env.serviceKey);
   let id: string | undefined;
   let session = false;
+  if (looksLikeJwt(token) && !token.startsWith(KEY_PREFIX)) {
+    // Supabase logins are signed tokens too: only GitHub's are checked here, the rest below.
+    let claims: ActionClaims | null = null;
+    try {
+      const payload = JSON.parse(Buffer.from(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8")) as { iss?: string };
+      if (payload.iss === ACTIONS_ISSUER) claims = await verifyActionToken(token);
+    } catch (e) {
+      if (e instanceof ActionsAuthError) return json({ error: "actions_token", message: e.message }, 401);
+    }
+    if (claims) {
+      const hit = await gameForAction(db, claims);
+      if (!hit) return json({ error: "not_followed", message: `${claims.repository} ${claims.ref}` }, 403);
+      return {
+        db, serviceKey: env.serviceKey, user: hit.user, session: false,
+        action: { game_id: hit.game_id, repo: claims.repository, branch: claims.ref.slice("refs/heads/".length), sha: claims.sha },
+      };
+    }
+  }
   if (token.startsWith(KEY_PREFIX)) {
     if (!isUploadKey(token)) return json({ error: "bad_key" }, 401);
     const [key] = await db.select<{ id: string; user_id: string }>("upload_keys", `key_hash=eq.${hashKey(token)}&select=id,user_id`);
@@ -104,13 +129,13 @@ export async function POST(request: Request) {
   const b = await body(request);
 
   // Settings, keys and GitHub: only when logged in on the website.
-  const SESSION_ONLY = ["create_key", "set_config", "clear_config", "test_config", "set_webhook_secret", "git_branches", "git_connect", "git_deploy", "git_disconnect"];
+  const SESSION_ONLY = ["create_key", "set_config", "clear_config", "test_config", "set_webhook_secret", "git_branches", "git_connect", "git_deploy", "git_disconnect", "git_build"];
   if (typeof b.action === "string" && SESSION_ONLY.includes(b.action)) {
     if (!w.session) return json({ error: "not_allowed" }, 403);
     if (b.action === "create_key") return createKey(w, b);
     if (b.action.startsWith("git_")) {
       try {
-        return await git(w, b);
+        return await git(w, b, new URL(request.url).origin);
       } catch (e) {
         if (e instanceof GitHubError) return json({ error: "github_error", message: e.message.slice(0, 200) }, 502);
         return failed(e);
@@ -129,6 +154,7 @@ export async function POST(request: Request) {
   const { config } = await r2Config(w.db, w.serviceKey);
   if (!config) return json({ error: "hosting_off" }, 503);
   const deps = hostingDeps(w.db, config);
+  if (w.action) return actionUpload(w, deps, b);
   try {
     switch (b.action) {
       case "start":
@@ -146,8 +172,8 @@ export async function POST(request: Request) {
         return json(
           await moveGame(deps, w.user, b.game_id, {
             git: await gitAccess(w),
+            origin: new URL(request.url).origin,
             anyway: b.anyway === true,
-            partial: b.partial === true,
             repo: typeof b.installation_id === "number" && typeof b.repo === "string" && /^[\w.-]+\/[\w.-]+$/.test(b.repo) ? { installation_id: b.installation_id, repo: b.repo } : null,
           }),
         );
@@ -164,6 +190,34 @@ export async function POST(request: Request) {
         return json({ error: "bad_request" }, 400);
     }
   } catch (e) {
+    return failed(e);
+  }
+}
+
+/**
+ * A GitHub Actions run of a game Toki builds with GitHub Actions: it may only put that game's new
+ * version live (start, finish), and the game's repository row shows how it went.
+ */
+async function actionUpload(w: Who, deps: ReturnType<typeof hostingDeps>, b: Record<string, unknown>): Promise<Response> {
+  const a = w.action!;
+  const mark = (patch: Record<string, unknown>) => w.db.update("game_git", `game_id=eq.${a.game_id}`, { ...patch, updated_at: new Date().toISOString() }).catch(() => {});
+  try {
+    if (b.action === "start") {
+      await mark({ status: "deploying", last_sha: a.sha, error: null });
+      // The run names no game: it is the one that follows its repository and branch.
+      return json(await startUpload(deps, w.user, { ...b, game_id: a.game_id, slug: undefined }));
+    }
+    if (b.action === "finish") {
+      if (typeof b.build_id !== "string" || !isUuid(b.build_id)) return json({ error: "bad_request" }, 400);
+      const [build] = await w.db.select<{ game_id: string }>("game_builds", `id=eq.${b.build_id}&select=game_id`);
+      if (!build || build.game_id !== a.game_id) return json({ error: "not_allowed" }, 403);
+      const out = await finishUpload(deps, w.user, b);
+      await mark({ status: "live", last_sha: a.sha, error: null });
+      return json(out);
+    }
+    return json({ error: "not_allowed" }, 403);
+  } catch (e) {
+    await mark({ status: "failed", error: e instanceof HostingError ? e.code : "error" });
     return failed(e);
   }
 }
@@ -234,7 +288,7 @@ async function gitAccess(w: Who): Promise<GitHubAccess | null> {
 
 const BRANCH = /^(?!.*\.\.)(?!\/)[\w./-]{1,200}$/;
 
-async function git(w: Who, b: Record<string, unknown>): Promise<Response> {
+async function git(w: Who, b: Record<string, unknown>, origin: string): Promise<Response> {
   const { env } = await withSecrets(w.db, { ...serverEnv(), serviceKey: w.serviceKey });
   if (!githubConfigured(env.github)) return json({ error: "github_off" }, 503);
   const gh = github(env.github);
@@ -259,6 +313,19 @@ async function git(w: Who, b: Record<string, unknown>): Promise<Response> {
     return json({ ok: true });
   }
 
+  /** The repository holds the source: GitHub Actions builds the game on every push (server/gitBuild.ts). */
+  const build = async (r: GitRow): Promise<Response> => {
+    const can = await buildKind(gh, r);
+    if ("cannot" in can) return json({ ok: false, error: "cant_build", engine: can.cannot }, 422);
+    const setup: BuildSetup = await setUpBuild(w.db, gh, r, origin);
+    return json({ ok: true, building: setup });
+  };
+  if (b.action === "git_build") {
+    const [r] = await w.db.select<GitRow>("game_git", `game_id=eq.${g.id}&select=game_id,installation_id,repo,branch,folder,created_by`);
+    if (!r) return json({ error: "no_repo" }, 404);
+    return build(r);
+  }
+
   let row: GitRow;
   if (b.action === "git_connect") {
     const repo = typeof b.repo === "string" ? b.repo.trim() : "";
@@ -272,16 +339,24 @@ async function git(w: Who, b: Record<string, unknown>): Promise<Response> {
     const exact = repos.find((r) => r.repo.toLowerCase() === repo.toLowerCase())!.repo;
     if (!(await (await gh.repo(b.installation_id as number, exact)).branches()).includes(branch)) return json({ error: "no_branch" }, 404);
     row = { game_id: g.id, installation_id: b.installation_id as number, repo: exact, branch, folder, created_by: w.user.id };
-    await w.db.insert("game_git?on_conflict=game_id", { ...row, status: "waiting", error: null, updated_at: new Date().toISOString() }, "resolution=merge-duplicates,return=minimal");
+    await w.db.insert(
+      "game_git?on_conflict=game_id",
+      { ...row, status: "waiting", error: null, build: "none", build_pr: null, updated_at: new Date().toISOString() },
+      "resolution=merge-duplicates,return=minimal",
+    );
   } else if (b.action === "git_deploy") {
-    const [r] = await w.db.select<GitRow>("game_git", `game_id=eq.${g.id}&select=game_id,installation_id,repo,branch,folder,created_by`);
+    const [r] = await w.db.select<GitRow & { build: string }>("game_git", `game_id=eq.${g.id}&select=game_id,installation_id,repo,branch,folder,created_by,build`);
     if (!r) return json({ error: "no_repo" }, 404);
+    // Built by GitHub Actions: the next push (or "Run workflow" on GitHub) puts it live.
+    if (r.build === "action") return build(r);
     row = r;
   } else return json({ error: "bad_request" }, 400);
 
   const { config } = await r2Config(w.db, w.serviceKey);
   if (!config) return json({ error: "hosting_off" }, 503);
   const out = await deployCommit(hostingDeps(w.db, config), gh, row);
+  // The repository holds the source, which must be built first: let GitHub Actions build it.
+  if (!out.ok && out.error === "needs_build") return build(row);
   return json(out, out.ok ? 200 : 422);
 }
 

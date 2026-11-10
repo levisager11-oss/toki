@@ -6,7 +6,7 @@ import { gzipSync } from "node:zlib";
 import { checkMove, crawlGame, dynamicNames, findRepo, moveBack, moveGame, pagesRepos, references, repoCandidates, savesVerdict, siteName, type CrawledFile } from "../server/migrate";
 import { deployCommit } from "../server/gitDeploy";
 import { guessRepo } from "../src/lib/hostingRules";
-import type { GitHubClient } from "../server/github";
+import { GitHubError, type GitHubClient } from "../server/github";
 import { HostingError, type Deps } from "../server/hosting";
 import { fakeDb, fakeStore, tar, type Row } from "./fakes";
 import { HELLO_MS, keepPickedUp, listenForPickup, needsPickup, STORE_MS } from "../src/lib/movedSaves";
@@ -126,10 +126,13 @@ describe("moving a game", () => {
   let tables: Record<string, Row[]>;
   let deps: Deps;
   let puts: string[];
+  let prs: { files: Record<string, string>; base: string }[];
   const put = (async (url: string) => {
     puts.push(url);
     return new Response(null, { status: 200 });
   }) as unknown as typeof fetch;
+  // The game's repository holds its source (Vite); the built game runs at ROOT.
+  const SOURCE = { "index.html": '<script type="module" src="./src/main.ts"></script>', "package.json": '{"scripts":{"build":"vite build"}}', "src/main.ts": "x" };
 
   beforeEach(() => {
     tables = {
@@ -137,29 +140,81 @@ describe("moving a game", () => {
       game_builds: [],
       game_releases: [],
       game_saves: [],
+      game_git: [],
       profiles: [{ id: "dev", role: "creator" }],
     };
     puts = [];
+    prs = [];
     const files = new Map<string, number>();
     const store = fakeStore(files, new Map());
     // The pretend Cloudflare gets each file from its upload link.
     const realPut = put;
     deps = { db: fakeDb(tables), store, config: { accountId: "a", accessKeyId: "k", secretAccessKey: "s", bucket: "games", domain: "playtoki.app" }, now: () => new Date("2026-11-19T10:00:00Z") };
-    puts = [];
     (deps as Deps & { put: typeof fetch }).put = (async (url: string, init?: RequestInit) => {
       const u = new URL(url);
       files.set(decodeURIComponent(u.pathname.slice(1)), Number(u.searchParams.get("size")));
       return realPut(url, init);
     }) as unknown as typeof fetch;
   });
-  const opts = () => ({ fetch: web(SITE).fetchImpl, resolve: publicDns, put: (deps as Deps & { put: typeof fetch }).put });
+  const git = (repos: Record<string, Record<string, Record<string, string>>> = { "lu/moon-hop": { main: SOURCE } }) => ({ gh: fakeGitHub(repos, prs), installations: [7] });
+  const opts = (repos?: Parameters<typeof git>[0]) => ({ fetch: web(SITE).fetchImpl, resolve: publicDns, put: (deps as Deps & { put: typeof fetch }).put, git: git(repos), origin: "https://www.playtoki.app" });
 
-  it("puts the game live on Toki and remembers its old address for players' progress", async () => {
+  it("needs GitHub connected and the game's repository", async () => {
+    await expect(moveGame(deps, DEV, GAME, { ...opts(), git: null })).rejects.toMatchObject({ code: "github_required" });
+    await expect(moveGame(deps, DEV, GAME, opts({ "lu/other": { main: SOURCE } }))).rejects.toMatchObject({ code: "repo_required" });
+    expect(puts).toEqual([]);
+    expect(tables.games[0].play_url).toBe(ROOT);
+  });
+
+  it("copies the built game from its site, and lets GitHub Actions build every push from now on", async () => {
     const out = await moveGame(deps, DEV, GAME, opts());
-    expect(out).toMatchObject({ play_url: "https://moon-hop.playtoki.app/", from: ROOT, files: 15, saves: true });
+    expect(out).toMatchObject({ play_url: "https://moon-hop.playtoki.app/", from: ROOT, files: 15, saves: true, source: "site", repoHelped: { repo: "lu/moon-hop", files: 0 } });
+    expect(out.build).toEqual({ pr: "https://github.com/lu/moon-hop/pull/1", manual: null, ready: false, repo: "lu/moon-hop", branch: "main" });
     expect(puts).toHaveLength(15);
     expect(tables.games[0]).toMatchObject({ play_url: "https://moon-hop.playtoki.app/", hosted_site: "moon-hop", moved_from: ROOT, moved_at: "2026-11-19T10:00:00.000Z", controls: "Space to hop" });
+    // Like a game that was on Toki from the start: it follows its repository.
+    expect(tables.game_git[0]).toMatchObject({ repo: "lu/moon-hop", branch: "main", build: "action", build_pr: "https://github.com/lu/moon-hop/pull/1", status: "waiting" });
+    expect(Object.keys(prs[0].files)).toEqual([".github/workflows/toki.yml"]);
+    expect(prs[0].files[".github/workflows/toki.yml"]).toContain("id-token: write");
     await expect(moveGame(deps, DEV, GAME, opts())).rejects.toMatchObject({ code: "already_hosted" });
+  });
+
+  it("brings the files only the repository names (the game builds their names while running)", async () => {
+    const site = {
+      ...SITE,
+      [`${ROOT}js/main.js`]: { body: `${SITE[`${ROOT}js/main.js`].body} const play = (n) => new Audio(\`audio/\${n}.mp3\`);`, type: "text/javascript" },
+      [`${ROOT}audio/jump.mp3`]: { body: "j", type: "audio/mpeg" },
+      [`${ROOT}audio/land.mp3`]: { body: "l", type: "audio/mpeg" },
+    };
+    const repo = { "lu/moon-hop": { main: { ...SOURCE, "public/audio/jump.mp3": "", "public/audio/land.mp3": "", "public/audio/gone.mp3": "" } } };
+    const out = await moveGame(deps, DEV, GAME, { ...opts(repo), fetch: web(site).fetchImpl });
+    expect(out).toMatchObject({ source: "site", files: 17, repoHelped: { repo: "lu/moon-hop", files: 2 } });
+  });
+
+  it("takes the game from its repository when that has the finished game, and follows it", async () => {
+    const out = await moveGame(deps, DEV, GAME, opts({ "lu/moon-hop": { main: { "project.godot": "" }, "gh-pages": { "index.html": "<html>gh</html>", "index.pck": "p" } } }));
+    expect(out).toMatchObject({ source: "github", github: { repo: "lu/moon-hop", branch: "gh-pages", folder: "" }, build: null, from: ROOT, saves: true, files: 2 });
+    expect(tables.game_git[0]).toMatchObject({ repo: "lu/moon-hop", branch: "gh-pages", status: "live" });
+    expect(tables.games[0]).toMatchObject({ play_url: "https://moon-hop.playtoki.app/", moved_from: ROOT });
+    await moveBack(deps, DEV, GAME);
+    expect(tables.game_git).toEqual([]);
+  });
+
+  it("says when the repository's engine can't be built on GitHub (Unity and the like)", async () => {
+    const out = await moveGame(deps, DEV, GAME, opts({ "lu/moon-hop": { main: { "ProjectSettings/ProjectVersion.txt": "m_EditorVersion: 6000.0", "Assets/Player.cs": "" } } }));
+    expect(out).toMatchObject({ source: "site", build: { cannot: "Unity", repo: "lu/moon-hop" } });
+    expect(tables.game_git).toEqual([]);
+    expect(prs).toEqual([]);
+  });
+
+  it("hands over GitHub's page for the build file when the Toki app may not add workflow files", async () => {
+    const gh = git();
+    (gh.gh as unknown as { failPr: boolean }).failPr = true;
+    const out = await moveGame(deps, DEV, GAME, { ...opts(), git: gh });
+    const b = out.build as { pr: string | null; manual: string };
+    expect(b.pr).toBeNull();
+    expect(b.manual.startsWith("https://github.com/lu/moon-hop/new/main?filename=.github%2Fworkflows%2Ftoki.yml&value=")).toBe(true);
+    expect(tables.game_git[0]).toMatchObject({ build: "action", build_pr: b.manual });
   });
 
   it("doesn't move a game whose saves would stay behind, unless told to", async () => {
@@ -191,6 +246,7 @@ describe("moving a game", () => {
     expect(await moveBack(deps, DEV, GAME)).toEqual({ play_url: ROOT });
     expect(tables.games[0]).toMatchObject({ play_url: ROOT, moved_from: null, moved_at: null });
     expect(tables.game_builds.every((b) => b.status === "deleting")).toBe(true);
+    expect(tables.game_git).toEqual([]);
     await expect(moveBack(deps, DEV, GAME)).rejects.toMatchObject({ code: "not_moved" });
   });
 
@@ -200,40 +256,6 @@ describe("moving a game", () => {
     expect(tables.games[0].play_url).toBe(ROOT);
     const check = await checkMove(deps, DEV, GAME, null, { fetch: web(site).fetchImpl, resolve: publicDns });
     expect(check).toMatchObject({ ok: false, problem: "engine_storage", engine: "Godot", github: null, suggestRepo: "lu/moon-hop" });
-  });
-
-  it("takes the game from its repository when that has the finished game, and follows it", async () => {
-    tables.game_git = [];
-    const gh = fakeGitHub({ "lu/moon-hop": { main: { "project.godot": "" }, "gh-pages": { "index.html": "<html>gh</html>", "index.pck": "p" } } });
-    const out = await moveGame(deps, DEV, GAME, { ...opts(), git: { gh, installations: [7] } });
-    expect(out).toMatchObject({ source: "github", github: { repo: "lu/moon-hop", branch: "gh-pages", folder: "" }, suggestRepo: null, from: ROOT, saves: true, files: 2 });
-    expect(tables.game_git[0]).toMatchObject({ repo: "lu/moon-hop", branch: "gh-pages", status: "live" });
-    expect(tables.games[0]).toMatchObject({ play_url: "https://moon-hop.playtoki.app/", moved_from: ROOT });
-    await moveBack(deps, DEV, GAME);
-    expect(tables.game_git).toEqual([]);
-  });
-
-  it("takes the game from its site when the repository has no finished game, with the files only the repository names", async () => {
-    tables.game_git = [];
-    // The game builds its sound names while running; the files are in the repository's public folder.
-    const site = {
-      ...SITE,
-      [`${ROOT}js/main.js`]: { body: `${SITE[`${ROOT}js/main.js`].body} const play = (n) => new Audio(\`audio/\${n}.mp3\`);`, type: "text/javascript" },
-      [`${ROOT}audio/jump.mp3`]: { body: "j", type: "audio/mpeg" },
-      [`${ROOT}audio/land.mp3`]: { body: "l", type: "audio/mpeg" },
-    };
-    const o = { ...opts(), fetch: web(site).fetchImpl };
-    // No repository to look them up in: Toki says which names, and moves nothing.
-    await expect(moveGame(deps, DEV, GAME, o)).rejects.toMatchObject({ code: "move_dynamic_files", detail: "audio/….mp3" });
-    expect(tables.games[0].play_url).toBe(ROOT);
-    // Moved anyway: the result says what may be missing.
-    expect(await moveGame(deps, DEV, GAME, { ...o, partial: true })).toMatchObject({ source: "site", files: 15, missing: ["audio/….mp3"], repoHelped: null, suggestRepo: "lu/moon-hop" });
-    await moveBack(deps, DEV, GAME);
-    // With the repository: its file list brings the sounds.
-    const gh = fakeGitHub({ "lu/moon-hop": { main: { "project.godot": "", "player.gd": "", "public/audio/jump.mp3": "", "public/audio/land.mp3": "", "public/audio/gone.mp3": "" } } });
-    const out = await moveGame(deps, DEV, GAME, { ...o, git: { gh, installations: [7] } });
-    expect(out).toMatchObject({ source: "site", github: null, files: 17, missing: [], repoHelped: { repo: "lu/moon-hop", files: 2 }, suggestRepo: null });
-    expect(tables.game_git).toEqual([]);
   });
 
   it("notices file names a game builds while running", () => {
@@ -266,8 +288,9 @@ describe("whether players' progress can come along", () => {
 });
 
 /** A pretend GitHub: one installation that reaches the given repositories with their files per branch. */
-function fakeGitHub(repos: Record<string, Record<string, Record<string, string>>>) {
+function fakeGitHub(repos: Record<string, Record<string, Record<string, string>>>, prs: { files: Record<string, string>; base: string }[] = []) {
   const gh = {
+    failPr: false,
     repos: async () => Object.keys(repos).map((repo) => ({ repo, private: false, defaultBranch: "main" })),
     repo: async (_id: number, name: string) => {
       const branches = repos[name];
@@ -278,6 +301,11 @@ function fakeGitHub(repos: Record<string, Record<string, Record<string, string>>
         head: async () => ({ sha: "d".repeat(40), message: "Hop higher" }),
         tarball: async (ref: string) => gzipSync(tar(branches[ref] ?? branches["gh-pages"] ?? branches.main)),
         defaultBranch: async () => "main",
+        openPullRequest: async (p: { files: Record<string, string>; base: string }) => {
+          if (gh.failPr) throw new GitHubError("GitHub 403: Resource not accessible by integration", 403);
+          prs.push(p);
+          return `https://github.com/${name}/pull/${prs.length}`;
+        },
       };
     },
   };
@@ -302,7 +330,11 @@ describe("the game's GitHub repository", () => {
 
   it("finds no finished game in a repository that must be built first, and gives its file names instead", async () => {
     const gh = fakeGitHub({ "lu/moon-hop": { main: VITE } });
-    expect(await findRepo(gh, [7], { play_url: ROOT })).toEqual({ found: null, repo: "lu/moon-hop", reached: true, candidates: ["audio/jump.mp3", "icon.png", "public/audio/jump.mp3", "public/icon.png"] });
+    expect(await findRepo(gh, [7], { play_url: ROOT })).toEqual({
+      found: null, repo: "lu/moon-hop", reached: true,
+      candidates: ["audio/jump.mp3", "icon.png", "public/audio/jump.mp3", "public/icon.png"],
+      source: { installation_id: 7, repo: "lu/moon-hop", branch: "main" },
+    });
     expect(await findRepo(fakeGitHub({}), [7], { play_url: ROOT })).toEqual({ found: null, repo: "lu/moon-hop", reached: false, candidates: [] });
   });
 
@@ -320,6 +352,10 @@ describe("the game's GitHub repository", () => {
     expect(guessRepo(repos, "https://debtdrifter.vercel.app/", "x")).toEqual({ repo: "lu/debt-drifter" });
     expect(guessRepo(repos, "https://lu.github.io/other/", "debt-drifter")).toEqual({ repo: "lu/other" });
     expect(guessRepo(repos, "https://example.com/", "snake")).toBeNull();
+    // The published build beats the project it's made from (DeepSub: Deepsub is the Godot project).
+    const deepsub = [{ repo: "lu/Deepsub" }, { repo: "lu/deepsub-web" }, { repo: "lu/debt-drifter" }];
+    expect(guessRepo(deepsub, "https://deepsub.vercel.app/", "deepsub")).toEqual({ repo: "lu/deepsub-web" });
+    expect(guessRepo([{ repo: "lu/Deepsub" }], "https://deepsub.vercel.app/", "deepsub")).toEqual({ repo: "lu/Deepsub" });
   });
 
   it("asks the site for a repository's pictures, sounds and data, not for its code", () => {

@@ -118,8 +118,16 @@ Every key can also be set as an environment variable in Vercel; those win over w
 Toki: `AI_API_KEY`, `ANTHROPIC_API_KEY`, and for a GitHub App made by hand `GITHUB_APP_ID`, `GITHUB_APP_SLUG`,
 `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY` (the whole `.pem`).
 A GitHub App made by hand needs: callback URL `https://www.playtoki.app/connect/github`, "Request
-user authorization (OAuth) during installation" on, webhook off, repository permissions Contents
-and Pull requests read and write, installable by any account.
+user authorization (OAuth) during installation" on, webhook off, repository permissions Contents,
+Pull requests and Workflows read and write, installable by any account.
+
+**Workflows permission (for games that must be built first).** Toki adds a build file
+(`.github/workflows/toki.yml`) to a game's repository with a pull request, and GitHub only lets an
+app touch workflow files with the "Workflows: Read and write" permission. Apps set up before
+this don't have it: add it on GitHub (Settings → Developer settings → GitHub Apps → the Toki app →
+Permissions & events → Repository permissions → Workflows), then each account that installed the
+app approves the new permission once. Until then, Toki gives developers GitHub's "new file" page
+with the build file filled in instead (one click on "Commit changes"), so it works either way.
 
 ## How the limits work
 
@@ -130,7 +138,7 @@ and Pull requests read and write, installable by any account.
 - Admins have no quota of their own; the monthly cap applies to everyone.
 - Months are calendar months in UTC.
 - One run makes at most 8 AI calls and can only change the requested features. Changes to
-  `.github/` are refused, and the app has no permission for workflows anyway.
+  `.github/` are refused (only Toki itself adds the build file, see above).
 
 ## Anthropic
 

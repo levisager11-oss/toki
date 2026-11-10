@@ -7,9 +7,9 @@
 //    first) the site it runs on: the server downloads the game from its address, starting at its
 //    page: everything the page, its scripts and its styles point to inside the game's folder.
 //    Games often build file names while running ("audio/" + name + ".mp3"), which reading the
-//    code can't find. So when Toki reaches the game's repository, it also asks the site for every
-//    file in the repository (a build copies its "public" folder to the site as it is). Without a
-//    repository, the developer is told which names couldn't be looked up before anything moves.
+//    code can't find. So Toki also asks the site for every file in the game's repository (a build
+//    copies its "public" folder to the site as it is). That's why moving needs GitHub connected
+//    and the game's repository picked; the game then follows it like any game on Toki.
 //    Links to other sites (a font from a CDN, an ad script) stay as they are. Only public https
 //    sites are read, never local or private addresses.
 // The repository: the one the developer picked, the one a GitHub Pages address names, or one of
@@ -27,6 +27,7 @@ import { isCheckableUrl } from "./embed-check.js";
 import { privateAddress, type Lookup } from "./assist/pages.js";
 import { finishUpload, HostingError, startUpload, type Deps, type HostUser } from "./hosting.js";
 import { deployCommit, type GitRow } from "./gitDeploy.js";
+import { buildKind, manualBuildLink, setUpBuild, type BuildSetup, type NoBuild } from "./gitBuild.js";
 import type { GitHubClient } from "./github.js";
 import { gameFolder, isSourcePage } from "./assist/scan.js";
 import { cleanPath, MAX_GAME_BYTES, MAX_GAME_FILES, pagesRepos, plainName as plain, readTokiJson, siteName, type TokiJson } from "../src/lib/hostingRules.js";
@@ -416,6 +417,8 @@ export interface RepoLook {
   reached: boolean;
   /** No finished game in it (it must be built first): the names of its files, to ask the game's site for */
   candidates: string[];
+  /** No finished game in it: where its source is, so GitHub Actions can build it from now on */
+  source?: { installation_id: number; repo: string; branch: string };
 }
 
 // Files a build copies as they are (pictures, sounds, data), and folders whose content lands at the site's top.
@@ -468,7 +471,7 @@ export async function findRepo(
   for (const w of pages) add(reachable.find((r) => r.repo.toLowerCase() === w.repo.toLowerCase()), w.sub);
   if (!pages.length) for (const r of reachable) if (names.includes(plain(r.repo.split("/")[1] ?? ""))) add(r);
 
-  let helper: { repo: string; candidates: string[] } | null = null;
+  let helper: { repo: string; candidates: string[]; source: NonNullable<RepoLook["source"]> } | null = null;
   for (const t of targets.slice(0, 3)) {
     const repo = await gh.repo(t.id, t.repo);
     const branches = await repo.branches().catch(() => [] as string[]);
@@ -489,10 +492,10 @@ export async function findRepo(
       for (const p of wanted) await read(p);
       const { folder } = gameFolder(paths, (p) => texts.get(p));
       if (folder !== null) return { found: { installation_id: t.id, repo: t.repo, branch, folder }, repo: t.repo, reached: true, candidates: [] };
-      if (!helper && branch === t.defaultBranch) helper = { repo: t.repo, candidates: repoCandidates(paths) };
+      if (!helper && branch === t.defaultBranch) helper = { repo: t.repo, candidates: repoCandidates(paths), source: { installation_id: t.id, repo: t.repo, branch } };
     }
   }
-  if (helper) return { found: null, repo: helper.repo, reached: true, candidates: helper.candidates };
+  if (helper) return { found: null, repo: helper.repo, reached: true, candidates: helper.candidates, source: helper.source };
   return { found: null, repo: pages[0]?.repo ?? null, reached: false, candidates: [] };
 }
 
@@ -511,10 +514,12 @@ export interface MoveResult {
   github: RepoChoice | null;
   /** Taken from the site: the repository whose file list helped, and how many files it added */
   repoHelped: { repo: string; files: number } | null;
-  /** A repository the game seems to come from, which Toki can't reach (yet): connect GitHub for it */
-  suggestRepo: string | null;
-  /** File names the game builds while running that Toki couldn't look up (moved anyway) */
-  missing: string[];
+  /**
+   * The repository holds the source: the game now follows it and GitHub Actions builds every push
+   * (the pull request with the build file, or GitHub's page to add it), or why that can't be
+   * (Unity and the like need their own editor). null: no repository, or it holds the finished game.
+   */
+  build: (BuildSetup & { repo: string; branch: string }) | { cannot: NoBuild; repo: string } | null;
 }
 
 export interface GitHubAccess {
@@ -581,30 +586,35 @@ const MOVE_ERRORS: Record<SavesProblem, string> = { no_script: "move_no_saves", 
 
 export interface MoveOptions extends CrawlOptions {
   put?: typeof fetch;
+  /** The developer's GitHub connection: moving needs it */
   git?: GitHubAccess | null;
   /** The repository the developer picked for the game */
   repo?: { installation_id: number; repo: string } | null;
   /** Move although players' progress stays behind */
   anyway?: boolean;
-  /** Move although some files (named at runtime) may be missing */
-  partial?: boolean;
+  /** Toki's own address, for the build file (where to get the upload script) */
+  origin?: string;
 }
 
 /**
- * Moves a game from its link onto Toki:
- * - from its GitHub repository when that holds the finished game (then every push updates it);
- * - else from the site it runs on, and when Toki reaches the game's repository (which must be
- *   built first), also every file of the repository that the site serves: that brings the files
- *   whose names the game builds while running, which reading its code can't find.
- * Throws move_no_saves / move_engine_saves when players' progress would stay behind (unless
- * `anyway`), and move_dynamic_files when the game builds file names while running and Toki has
- * no repository to look them up in (unless `partial`).
+ * Moves a game from its link onto Toki, so it works like a game that was on Toki from the start.
+ * Needs the developer's GitHub connection and the game's repository (github_required,
+ * repo_required): with it Toki knows every file of the game, and the game follows the repository.
+ * - The finished game is in the repository: Toki takes it from there; every push updates it.
+ * - The repository holds the source: Toki downloads the built game from its site (also every
+ *   picture, sound and data file the repository lists, since games often build those names while
+ *   running), and GitHub Actions builds every push from now on (server/gitBuild.ts).
+ * - Unity, GameMaker, Construct: their editor can't run on GitHub, so after the download new
+ *   versions are uploaded (or exported into the repository, which Toki then follows).
+ * Throws move_no_saves / move_engine_saves when players' progress would stay behind (unless `anyway`).
  */
 export async function moveGame(deps: Deps, user: HostUser, gameId: string, o: MoveOptions = {}): Promise<MoveResult> {
   const { db } = deps;
   const g = await movable(deps, user, gameId);
   const from = g.play_url;
-  const repo = o.git ? await findRepo(o.git.gh, o.git.installations, g, o.repo) : noRepo(from);
+  if (!o.git) throw new HostingError("github_required", 409);
+  const repo = await findRepo(o.git.gh, o.git.installations, g, o.repo);
+  if (!repo.reached) throw new HostingError("repo_required", 409, repo.repo ?? "");
   // Loading from GitHub takes time too: then the old address only gets a shorter look.
   const { got, verdict } = await look(deps, g, { ...o, extra: repo.candidates, ...(repo.found ? { deadline: Math.min(o.deadline ?? CRAWL_MS, 120_000) } : {}) });
   if (!verdict.ok && !o.anyway) throw new HostingError(MOVE_ERRORS[verdict.problem!], 409);
@@ -621,27 +631,37 @@ export async function moveGame(deps: Deps, user: HostUser, gameId: string, o: Mo
       source = "github";
     } else await db.remove("game_git", `game_id=eq.${g.id}`); // the site is the way then
   }
-  let missing: string[] = [];
   if (!result) {
     if (!got) throw new HostingError("move_unreachable", 422);
-    // Names built while running, and no repository to look them up in: files would be missing.
-    if (got.dynamic.length && !repo.reached) {
-      if (!o.partial) throw new HostingError("move_dynamic_files", 409, got.dynamic.join(", "));
-      missing = got.dynamic;
-    }
     result = await uploadCrawled(deps, user, g, got, o.put ?? fetch);
   }
   // Remembered so players' progress can be picked up there (src/lib/movedSaves.ts).
   await db.update("games", `id=eq.${g.id}`, { moved_from: from, moved_at: (deps.now?.() ?? new Date()).toISOString() });
+  // Like a game that was on Toki from the start: it follows its repository from now on, and
+  // GitHub Actions builds every push (the source must be built first).
+  let build: MoveResult["build"] = null;
+  if (source === "site" && repo.source) {
+    const r = { game_id: g.id, ...repo.source, folder: "", created_by: user.id };
+    const can = await buildKind(o.git.gh, r).catch(() => ({ cannot: "unknown" as const }));
+    if ("cannot" in can) build = { cannot: can.cannot, repo: r.repo };
+    else {
+      await db.insert(
+        "game_git?on_conflict=game_id",
+        { ...r, status: "waiting", error: null, build: "action", build_pr: null, updated_at: new Date().toISOString() },
+        "resolution=merge-duplicates,return=minimal",
+      );
+      const setup = await setUpBuild(db, o.git.gh, r, o.origin ?? "https://www.playtoki.app").catch(() => null);
+      build = setup ? { ...setup, repo: r.repo, branch: r.branch } : { pr: null, manual: manualBuildLink(r.repo, r.branch, o.origin ?? "https://www.playtoki.app"), ready: false, repo: r.repo, branch: r.branch };
+    }
+  }
   return {
+    build,
     ...result,
     from,
     saves: verdict.ok,
     source,
     github: source === "github" ? repo.found : null,
     repoHelped: source === "site" && repo.reached && repo.repo && got ? { repo: repo.repo, files: got.fromExtra } : null,
-    suggestRepo: source === "github" || repo.reached ? null : repo.repo,
-    missing,
   };
 }
 

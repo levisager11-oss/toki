@@ -1,12 +1,37 @@
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../lib/i18n";
 import { githubConnectLink, githubManage, githubRepos, type GitHubInfo } from "../lib/ai";
-import { gitBranches, gitDeploy, gitDisconnect, hostError, type GitChoice, type GitRow } from "../lib/hosting";
+import { gitBranches, gitBuild, gitDeploy, gitDisconnect, hostError, type GitChoice, type GitResult, type GitRow } from "../lib/hosting";
 
 /** Why an update from GitHub failed, in words where Toki knows the reason. */
-export function gitFailed(t: ReturnType<typeof useI18n>["t"], error: string | undefined): string {
+export function gitFailed(t: ReturnType<typeof useI18n>["t"], error: string | undefined, engine?: string): string {
+  if (error === "cant_build") return t("git.cantBuild", { engine: engine && engine !== "unknown" ? engine : t("git.thisEngine") });
   const code = hostError(error ?? "");
   return code === "error" ? t("git.failed", { error: error ?? "" }) : t(`host.err.${code}`, { mb: "100 MB" });
+}
+
+/**
+ * GitHub Actions builds this game on every push: where its build file is (a pull request to
+ * merge, or GitHub's page to add it with one click), and "Run it once" on GitHub.
+ */
+export function BuildInfo({ repo, branch, link, ready }: { repo: string; branch: string; link: string | null | undefined; ready?: boolean }) {
+  const { t } = useI18n();
+  const isPr = !!link && /\/pull\/\d+/.test(link);
+  return (
+    <div className="build-info">
+      <p>{t("git.buildAction", { branch })}</p>
+      {!ready && link && (
+        <p>
+          <b>{isPr ? t("git.buildMergePr") : t("git.buildAddFile")}</b>{" "}
+          <a className="btn" href={link} target="_blank" rel="noreferrer">{isPr ? t("git.buildOpenPr") : t("git.buildOpenNew")}</a>
+        </p>
+      )}
+      <small>
+        {t("git.buildHow")}{" "}
+        <a href={`https://github.com/${repo}/actions`} target="_blank" rel="noreferrer">{t("git.buildRuns")}</a>
+      </small>
+    </div>
+  );
 }
 
 /**
@@ -68,14 +93,14 @@ export function GitHubFollow({ gameId, row, choice, onChoice, onChanged }: {
 
   const connectGitHub = () => window.location.assign(githubConnectLink(info!, window.location.pathname));
 
-  const run = async (what: "deploy" | "stop") => {
+  const run = async (what: "deploy" | "stop" | "build") => {
     if (!gameId) return;
     setBusy(true);
     setErr("");
     try {
-      if (what === "deploy") {
-        const r = await gitDeploy(gameId);
-        if (!r.ok) setErr(gitFailed(t, r.error));
+      if (what === "deploy" || what === "build") {
+        const r: GitResult = what === "build" ? await gitBuild(gameId) : await gitDeploy(gameId);
+        if (!r.ok) setErr(gitFailed(t, r.error, r.engine));
       } else await gitDisconnect(gameId);
     } catch (e) {
       setErr(t(`host.err.${hostError(e)}`, { mb: "100 MB" }));
@@ -104,8 +129,15 @@ export function GitHubFollow({ gameId, row, choice, onChoice, onChanged }: {
           {row.status === "failed" && row.error && (
             <p className="sub">{t("git.error", { error: hostError(row.error) === "error" ? row.error : t(`host.err.${hostError(row.error)}`, { mb: "100 MB" }) })}</p>
           )}
+          {row.build === "action" && <BuildInfo repo={row.repo} branch={row.branch} link={row.build_pr} ready={row.status === "live" || !!row.last_sha} />}
+          {row.build !== "action" && row.error === "needs_build" && (
+            <p className="sub">
+              {t("git.buildOffer")}{" "}
+              <button type="button" className="btn primary" onClick={() => run("build")} disabled={busy}>{t("git.buildStart")}</button>
+            </p>
+          )}
           <div className="actions">
-            <button type="button" className="btn" onClick={() => run("deploy")} disabled={busy}>{busy ? t("git.deploying") : t("git.deployNow")}</button>
+            {row.build !== "action" && <button type="button" className="btn" onClick={() => run("deploy")} disabled={busy}>{busy ? t("git.deploying") : t("git.deployNow")}</button>}
             <button type="button" className="linkish" onClick={() => setEditing((v) => !v)}>{t("git.change")}</button>
             <button type="button" className="linkish danger-text" onClick={() => run("stop")} disabled={busy}>{t("git.stop")}</button>
           </div>

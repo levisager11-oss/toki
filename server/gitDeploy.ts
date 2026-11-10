@@ -174,9 +174,10 @@ export async function gamesForPush(db: Db, ev: PushEvent): Promise<{ rows: GitRo
   const branch = ev.ref?.startsWith("refs/heads/") ? ev.ref.slice(11) : null;
   const repo = ev.repository?.full_name;
   if (!branch || !repo || ev.deleted || !ev.after || !/^[0-9a-f]{40}$/.test(ev.after) || /^0+$/.test(ev.after)) return null;
+  // Games built by GitHub Actions upload by themselves (api/hosting.ts): leave them alone here.
   const rows = await db.select<GitRow>(
     "game_git",
-    `repo=eq.${encodeURIComponent(repo)}&branch=eq.${encodeURIComponent(branch)}&select=game_id,installation_id,repo,branch,folder,created_by`,
+    `repo=eq.${encodeURIComponent(repo)}&branch=eq.${encodeURIComponent(branch)}&build=eq.none&select=game_id,installation_id,repo,branch,folder,created_by`,
   );
   const mine = rows.filter((r) => Number(r.installation_id) === ev.installation?.id);
   if (!mine.length) return null;

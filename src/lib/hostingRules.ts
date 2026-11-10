@@ -256,5 +256,50 @@ export function guessRepo<T extends { repo: string }>(repos: T[], playUrl: strin
   }
   if (pagesRepos(playUrl).length) return null;
   const names = [siteName(playUrl), plainName(slug)].filter((n) => n.length >= 3);
-  return repos.find((r) => names.includes(plainName(r.repo.split("/")[1] ?? ""))) ?? null;
+  const name = (r: T) => plainName(r.repo.split("/")[1] ?? "");
+  // A repository with the published game ("deepsub-web") beats the project it's made from ("deepsub").
+  for (const end of PUBLISHED) {
+    const hit = repos.find((r) => names.some((n) => name(r) === n + end));
+    if (hit) return hit;
+  }
+  return repos.find((r) => names.includes(name(r))) ?? null;
+}
+/** Name endings of repositories that hold a game's published web build. */
+const PUBLISHED = ["web", "site", "pages", "build", "dist", "html5", "html", "www", "play"];
+
+/** Where the build file goes in a game's repository (server/gitBuild.ts). */
+export const BUILD_WORKFLOW_PATH = ".github/workflows/toki.yml";
+
+/**
+ * The build file for a game whose repository holds the source: on every push to `branch`,
+ * GitHub Actions runs Toki's upload script with --build (install, build, find the built game,
+ * upload). No key: the script proves where it runs with GitHub's signed token (id-token: write).
+ * The steps live in the script, so they can improve without changing anyone's repository.
+ */
+export function buildWorkflow(origin: string, branch: string): string {
+  return `# Builds the game on every push to ${branch} and puts it on Toki (${origin}).
+# No key needed: Toki checks GitHub's signed proof that this run belongs to this repository.
+# The steps (install, build, upload) are in Toki's upload script: ${origin}/toki-upload.mjs
+name: Toki
+on:
+  push:
+    branches: [${JSON.stringify(branch)}]
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: toki
+  cancel-in-progress: true
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - run: curl -fsSL ${origin}/toki-upload.mjs -o "$RUNNER_TEMP/toki-upload.mjs"
+      - run: node "$RUNNER_TEMP/toki-upload.mjs" --build
+`;
 }

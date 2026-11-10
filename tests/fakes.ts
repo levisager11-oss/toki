@@ -17,6 +17,7 @@ function match(row: Row, key: string, cond: string): boolean {
     case "lt": return x !== null && String(x) < v;
     case "lte": return x !== null && String(x) <= v;
     case "cs": return Array.isArray(x) && v.slice(1, -1).split(",").every((s) => x.includes(s));
+    case "ilike": return typeof x === "string" && new RegExp(`^${v.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`, "i").test(x);
     default: throw new Error(`op ${op}`);
   }
 }
