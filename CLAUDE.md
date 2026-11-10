@@ -9,13 +9,20 @@ Whenever you change something in Toki, also post a Toki update (release notes) s
 - Write for players, in plain English: a short `title` and `notes` where lines starting with `- ` become a list. No technical words.
 - If a change fixes feedback posts, link them with `set_release_fixes` (or set `fixed_in` and `status = 'done'`).
 
+## New things for developers' games
+
+When the script games use (`public/toki-save.js`) or the integration guide (`src/lib/integration.ts`) gets something new that developers have to add to their games:
+
+- Make sure Toki Connect can add it (a feature in `server/connect/agent.ts`) and the instructions to copy explain it.
+- Tell the developers once the app that knows the topic is live: add a text for the topic in `src/pages/Notifications.tsx` (kind `dev_news`), then run `select public.notify_developers('<topic>')` with the Supabase connector. It sends one notification per developer and topic.
+
 ## Stay on Supabase's free plan
 
 The owner doesn't want to pay for Supabase if it can be avoided. When adding features:
 
 - Delete old rows on a schedule with `pg_cron` (e.g. chat messages after 7 or 30 days, notifications after 30 days), and cap rows per player where it makes sense.
 - Keep files small (shrink images in the browser before upload) and delete replaced files.
-- Use Supabase Realtime sparingly: only subscribe while something is on screen, and don't listen for events that would reach everyone (like deletes).
+- Use Supabase Realtime sparingly: only subscribe while something is on screen, and don't listen for events that would reach everyone (like deletes). The one standing exception: while a friend is online, Toki listens for a "you got an invite" nudge (`src/lib/useBadges.ts`).
 - Prefer one row that is overwritten over a growing log.
 
 ## Database changes

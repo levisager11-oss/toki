@@ -233,6 +233,7 @@ export interface Proposal {
   leaderboard: boolean;
   has_scores: boolean;
   isolation: boolean;
+  multiplayer: boolean;
 }
 export interface ScanResult {
   proposal: Proposal;

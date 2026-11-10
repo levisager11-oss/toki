@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { InviteToGame } from "../components/GameInvite";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
 import { useGames } from "../lib/useGames";
@@ -146,6 +147,7 @@ function ChatHeader({ chat, summary, title, onRenamed, onLeft }: {
       ) : (
         <h2>{title}</h2>
       )}
+      {chat.kind === "dm" && summary?.other_id && <span className="chat-invite"><InviteToGame friend={{ id: summary.other_id }} /></span>}
       {chat.kind === "group" && (
         <>
           <span className="sub">{members?.map((m) => `@${m.username}`).join(", ")}</span>

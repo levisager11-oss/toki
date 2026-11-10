@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, Navigate, useParams } from "react-router-dom";
+import { Link, Navigate, useParams, useSearchParams } from "react-router-dom";
 import { useTitle } from "../lib/useTitle";
 import { useI18n } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
@@ -20,8 +20,10 @@ import { TranslateToggle, useTranslate } from "../components/AiBits";
 import { GameHelper } from "../components/GameHelper";
 import { Screenshots } from "../components/ShotViewer";
 import { useFreeAi } from "../lib/assist";
-import { CloseIcon, FullscreenIcon } from "../components/icons";
+import { CloseIcon, FullscreenIcon, PeopleIcon } from "../components/icons";
 import { ShareButton } from "../components/ShareButton";
+import { InviteFriends, InviteStatus, useGameInvites, useRoomBridge } from "../components/GameInvite";
+import { maxPlayers, playUrl, roomCode } from "../lib/invites";
 
 const LANDSCAPE_PHONE = "(orientation: landscape) and (pointer: coarse) and (max-height: 600px)";
 // A visit counts as a play after this long on the page (the server counts one per browser per day).
@@ -50,6 +52,15 @@ export function GamePage() {
   // Loads the game again, e.g. to continue from newer progress made on another device.
   const [frameRun, setFrameRun] = useState(0);
   const isolated = game?.needs_isolation === true;
+  // Play together: ?room=CODE (from a friend's invite) opens the game in that room, and
+  // ?invite=<friend> (from the friends list) invites them as soon as a room is open.
+  const [params] = useSearchParams();
+  const joinCode = game?.multiplayer ? roomCode(params.get("room")) : null;
+  const src = game ? playUrl(game, joinCode) : "";
+  const frameKey = `${src}|${userId ?? ""}|${frameRun}`;
+  const room = useRoomBridge(gameFrame, game, frameKey);
+  const inviteFirst = game?.multiplayer && userId && /^[0-9a-f-]{36}$/i.test(params.get("invite") ?? "") ? params.get("invite") : null;
+  const invites = useGameInvites(game, room, inviteFirst);
 
   useEffect(() => {
     if (game) matchIsolation(isolated);
@@ -163,8 +174,8 @@ export function GamePage() {
           {/* Starts again after logging in or out, so the game gets the right save. */}
           <iframe
             ref={gameFrame}
-            key={`${game.play_url}|${userId ?? ""}|${frameRun}`}
-            src={game.play_url}
+            key={frameKey}
+            src={src}
             title={game.title}
             allow={`fullscreen; autoplay; gamepad;${isolated ? " cross-origin-isolated;" : ""} clipboard-write; screen-wake-lock`}
             allowFullScreen
@@ -182,16 +193,21 @@ export function GamePage() {
             <span className="sub">
               {t("game.by")} {game.author ? <Link to={`/u/${game.author.username}`}><b>@{game.author.username}</b></Link> : <b>Toki</b>}
               {game.engine ? ` · ${game.engine}` : ""} · {t(`cat.${game.category}`)}
+              {game.multiplayer && <> · <span className="multi-note"><PeopleIcon size={13} /> {maxPlayers(game) ? t("game.playersUpTo", { n: maxPlayers(game)! }) : t("game.multiplayer")}</span></>}
               {plays(game) > 0 && <> · <Plays game={game} /></>}
             </span>
           </div>
           <div className="actions">
             <FavButton game={game} withLabel />
+            {game.multiplayer && (userId
+              ? <InviteFriends key={game.id} game={game} invites={invites} startOpen={!!inviteFirst} />
+              : <Link to={`/login?next=/game/${game.slug}`} className="btn"><PeopleIcon />{t("invite.button")}</Link>)}
             <ShareButton path={`/game/${game.slug}`} title={game.title} />
             {canEdit && <Link to={`/edit/${game.slug}`} className="btn">{t("game.edit")}</Link>}
             <button type="button" className="btn primary" onClick={fullscreen}><FullscreenIcon />{t("game.fullscreen")}</button>
           </div>
         </div>
+        {game.multiplayer && userId && <InviteStatus invites={invites} />}
         {freeAi && helper && <GameHelper key={game.id} game={game} onClose={() => setHelper(false)} />}
         {(saves.lost || saves.conflict) && (
           <div className="check warn save-conflict" role="alert">
@@ -207,7 +223,7 @@ export function GamePage() {
         )}
         <p className="hint">
           {t("game.notLoading")}{" "}
-          <a href={game.play_url} target="_blank" rel="noopener noreferrer">{t("game.openDirect")} ↗</a>
+          <a href={src} target="_blank" rel="noopener noreferrer">{t("game.openDirect")} ↗</a>
         </p>
         {freeAi && userId && !helper && (
           <p className="hint">

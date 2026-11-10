@@ -116,6 +116,12 @@ export interface TokiJson {
   isolation?: boolean;
   score_order?: "high" | "low";
   score_format?: "points" | "time";
+  /** The game has multiplayer rooms friends can be invited into (see "Play together" in agents.md) */
+  multiplayer?: boolean;
+  /** How many can play together (2 to 64) */
+  max_players?: number;
+  /** The name of the room code in the game's invite links, when it isn't "room" */
+  join_param?: string;
   /** Pictures inside the game's files (or https links): the cover, and up to 4 screenshots */
   cover_image?: string;
   screenshots?: string[];
@@ -126,6 +132,9 @@ export interface TokiJson {
   /** Only for the upload script: the folder with the game, when it isn't the one with toki.json */
   folder?: string;
 }
+
+/** The name of the room code in a game's invite links (<game>?room=ABCD): short and plain. */
+export const JOIN_PARAM = /^[a-z][a-z0-9_-]{0,19}$/;
 
 const text = (v: unknown, max: number) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : undefined);
 
@@ -160,6 +169,10 @@ export function readTokiJson(raw: unknown): TokiJson {
   if (typeof o.isolation === "boolean") out.isolation = o.isolation;
   if (o.score_order === "high" || o.score_order === "low") out.score_order = o.score_order;
   if (o.score_format === "points" || o.score_format === "time") out.score_format = o.score_format;
+  if (typeof o.multiplayer === "boolean") out.multiplayer = o.multiplayer;
+  if (Number.isInteger(o.max_players) && (o.max_players as number) >= 2 && (o.max_players as number) <= 64) out.max_players = o.max_players as number;
+  const joinParam = text(o.join_param, 20);
+  if (joinParam && JOIN_PARAM.test(joinParam)) out.join_param = joinParam;
   const cover = text(o.cover_image, 300);
   if (cover) out.cover_image = cover;
   if (Array.isArray(o.screenshots)) {

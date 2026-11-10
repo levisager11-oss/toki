@@ -6,7 +6,7 @@ import type { Role } from "./types";
 /** An i18n key for what went wrong, from the server's error. */
 export type SocialErrorKey =
   | "soc.err.banned" | "soc.err.blocked" | "soc.err.notFriends" | "soc.err.rateLimited"
-  | "soc.err.groupFull" | "soc.err.login" | "error";
+  | "soc.err.groupFull" | "soc.err.login" | "soc.err.badCode" | "error";
 
 export class SocialError extends Error {
   constructor(readonly key: SocialErrorKey) {
@@ -22,6 +22,7 @@ export function socialErrorKey(error: { message?: string } | null | undefined): 
   if (m.includes("rate_limited")) return "soc.err.rateLimited";
   if (m.includes("group_full")) return "soc.err.groupFull";
   if (m.includes("login_required")) return "soc.err.login";
+  if (m.includes("bad_code")) return "soc.err.badCode";
   return "error";
 }
 const fail = (error: { message?: string }) => new SocialError(socialErrorKey(error));
@@ -251,12 +252,23 @@ export const handleReport = (id: number, outcome: "dismissed" | "deleted" | "ban
 
 // ---------- notifications ----------
 
-export type NotificationKind = "fb_reply" | "fb_status" | "friend_request" | "friend_accept" | "group_add" | "score_beaten";
+export type NotificationKind =
+  | "fb_reply" | "fb_status" | "friend_request" | "friend_accept" | "group_add" | "score_beaten"
+  /** a friend invites you into their room in a multiplayer game */
+  | "game_invite"
+  /** Toki can do something new for developers' games */
+  | "dev_news";
 
 export interface Notification {
   id: number;
   kind: NotificationKind;
-  data: { post?: string; title?: string; status?: string; version?: string | null; chat?: string; game?: string; official?: boolean };
+  data: {
+    post?: string; title?: string; status?: string; version?: string | null; chat?: string; game?: string; official?: boolean;
+    /** game_invite: the room's code */
+    code?: string;
+    /** dev_news: what is new, e.g. "multiplayer" */
+    topic?: string;
+  };
   created_at: string;
   read_at: string | null;
   actor: Person | null;
@@ -271,6 +283,13 @@ export async function listNotifications(): Promise<Notification[]> {
   if (error) throw fail(error);
   return data as unknown as Notification[];
 }
+
+/**
+ * Invites a friend into the room with this code in a multiplayer game. They see it in the bell,
+ * and as a pop-up while they are on Toki. A new invite replaces an earlier one to that friend.
+ */
+export const inviteToGame = (userId: string, gameId: string, code: string) =>
+  rpc<void>("invite_to_game", { p_user: userId, p_game: gameId, p_code: code });
 
 export const markNotificationsRead = (ids?: number[]) => rpc<void>("mark_notifications_read", { p_ids: ids ?? null });
 

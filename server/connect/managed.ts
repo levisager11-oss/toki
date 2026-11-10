@@ -8,7 +8,7 @@
 // install or run anything long, a hard dollar cap per run (enforced by Anthropic), and each step
 // here only looks at the session (no AI call of Toki's own).
 import { MAX_CHANGED, MAX_WRITE, safePath } from "./files.js";
-import { questions, task, type Job, type JobState, type Message, type StepResult } from "./agent.js";
+import { gameLine, questions, task, type Job, type JobState, type Message, type StepResult } from "./agent.js";
 
 export const REPO_PATH = "/workspace/repo";
 export const CHANGES_FILE = "toki-changes.json";
@@ -70,9 +70,7 @@ export const CHANGES_COMMAND = `cd ${REPO_PATH} && git add -A && python3 -c "imp
 export function kickoff(job: Job, script: string, lang: "en" | "de"): string {
   const parts = [task(job, script)];
   if (job.game && !job.features.includes("fix")) {
-    parts.push(
-      `Toki game: "${job.game.title}". Its leaderboard treats ${job.game.score_order === "low" ? "a LOWER score as better" : "a HIGHER score as better"} and shows scores as ${job.game.score_format === "time" ? "a time (send milliseconds)" : "points"}.`,
-    );
+    parts.push(gameLine(job));
   }
   if (job.notes) parts.push(`The developer's notes:\n${job.notes}`);
   parts.push(

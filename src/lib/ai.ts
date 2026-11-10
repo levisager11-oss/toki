@@ -282,7 +282,7 @@ export function githubStateMatches(state: string | null): boolean {
   }
 }
 
-export type Feature = "saves" | "scores" | "fix";
+export type Feature = "saves" | "scores" | "multiplayer" | "fix";
 export type JobStatus = "working" | "question" | "done" | "failed";
 
 export interface Question {

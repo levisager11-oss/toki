@@ -1,8 +1,10 @@
-/* Toki save support v3. Put this in the game's HTML <head>, before the game's own scripts.
+/* Toki save support v4. Put this in the game's HTML <head>, before the game's own scripts.
    Inside Toki, it keeps a copy of everything the game stores in localStorage, so progress
    survives closing the app (iPhone deletes storage of games shown inside other sites) and
    follows logged-in players to other devices. Outside Toki it does nothing.
-   High scores: call toki.score(points) when a round ends (for times: milliseconds). */
+   High scores: call toki.score(points) when a round ends (for times: milliseconds).
+   Multiplayer: call toki.room(code) when the player is in a room others can join with that
+   code (toki.room(null) when they leave it), so they can invite their Toki friends. */
 (function () {
   // Games hosted on Toki get this script added for them; a second copy in the game does nothing.
   if (window.__tokiSave) return;
@@ -14,6 +16,9 @@
   window.toki = window.toki || {};
   window.toki.score = function (n) {
     if (inToki && typeof n === "number" && isFinite(n)) top.postMessage({ toki: 1, type: "score", data: n }, origin);
+  };
+  window.toki.room = function (code) {
+    if (inToki) top.postMessage({ toki: 1, type: "room", data: code == null || code === "" ? null : String(code) }, origin);
   };
   if (!inToki) return;
   var ls, MARK = "__toki_t";

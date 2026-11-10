@@ -973,3 +973,42 @@ main.content:focus { outline: none; }
 .host-setup { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 4px; }
 .host-setup .actions { margin-top: 10px; }
 .ai-card .steps code { font-size: 12px; overflow-wrap: anywhere; }
+
+/* ---------- Play together: invites into multiplayer games ---------- */
+.thumb .tag.multi { top: auto; bottom: 8px; display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; font-family: var(--f-ui); font-size: 12px; font-weight: 700; line-height: 1.2; }
+.multi-note { white-space: nowrap; }
+.multi-note svg { vertical-align: -2px; }
+.chips .multi-chip { display: inline-flex; align-items: center; gap: 5px; }
+.btn.on { background: var(--fg); color: var(--surface); }
+.invite-dialog { border: 1px solid var(--fg); background: var(--surface); color: var(--fg); padding: 0; width: min(480px, calc(100vw - 24px)); max-height: calc(100dvh - 32px); box-shadow: 6px 6px 0 var(--fg); }
+.invite-dialog::backdrop { background: rgba(0, 0, 0, .55); }
+.invite-box { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.invite-box .sechead { margin: 0; align-items: flex-start; flex-wrap: nowrap; gap: 12px; }
+.invite-box h2 { margin: 0; font-size: 18px; font-weight: 800; overflow-wrap: anywhere; }
+.invite-box h3 { margin: 4px 0 0; font-size: 15px; font-weight: 800; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.invite-box h3 .sub, .invite-box .check .sub { font-size: 13px; font-weight: 500; color: var(--muted); }
+.invite-box .icon-btn { flex: none; cursor: pointer; }
+.invite-box .check, .invite-box .msg, .invite-box .note, .invite-box .error { margin: 0; }
+.invite-box .msg { flex-direction: row; flex-wrap: wrap; align-items: center; }
+.invite-steps { margin: 0; padding-left: 20px; display: grid; gap: 4px; font-size: 14px; }
+.invite-code .row { display: flex; gap: 8px; }
+.invite-code .row input { flex: 1; min-width: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 700; letter-spacing: .12em; }
+.invite-code .row input::placeholder { font-weight: 400; }
+.room-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 15px; letter-spacing: .12em; }
+.invite-status { font-weight: 600; }
+.invite-pop { position: fixed; z-index: 40; right: 16px; bottom: 16px; width: min(360px, calc(100vw - 24px)); display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--fg); box-shadow: 4px 4px 0 var(--fg); animation: invite-pop .2s steps(4); }
+.invite-pop > div { flex: 1; min-width: 0; }
+.invite-pop p { margin: 0 0 10px; font-weight: 700; overflow-wrap: anywhere; }
+.invite-pop .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+@keyframes invite-pop { from { transform: translateY(12px); opacity: 0; } }
+.invite-menu { position: relative; }
+.invite-menu summary { list-style: none; }
+.invite-menu summary::-webkit-details-marker { display: none; }
+.invite-menu ul { position: absolute; z-index: 20; right: 0; top: calc(100% + 4px); min-width: 180px; max-width: 70vw; margin: 0; padding: 4px 0; list-style: none; background: var(--surface); border: 1px solid var(--fg); box-shadow: 3px 3px 0 var(--fg); }
+.invite-menu li a { display: block; padding: 8px 12px; color: var(--fg); text-decoration: none; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.invite-menu li a:hover, .invite-menu li a:focus-visible { background: var(--bg); }
+.chat-invite { margin-left: auto; }
+@media (max-width: 860px) {
+  .invite-pop { right: 12px; left: 12px; width: auto; bottom: calc(var(--tabbar-h, 64px) + 12px); }
+}
+@media (prefers-reduced-motion: reduce) { .invite-pop { animation: none; } }

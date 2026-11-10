@@ -10,7 +10,7 @@ import { COVERS, coverFor } from "../pixel/scenes";
 import { Cover } from "../components/Cover";
 import { NotFound } from "./NotFound";
 import { LinkCheck } from "../components/LinkCheck";
-import { SaveSupport } from "../components/SaveSupport";
+import { MultiplayerSetup, SaveSupport } from "../components/SaveSupport";
 import { AiBox } from "../components/AiBits";
 import { HelperSetup } from "../components/HelperSetup";
 import { assistError, describeGame, useFreeAi } from "../lib/assist";
@@ -39,7 +39,7 @@ const rememberAdvanced = (on: boolean) => {
     /* only a convenience */
   }
 };
-import { siteFor, siteUrl } from "../lib/hostingRules";
+import { JOIN_PARAM, siteFor, siteUrl } from "../lib/hostingRules";
 
 const MAX_IMAGE = 2 * 1024 * 1024;
 const MAX_SHOTS = 4;
@@ -75,6 +75,10 @@ export function GameForm() {
   const [shots, setShots] = useState<string[]>([]);
   const [scoreOrder, setScoreOrder] = useState<"high" | "low">("high");
   const [scoreFormat, setScoreFormat] = useState<"points" | "time">("points");
+  // Play together: the game has rooms friends can be invited into (src/lib/invites.ts).
+  const [multiplayer, setMultiplayer] = useState(false);
+  const [maxPlayers, setMaxPlayers] = useState("");
+  const [joinParam, setJoinParam] = useState("room");
   const [err, setErr] = useState<string>((location.state as { uploadError?: string } | null)?.uploadError ?? "");
   // Where the game runs: uploaded to Toki, from a GitHub branch, or a link to elsewhere (null: not picked yet).
   const [mode, setMode] = useState<"upload" | "github" | "link" | null>(null);
@@ -135,6 +139,9 @@ export function GameForm() {
       setShots(g.screenshots ?? []);
       setScoreOrder(g.score_order ?? "high");
       setScoreFormat(g.score_format ?? "points");
+      setMultiplayer(g.multiplayer === true);
+      setMaxPlayers(g.max_players ? String(g.max_players) : "");
+      setJoinParam(g.join_param || "room");
     });
   }, [editSlug]);
 
@@ -153,6 +160,7 @@ export function GameForm() {
       setEngine(p.engine);
       setScoreOrder(p.score_order);
       setScoreFormat(p.score_format);
+      setMultiplayer(p.multiplayer === true);
       setIsolation(p.isolation);
       setDirty(true);
     }
@@ -243,6 +251,7 @@ export function GameForm() {
       // Until the upload is done; the server then sets the real address.
       playUrl = wasHosted && orig ? orig.play_url : siteUrl(siteFor(effectiveSlug), hosting!.domain!);
     } else if (!/^https:\/\//i.test(playUrl)) return setErr(t("form.badUrl"));
+    const players = Math.round(Number(maxPlayers));
     const row = {
       slug: effectiveSlug,
       title: title.trim(),
@@ -260,6 +269,9 @@ export function GameForm() {
       needs_isolation: isolation,
       score_order: scoreOrder,
       score_format: scoreFormat,
+      multiplayer,
+      max_players: players >= 2 && players <= 64 ? players : null,
+      join_param: JOIN_PARAM.test(joinParam.trim()) ? joinParam.trim() : "room",
     };
     setBusy(true);
     const res = orig
@@ -331,6 +343,9 @@ export function GameForm() {
     if (d.screenshots.length && !shots.length) setShots(d.screenshots.slice(0, MAX_SHOTS));
     if (d.toki?.score_order) setScoreOrder(d.toki.score_order);
     if (d.toki?.score_format) setScoreFormat(d.toki.score_format);
+    if (d.toki?.multiplayer !== undefined) setMultiplayer(d.toki.multiplayer);
+    if (d.toki?.max_players) setMaxPlayers(String(d.toki.max_players));
+    if (d.toki?.join_param) setJoinParam(d.toki.join_param);
     if (d.play_url && !wasHosted) {
       setUrl(d.play_url);
       setMode("link");
@@ -448,6 +463,28 @@ export function GameForm() {
             </div>
           </div>
           <small id="scores-help">{t("form.scoresHelp")}</small>
+
+          <label className="check">
+            <input id="multiplayer" type="checkbox" checked={multiplayer} onChange={(e) => setMultiplayer(e.target.checked)} aria-describedby="multiplayer-help" />
+            {t("form.multiplayer")}
+          </label>
+          <small id="multiplayer-help">{t("form.multiplayerHelp")}</small>
+          {multiplayer && (
+            <>
+              <div className="pair">
+                <div>
+                  <label htmlFor="max-players">{t("form.maxPlayers")}</label>
+                  <input id="max-players" type="number" inputMode="numeric" min={2} max={64} placeholder="4" value={maxPlayers} onChange={(e) => setMaxPlayers(e.target.value)} />
+                </div>
+                <div>
+                  <label htmlFor="join-param">{t("form.joinParam")}</label>
+                  <input id="join-param" maxLength={20} pattern="[a-z][a-z0-9_\-]{0,19}" placeholder="room" autoCapitalize="none" spellCheck={false} value={joinParam} onChange={(e) => setJoinParam(e.target.value.toLowerCase())} aria-describedby="join-param-help" />
+                </div>
+              </div>
+              <small id="join-param-help">{t("form.joinParamHelp", { example: `?\u2060${JOIN_PARAM.test(joinParam.trim()) ? joinParam.trim() : "room"}=ABCD` })}</small>
+              <MultiplayerSetup gameId={orig?.id} />
+            </>
+          )}
 
           <label htmlFor="description">{t("form.description")}</label>
           <textarea id="description" rows={3} maxLength={1000} value={description} onChange={(e) => setDescription(e.target.value)} />

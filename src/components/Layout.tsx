@@ -13,6 +13,7 @@ import { useNewUpdate } from "../lib/whatsNew";
 import { Avatar } from "./Avatar";
 import { useAiStatus } from "../lib/assist";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { InvitePopup } from "./GameInvite";
 
 // The admin pages, all reached through "Admin" in the sidebar.
 const ADMIN_PAGE = /^\/(admin|applications|invites|reports)(\/|$)/;
@@ -228,6 +229,8 @@ export function Layout() {
           </footer>
         </main>
       </div>
+
+      {profile && <InvitePopup />}
 
       <nav ref={tabbarRef} className="tabbar" aria-label="Toki">
         <NavLink to="/" end><HomeIcon /><span>{t("nav.discover")}</span></NavLink>

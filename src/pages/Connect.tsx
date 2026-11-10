@@ -176,7 +176,8 @@ export function Connect() {
   );
 }
 
-export const featureKey = (f: Feature) => (f === "fix" ? "connect.fix" : f === "saves" ? "connect.saves" : "connect.scores");
+export const featureKey = (f: Feature) =>
+  f === "fix" ? "connect.fix" : f === "saves" ? "connect.saves" : f === "multiplayer" ? "connect.multiplayer" : "connect.scores";
 
 /** pr: whether the run opened a pull request (a finished run without one found nothing to do). */
 export function JobBadge({ status, pr }: { status: ConnectJob["status"]; pr: boolean }) {
@@ -209,7 +210,9 @@ function NewRun({ repos, games, initialGame, fix, lang, onStarted }: {
   useEffect(() => {
     if (known) setGame((g) => g || initialGame);
   }, [known, initialGame]);
-  const [features, setFeatures] = useState<Feature[]>(["saves", "scores"]);
+  // "Add friend invites" from the news for developers starts with just that ticked.
+  const [features, setFeatures] = useState<Feature[]>(() =>
+    new URLSearchParams(location.search).get("add") === "multiplayer" ? ["multiplayer"] : ["saves", "scores"]);
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -261,6 +264,10 @@ function NewRun({ repos, games, initialGame, fix, lang, onStarted }: {
           <label className="fb-check">
             <input type="checkbox" checked={features.includes("scores")} onChange={() => toggle("scores")} />
             <span><b>{t("connect.scores")}</b> <span className="sub">{t("connect.scoresHelp")}</span></span>
+          </label>
+          <label className="fb-check">
+            <input type="checkbox" checked={features.includes("multiplayer")} onChange={() => toggle("multiplayer")} />
+            <span><b>{t("connect.multiplayer")}</b> <span className="sub">{t("connect.multiplayerHelp")}</span></span>
           </label>
         </>
       )}

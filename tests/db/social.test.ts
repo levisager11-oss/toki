@@ -276,11 +276,11 @@ describe("ping", () => {
     await say(a, chat, "hello");
     await say(a, chat, "are you there?");
     const r = await rpc<{ notifications: number; chats: number }>(b, "ping", [game.id, true], ["uuid", "boolean"]);
-    expect(r).toEqual({ notifications: 1, chats: 1 }); // the friend request, and one chat
+    expect(r).toMatchObject({ notifications: 1, chats: 1 }); // the friend request, and one chat
     expect((await t.admin<{ game_id: string }>("select game_id from presence where user_id = $1", [b.id]))[0].game_id).toBe(game.id);
     await rpc(b, "mark_chat_read", [chat], ["uuid"]);
     await rpc(b, "mark_notifications_read", [null], ["bigint[]"]);
-    expect(await rpc(b, "ping", [null, false], ["uuid", "boolean"])).toEqual({ notifications: 0, chats: 0 });
+    expect(await rpc(b, "ping", [null, false], ["uuid", "boolean"])).toMatchObject({ notifications: 0, chats: 0 });
     // Not visible: online status stays as it was.
     expect((await t.admin<{ game_id: string }>("select game_id from presence where user_id = $1", [b.id]))[0].game_id).toBe(game.id);
   });
@@ -296,5 +296,87 @@ describe("ping", () => {
     expect((await rpc<{ chats: number }>(c, "ping", [null, false], ["uuid", "boolean"])).chats).toBe(0);
     await say(b, g, "from a friend");
     expect((await rpc<{ chats: number }>(c, "ping", [null, false], ["uuid", "boolean"])).chats).toBe(1);
+  });
+});
+
+describe("game invites", () => {
+  let multi: { id: string };
+  const invite = (from: Who, to: { id: string }, g = multi, code = "ABCD") => rpc(from, "invite_to_game", [to.id, g.id, code], ["uuid", "uuid", "text"]);
+  const ping = (who: Who) => rpc<{ friends_online: number; invite: { id: number; game: string; code: string; from: { username: string } } | null }>(who, "ping", [null, true], ["uuid", "boolean"]);
+
+  beforeAll(async () => {
+    multi = await t.game(dev);
+    await t.as(dev, "update games set multiplayer = true, max_players = 4, join_param = 'join' where id = $1", [multi.id]);
+  });
+
+  it("reach a friend in the bell and as the pop-up's invite", async () => {
+    await befriend(a, b);
+    await rpc(b, "mark_notifications_read", [null], ["bigint[]"]);
+    await invite(a, b);
+    const [n] = await t.as<{ id: number; data: { game: string; code: string; title: string }; actor_id: string }>(b, "select id, data, actor_id from notifications where kind = 'game_invite'");
+    expect(n).toMatchObject({ actor_id: a.id, data: { game: multi.id, code: "ABCD" } });
+    const r = await ping(b);
+    expect(r.invite).toMatchObject({ id: Number(n.id), game: multi.id, code: "ABCD", from: { username: a.username } });
+    expect(r.friends_online).toBe(0); // a hasn't been on Toki yet
+    await ping(a);
+    expect((await ping(b)).friends_online).toBe(1);
+    // Answered (joined or "not now"): no pop-up any more.
+    await rpc(b, "mark_notifications_read", [[n.id]], ["bigint[]"]);
+    expect((await ping(b)).invite).toBeNull();
+  });
+
+  it("only go to friends, for multiplayer games, with a plain room code", async () => {
+    await expect(invite(a, b)).rejects.toThrow(/not_friends/);
+    await expect(invite(null, b)).rejects.toThrow(/permission denied/); // visitors
+    await befriend(a, b);
+    await expect(invite(a, b, game)).rejects.toThrow(/not_found/); // not a multiplayer game
+    await expect(invite(a, b, multi, "AB CD")).rejects.toThrow(/bad_code/);
+    await expect(invite(a, b, multi, "x".repeat(33))).rejects.toThrow(/bad_code/);
+    await expect(invite(a, b, multi, "<script>")).rejects.toThrow(/bad_code/);
+    await rpc(b, "block_user", [a.id], ["uuid"]); // ends the friendship
+    await expect(invite(a, b)).rejects.toThrow(/not_friends/);
+    expect(await t.as(b, "select 1 from notifications where kind = 'game_invite'")).toHaveLength(0);
+  });
+
+  it("replace the earlier invite to the same friend, and can't be sent in a flood", async () => {
+    await befriend(a, b);
+    await invite(a, b, multi, "AAAA");
+    await expect(invite(a, b, multi, "BBBB")).rejects.toThrow(/rate_limited/);
+    await t.admin("update notifications set created_at = now() - interval '1 minute' where kind = 'game_invite' and actor_id = $1", [a.id]);
+    await invite(a, b, multi, "BBBB");
+    const rows = await t.as<{ data: { code: string } }>(b, "select data from notifications where kind = 'game_invite'");
+    expect(rows.map((r) => r.data.code)).toEqual(["BBBB"]);
+    // 30 invites in 10 minutes at most
+    await t.admin(
+      "insert into notifications (user_id, kind, actor_id, data) select $1, 'game_invite', $2, '{}' from generate_series(1, 29)",
+      [c.id, a.id],
+    );
+    await befriend(a, c);
+    await expect(invite(a, c)).rejects.toThrow(/rate_limited/);
+  });
+
+  it("can't be written directly", async () => {
+    await befriend(a, b);
+    await expect(t.as(a, "insert into notifications (user_id, kind, actor_id, data) values ($1, 'game_invite', $2, '{}')", [b.id, a.id])).rejects.toThrow(/permission denied/);
+  });
+
+  it("keep the game's settings within bounds", async () => {
+    await expect(t.as(dev, "update games set max_players = 1 where id = $1", [multi.id])).rejects.toThrow(/max_players/);
+    await expect(t.as(dev, "update games set join_param = 'a b' where id = $1", [multi.id])).rejects.toThrow(/join_param/);
+    await t.as(a, "update games set multiplayer = false where id = $1", [multi.id]); // not the owner: nothing changes
+    expect((await t.admin<{ multiplayer: boolean }>("select multiplayer from games where id = $1", [multi.id]))[0].multiplayer).toBe(true);
+  });
+});
+
+describe("news for developers", () => {
+  it("reaches everyone with a game, once per topic, and only the server sends it", async () => {
+    const other = await t.user("creator"); // a developer without a game
+    await expect(rpc(dev, "notify_developers", ["multiplayer"], ["text"])).rejects.toThrow(/permission denied/);
+    await t.admin("select notify_developers('multiplayer')");
+    await t.admin("select notify_developers('multiplayer')");
+    const rows = await t.as<{ data: { topic: string }; actor_id: string | null }>(dev, "select data, actor_id from notifications where kind = 'dev_news'");
+    expect(rows).toEqual([{ data: { topic: "multiplayer" }, actor_id: null }]);
+    expect(await t.as(other, "select 1 from notifications where kind = 'dev_news'")).toHaveLength(0);
+    expect(await t.as(a, "select 1 from notifications where kind = 'dev_news'")).toHaveLength(0);
   });
 });

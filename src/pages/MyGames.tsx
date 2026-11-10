@@ -10,6 +10,7 @@ import { HeartIcon, PlayIcon } from "../components/icons";
 import { useTitle } from "../lib/useTitle";
 import { UploadKeys } from "../components/UploadKeys";
 import { useHosting } from "../lib/hosting";
+import { MultiplayerSetup } from "../components/SaveSupport";
 
 export function MyGames() {
   const { t } = useI18n();
@@ -70,6 +71,7 @@ export function MyGames() {
           ))}
         </ul>
       )}
+      {list.length > 0 && <MultiplayerSetup id="toki-features" open={location.hash === "#toki-features"} />}
       {hosting?.enabled && <UploadKeys />}
     </section>
   );

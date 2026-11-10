@@ -7,6 +7,7 @@ import { refreshBadges, useBadges } from "../lib/useBadges";
 import { clearNotifications, listNotifications, markNotificationsRead, type Notification } from "../lib/social";
 import { Avatar } from "../components/Avatar";
 import { useTitle } from "../lib/useTitle";
+import { INVITE_MS, joinPath } from "../lib/invites";
 
 export function Notifications() {
   const { t, lang } = useI18n();
@@ -72,6 +73,20 @@ export function Notifications() {
         const g = games?.find((x) => x.id === d.game);
         return { line: t("notif.scoreBeaten", { who, title: d.title ?? "" }), to: g ? `/game/${g.slug}#scores` : "/" };
       }
+      case "game_invite": {
+        const g = games?.find((x) => x.id === d.game);
+        // The room may be gone after a while (and its code used by someone else): then just the game.
+        const fresh = Date.now() - new Date(n.created_at).getTime() < INVITE_MS;
+        return {
+          line: t(fresh ? "notif.gameInvite" : "notif.gameInviteOld", { who, title: g?.title ?? d.title ?? "" }),
+          to: g ? (fresh && d.code ? joinPath(g.slug, d.code) : `/game/${g.slug}`) : "/",
+        };
+      }
+      case "dev_news":
+        return d.topic === "multiplayer" ? { line: t("notif.devMultiplayer"), to: "/my-games#toki-features" } : { line: t("notif.devNews"), to: "/my-games#toki-features" };
+      default:
+        // A kind this version of Toki doesn't know yet.
+        return { line: t("notif.other"), to: "/updates" };
     }
   };
 
