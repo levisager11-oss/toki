@@ -11,6 +11,13 @@ const isTyping = () => {
   return !!a && (a.isContentEditable || a.tagName === "INPUT" || a.tagName === "TEXTAREA" || a.tagName === "SELECT");
 };
 
+// Height of the physical screen in the current orientation. The bar must never sit
+// below this, or its labels end up off the screen.
+const screenHeight = () => {
+  const { width, height } = window.screen;
+  return window.innerWidth > window.innerHeight ? Math.min(width, height) : Math.max(width, height);
+};
+
 export function useBottomBarFix(ref: RefObject<HTMLElement | null>) {
   useEffect(() => {
     const el = ref.current;
@@ -51,11 +58,17 @@ export function useBottomBarFix(ref: RefObject<HTMLElement | null>) {
           tallest.set(w, max);
           if (max - bottom > 100) bottom = max;
         }
+        // iOS sometimes reports a height taller than the screen; never trust more than that.
+        const screenH = screenHeight();
+        if (screenH > 0) bottom = Math.min(bottom, screenH);
         // Where iOS actually drew the bar, without our own shift. This also catches the
         // case where iOS reports the right height but still lays the bar out too high.
         const natural = el.getBoundingClientRect().bottom - applied;
         const shift = bottom - natural;
-        applied = shift > 1 ? Math.round(shift) : 0;
+        if (shift > 1) applied = Math.round(shift);
+        // iOS laid the bar out below the screen edge: pull it back up.
+        else if (screenH > 0 && natural - screenH > 1) applied = Math.round(screenH - natural);
+        else applied = 0;
         el.style.transform = applied ? `translateY(${applied}px)` : "";
       });
     };
