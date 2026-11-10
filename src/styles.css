@@ -895,6 +895,11 @@ a.author:hover { text-decoration: underline; color: var(--fg); }
 .helper-setup { margin: 16px 0; }
 .helper-guide { white-space: pre-wrap; font-family: var(--f-ui); font-size: 13px; background: var(--surface); border: 1px solid var(--line); padding: 8px 10px; max-height: 260px; overflow: auto; margin: 0; }
 .ai-link { align-self: flex-start; font-size: 14px; }
+.prompt-text { width: 100%; min-width: 0; resize: vertical; background: var(--bg); border: 1px solid var(--line); padding: 9px 11px; font-size: 13px; line-height: 1.45; }
+.prompt-text:focus { border-color: var(--fg); outline: none; }
+.prompt-skipped > summary { cursor: pointer; font-size: 14px; }
+.prompt-skipped ul { margin: 6px 0 0; padding-left: 18px; }
+.prompt-skipped li { overflow-wrap: anywhere; }
 .helper-setup > summary { cursor: pointer; padding: 6px 0; }
 .helper-setup > .ai-panel { margin-top: 8px; }
 

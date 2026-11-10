@@ -1,6 +1,7 @@
 // The free AI's small helpers, for every logged-in account: translations, similar feedback,
 // "You might like" games; and for developers and admins: release note drafts, game descriptions,
-// summaries of the feedback inbox and of developer applications.
+// summaries of the feedback inbox and of developer applications, and a prompt for a coding AI made
+// from a game's feedback.
 //
 // Whatever the AI reads comes from the database, never from the request: posts, replies and chat
 // messages are read with the account's own login, so row level security decides what it may see.
@@ -11,8 +12,8 @@ import { createHash } from "node:crypto";
 import { AiError } from "../server/ai/provider.js";
 import { freeCompletion, type FreeFeature } from "../server/ai/free.js";
 import {
-  applicationPrompt, describePrompt, inboxPrompt, plain, readDescribe, readRelease, readSimilar, readSuggest, readTranslation, releasePrompt,
-  similarPrompt, suggestPrompt, translatePrompt, type CatalogGame, type InboxPost, type Lang,
+  applicationPrompt, describePrompt, improvePrompt, improveText, inboxPrompt, plain, readDescribe, readImprove, readRelease, readSimilar, readSuggest,
+  readTranslation, releasePrompt, similarPrompt, suggestPrompt, translatePrompt, type CatalogGame, type ImprovePost, type InboxPost, type Lang,
 } from "../server/assist/prompts.js";
 import { linksIn, readPage } from "../server/assist/pages.js";
 import { cleanTurns, guideFiles, helpPrompt, learnPrompt, scoreText, type HelpGame, type HelpPlayer } from "../server/assist/help.js";
@@ -54,6 +55,8 @@ export async function POST(request: Request) {
         return await scan(ctx, b);
       case "summary":
         return await summary(ctx, b, lang);
+      case "improve":
+        return await improve(ctx, b, lang);
       case "application":
         return await application(ctx, b, lang);
       case "help":
@@ -383,6 +386,47 @@ async function summary(ctx: Ctx, b: Record<string, unknown>, lang: Lang) {
   }));
   const answer = await ask(ctx, "summary", inboxPrompt(posts, lang), 0.2);
   return json({ text: plain(answer, 4000) });
+}
+
+/**
+ * A prompt for an AI that works on the code, from one game's open feedback (or Toki's own, for
+ * admins): posts that don't help are sorted out and the same wishes put together.
+ */
+async function improve(ctx: Ctx, b: Record<string, unknown>, lang: Lang) {
+  if (ctx.user.role === "player") return json({ error: "not_allowed" }, 403);
+  let game: { title: string; description: string } | null = null;
+  if (b.game_id === "toki") {
+    if (ctx.user.role !== "admin") return json({ error: "not_allowed" }, 403);
+  } else if (isUuid(b.game_id)) {
+    const [g] = await ctx.db.select<{ title: string; description: string; description_de: string | null; created_by: string | null }>(
+      "games",
+      `id=eq.${b.game_id}&select=title,description,description_de,created_by`,
+    );
+    if (!g || (g.created_by !== ctx.user.id && ctx.user.role !== "admin")) return json({ error: "not_allowed" }, 403);
+    game = { title: g.title, description: (lang === "de" && g.description_de) || g.description };
+  } else {
+    return json({ error: "bad_request" }, 400);
+  }
+  // With the developer's latest reply to each post: it often says a post is settled.
+  const rows = await ctx.db.select<{ id: string; kind: string; title: string; body: string; device: string | null; vote_count: number; status: string; feedback_replies: { body: string }[] | null }>(
+    "feedback_posts",
+    `select=id,kind,title,body,device,vote_count,status,feedback_replies(body)&feedback_replies.official=eq.true&feedback_replies.order=created_at.desc&feedback_replies.limit=1` +
+      `&hidden=eq.false&status=in.(open,planned,in_progress)&${game ? `game_id=eq.${b.game_id}` : "game_id=is.null"}&order=vote_count.desc,created_at.desc&limit=120`,
+  );
+  if (!rows.length) return json({ prompt: "", total: 0, used: 0, skipped: [] });
+  const posts: ImprovePost[] = rows.map((r) => ({
+    id: r.id,
+    kind: r.kind,
+    title: r.title,
+    body: r.body,
+    votes: r.vote_count,
+    status: r.status,
+    device: r.device,
+    reply: r.feedback_replies?.[0]?.body ?? "",
+  }));
+  const out = readImprove(await ask(ctx, "summary", improvePrompt(game?.title ?? null, posts, lang), 0.2), posts);
+  if (!out) return json({ error: "ai_bad_answer" }, 502);
+  return json({ prompt: improveText(game, out.tasks, lang), total: posts.length, used: out.used, skipped: out.skipped });
 }
 
 async function application(ctx: Ctx, b: Record<string, unknown>, lang: Lang) {
