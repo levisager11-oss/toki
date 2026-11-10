@@ -108,6 +108,9 @@ export function Home() {
     <>
       {!q && slides.length > 0 && <Featured slides={slides} />}
 
+      {/* Right under the featured game. While searching it comes after the results instead. */}
+      {!q && <IdeaBanner />}
+
       {!q && recent.length > 0 && (
         <section>
           <div className="sechead">
@@ -161,7 +164,7 @@ export function Home() {
         )}
       </section>
 
-      <IdeaBanner />
+      {q && <IdeaBanner />}
     </>
   );
 }
