@@ -493,6 +493,71 @@ describe("SaveSync", () => {
     expect(a.game.storage.level).toBe("2");
   });
 
+  describe("what the page tells the player", () => {
+    it("says nothing for a game that never saves", async () => {
+      const cloud = new FakeCloud();
+      const a = new Device("A", cloud, {});
+      a.open();
+      await settle(3000);
+      expect(a.sync.state).toBe("none");
+      a.open(null);
+      await settle(3000);
+      expect(a.sync.state).toBe("none");
+    });
+
+    it("says saved only once the account holds the progress", async () => {
+      const cloud = new FakeCloud();
+      const a = new Device("A", cloud);
+      const states: string[] = [];
+      a.open();
+      const sync = a.sync as unknown as { o: { onState: (s: string) => void } };
+      sync.o.onState = (s) => states.push(s);
+      await settle(3000);
+      expect(cloud.save).not.toBeNull();
+      expect(states).toEqual(["saving", "saved"]);
+      expect(a.sync.state).toBe("saved");
+    });
+
+    it("says so when the account can't be reached, and recovers", async () => {
+      const cloud = new FakeCloud();
+      const a = new Device("A", cloud);
+      a.open();
+      await settle(3000);
+      expect(a.sync.state).toBe("saved");
+      cloud.putFails = true;
+      a.game.play({ level: "5" });
+      await nextUpload();
+      expect(a.sync.state).toBe("offline");
+      cloud.putFails = false;
+      await settle(6000);
+      expect(cloud.save?.keys.level).toBe("5");
+      expect(a.sync.state).toBe("saved");
+    });
+
+    it("says offline when the account can't be read and progress waits on the device", async () => {
+      const cloud = new FakeCloud();
+      cloud.readFails = true;
+      const a = new Device("A", cloud);
+      a.open();
+      await settle(11_000); // no answer: the game goes on by itself after 10 s
+      a.game.play({ level: "2" });
+      await settle(3000);
+      expect(a.sync.state).toBe("offline");
+      cloud.readFails = false;
+      await settle(10_000);
+      expect(cloud.save?.keys.level).toBe("2");
+      expect(a.sync.state).toBe("saved");
+    });
+
+    it("visitors: saved once the game saved something", async () => {
+      const cloud = new FakeCloud();
+      const a = new Device("A", cloud);
+      a.open(null);
+      await settle(3000);
+      expect(a.sync.state).toBe("saved");
+    });
+  });
+
   it("reads saves stored by the previous version of Toki", () => {
     const kv = new MemoryKV();
     kv.set(`toki.save.${USER}.${GAME}`, JSON.stringify({ keys: { a: "1" }, t: 5 }));
