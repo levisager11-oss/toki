@@ -107,7 +107,8 @@ export function MyGames() {
           ))}
         </ul>
       )}
-      <DevUpdates games={list} />
+      {/* Only the developer's own games, also for admins: the others are their developers' to update. */}
+      <DevUpdates games={list.filter((g) => g.created_by === profile.id)} />
       {list.length > 0 && <MultiplayerSetup id="toki-features" open={location.hash === "#toki-features"} />}
       {hosting?.enabled && <UploadKeys />}
     </section>
