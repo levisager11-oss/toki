@@ -38,6 +38,20 @@ export function roomFromMessage(data: unknown): string | null | undefined {
   return typeof m.data === "string" && ROOM_CODE.test(m.data) ? m.data : null;
 }
 
+/**
+ * Whether the game can open a room by itself when Toki asks (toki.onHost in toki-save.js):
+ * true or false when the game says so, false when it starts again, undefined for other messages.
+ */
+export function hostFromMessage(data: unknown): boolean | undefined {
+  const m = data as { toki?: number; type?: string; data?: unknown } | null;
+  if (!m || typeof m !== "object" || m.toki !== 1) return undefined;
+  if (m.type === "hello") return false;
+  return m.type === "host" ? m.data === true : undefined;
+}
+
+/** What Toki sends the game to have it open a room (the game set toki.onHost). */
+export const HOST_MESSAGE = { toki: 1, type: "host" } as const;
+
 /** The game's address that joins this room, or its normal address without a (valid) code. */
 export function playUrl(game: Pick<Game, "play_url" | "multiplayer" | "join_param">, code: string | null): string {
   if (!code || !game.multiplayer || !ROOM_CODE.test(code)) return game.play_url;
@@ -50,8 +64,13 @@ export function playUrl(game: Pick<Game, "play_url" | "multiplayer" | "join_para
   }
 }
 
-/** The game's page on Toki that joins this room. */
-export const joinPath = (slug: string, code: string) => `/game/${slug}?room=${encodeURIComponent(code)}`;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** A party's id from an address, or null. */
+export const partyId = (v: string | null | undefined) => (v && UUID.test(v) ? v : null);
+
+/** The game's page on Toki that joins this room, and the party of whoever invited (if any). */
+export const joinPath = (slug: string, code: string, party?: string | null) =>
+  `/game/${slug}?room=${encodeURIComponent(code)}${partyId(party) ? `&party=${party}` : ""}`;
 /** The game's page on Toki, ready to invite this friend as soon as a room is open. */
 export const invitePath = (slug: string, friendId: string) => `/game/${slug}?invite=${encodeURIComponent(friendId)}`;
 

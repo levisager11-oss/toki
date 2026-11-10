@@ -1,10 +1,12 @@
-/* Toki save support v4. Put this in the game's HTML <head>, before the game's own scripts.
+/* Toki save support v5. Put this in the game's HTML <head>, before the game's own scripts.
    Inside Toki, it keeps a copy of everything the game stores in localStorage, so progress
    survives closing the app (iPhone deletes storage of games shown inside other sites) and
    follows logged-in players to other devices. Outside Toki it does nothing.
    High scores: call toki.score(points) when a round ends (for times: milliseconds).
    Multiplayer: call toki.room(code) when the player is in a room others can join with that
-   code (toki.room(null) when they leave it), so they can invite their Toki friends. */
+   code (toki.room(null) when they leave it), so they can invite their Toki friends.
+   toki.onHost(fn): Toki calls fn when the player invites friends before a room is open; open a
+   room for them in it (and call toki.room(code) as always), so they don't have to. */
 (function () {
   // Games hosted on Toki get this script added for them; a second copy in the game does nothing.
   if (window.__tokiSave) return;
@@ -20,7 +22,17 @@
   window.toki.room = function (code) {
     if (inToki) top.postMessage({ toki: 1, type: "room", data: code == null || code === "" ? null : String(code) }, origin);
   };
+  var hostFn = null;
+  window.toki.onHost = function (fn) {
+    hostFn = typeof fn === "function" ? fn : null;
+    if (inToki) top.postMessage({ toki: 1, type: "host", data: !!hostFn }, origin);
+  };
   if (!inToki) return;
+  window.addEventListener("message", function (e) {
+    var m = e.data;
+    if (e.source !== top || !m || m.toki !== 1 || m.type !== "host" || !hostFn) return;
+    try { hostFn(); } catch (err) { /* the game's own error: the player can still open a room by hand */ }
+  });
   var ls, MARK = "__toki_t";
   try { ls = window.localStorage; ls.getItem(MARK); } catch (e) { return; }
   var P = Storage.prototype, raw = { set: P.setItem, clear: P.clear };

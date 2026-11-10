@@ -54,6 +54,7 @@ export function Chat() {
     c.kind === "public" ? t("chat.toki")
       : c.kind === "game" ? games?.find((g) => g.id === c.game_id)?.title ?? t("chat.gameRoom")
       : c.kind === "dm" ? `@${c.other_username ?? "…"}`
+      : c.kind === "party" ? t("party.chat")
       : c.title ?? "";
   const summary = chat ? list?.find((c) => c.id === chat.id) : undefined;
   const open = !!id;

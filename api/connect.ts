@@ -2,7 +2,7 @@
 // Every action checks that the run (and the GitHub installation) belongs to the logged-in account.
 import { budgetedCompletion } from "../server/ai/budget.js";
 import { freeCompletion, freeSettings } from "../server/ai/free.js";
-import { errorCode, errorDetail, step, type Bug, type Feature, type Job, type Message, type StepResult } from "../server/connect/agent.js";
+import { errorCode, errorDetail, step, uploadFeatures, type Bug, type Feature, type Job, type Message, type StepResult } from "../server/connect/agent.js";
 import { agentStep } from "../server/connect/managed.js";
 import {
   AGENT_SETTINGS, agentClient, changesFile, ensureAgent, interrupt, replyTool, sendMessage, sessionEvents, sessionStatus, startSession, type AgentSettings,
@@ -86,7 +86,7 @@ async function startUpload(ctx: Ctx, b: Record<string, unknown>) {
       installation_id: null,
       source: "upload",
       repo: `toki/${game.hosted_site}`,
-      features: ["scores"],
+      features: uploadFeatures(b.features),
       notes: typeof b.notes === "string" ? b.notes.trim().slice(0, 1000) : "",
       game_id: b.game_id,
       engine: "steps",

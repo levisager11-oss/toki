@@ -14,6 +14,8 @@ import { Avatar } from "./Avatar";
 import { useAiStatus } from "../lib/assist";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { InvitePopup } from "./GameInvite";
+import { PartyBar } from "./Party";
+import { keepPush } from "../lib/push";
 
 // The admin pages, all reached through "Admin" in the sidebar.
 const ADMIN_PAGE = /^\/(admin|applications|invites|reports)(\/|$)/;
@@ -40,6 +42,22 @@ export function Layout() {
   const topRef = useRef<HTMLElement>(null);
   useBottomBarFix(tabbarRef);
   useBarHeights(topRef, tabbarRef);
+  // A device with invite notifications on keeps getting them, for whoever is logged in.
+  const myId = profile?.id;
+  useEffect(() => {
+    if (myId) keepPush(myId, lang).catch(() => {});
+  }, [myId, lang]);
+  // A tapped notification, while Toki is open: go to its page (public/sw.js).
+  useEffect(() => {
+    const sw = typeof navigator !== "undefined" ? navigator.serviceWorker : undefined;
+    if (!sw) return;
+    const onMessage = (e: MessageEvent) => {
+      const m = e.data as { toki?: string; url?: unknown } | null;
+      if (m?.toki === "open" && typeof m.url === "string" && /^\/(?![/\\])/.test(m.url)) navigate(m.url);
+    };
+    sw.addEventListener("message", onMessage);
+    return () => sw.removeEventListener("message", onMessage);
+  }, [navigate]);
   // Admins: how many applications for developer accounts wait, shown next to "Applications".
   const [openApps, setOpenApps] = useState(0);
   const isAdmin = profile?.role === "admin";
@@ -220,6 +238,7 @@ export function Layout() {
 
         </header>
         {offline && <p className="offline-bar" role="status">{t("offline")}</p>}
+        {profile && <PartyBar me={profile.id} />}
         <main className="content" id="main" tabIndex={-1}>
           {/* A new boundary per page, so going to another page clears an error. */}
           <ErrorBoundary key={location.pathname}>
