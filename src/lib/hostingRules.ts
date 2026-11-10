@@ -91,6 +91,19 @@ export function siteUrl(site: string, domain: string, entry = "index.html"): str
   return `https://${site}.${domain}/${path}`;
 }
 
+/**
+ * The game runs at its own address on Toki right now: <hosted_site>.<domain>. Not a link
+ * elsewhere, even one that starts with the same name (debtdrifter.vercel.app).
+ */
+export function isOnToki(g: { hosted_site?: string | null; play_url: string } | null | undefined, domain: string | null | undefined): boolean {
+  if (!g?.hosted_site || !domain) return false;
+  try {
+    return new URL(g.play_url).hostname.toLowerCase() === `${g.hosted_site}.${domain}`.toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
 export function isHostedUrl(url: string, domain: string | null | undefined): boolean {
   if (!domain) return false;
   try {
