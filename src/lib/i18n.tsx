@@ -2511,7 +2511,7 @@ const de: Record<Key, string> = {
   "idea.box.mine": "Meine Spielideen",
   "idea.box.login": "Anmelden, um ein Spiel vorzuschlagen",
   "idea.form.title": "Welches Spiel fehlt dir?",
-  "idea.form.titleHint": "Ein Name, oder die Idee in wenigen Worten",
+  "idea.form.titleHint": "Name oder kurze Idee",
   "idea.form.body": "Wie soll es sein? (freiwillig)",
   "idea.form.bodyHint": "Was macht man im Spiel? Was macht daran Spass? Spielt man allein oder mit Freunden?",
   "idea.form.who": "Nur die Entwickler von Toki und du sehen deine Idee.",
