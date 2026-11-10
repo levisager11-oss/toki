@@ -113,3 +113,29 @@ describe("one-click add", () => {
     await expect(t.service("insert into connect_jobs (user_id, repo, features) values ($1, 'a/b', '{scores}')", [otherDev.id])).rejects.toThrow(/connect_jobs_installation_check/);
   });
 });
+
+describe("moving a game to Toki", () => {
+  it("only lets the server remember a game's old address", async () => {
+    const g = await t.game(dev);
+    await t.as(dev, "update games set moved_from = 'https://evil.example', moved_at = now() where id = $1", [g.id]);
+    expect((await t.admin<{ moved_from: string | null }>("select moved_from from games where id = $1", [g.id]))[0].moved_from).toBeNull();
+    await t.service("update games set moved_from = 'https://lu.github.io/moon-hop/', moved_at = now() where id = $1", [g.id]);
+    await t.as(admin, "update games set moved_from = null where id = $1", [g.id]);
+    await t.as(dev, "update games set title = 'Moon Hop' where id = $1", [g.id]);
+    const [row] = await t.admin<{ moved_from: string; moved_at: string | null }>("select moved_from, moved_at from games where id = $1", [g.id]);
+    expect(row.moved_from).toBe("https://lu.github.io/moon-hop/");
+    expect(row.moved_at).not.toBeNull();
+    const [added] = await t.as<{ moved_from: string | null }>(
+      dev,
+      "insert into games (slug, title, category, play_url, moved_from) values ('moved-try', 'X', 'arcade', 'https://example.com', 'https://x.example') returning moved_from",
+    );
+    expect(added.moved_from).toBeNull();
+  });
+
+  it("lets everyone read where a game was before, so players' progress can come along", async () => {
+    const g = await t.game(dev);
+    await t.service("update games set moved_from = 'https://lu.github.io/moon-hop/', moved_at = now() where id = $1", [g.id]);
+    const [row] = await t.as<{ moved_from: string }>(null, "select moved_from from games where id = $1", [g.id]);
+    expect(row.moved_from).toBe("https://lu.github.io/moon-hop/");
+  });
+});

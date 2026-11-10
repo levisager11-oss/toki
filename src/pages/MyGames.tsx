@@ -10,6 +10,7 @@ import { ClockIcon, HeartIcon, PlayIcon } from "../components/icons";
 import { useTitle } from "../lib/useTitle";
 import { UploadKeys } from "../components/UploadKeys";
 import { useHosting } from "../lib/hosting";
+import { isHostedUrl } from "../lib/hostingRules";
 import { MultiplayerSetup } from "../components/SaveSupport";
 import { formatDuration } from "../lib/analytics";
 
@@ -86,6 +87,12 @@ export function MyGames() {
                   <Link to={`/game/${g.slug}/feedback`}>{t("nav.feedback")}</Link>
                   {" · "}
                   <Link to={`/game/${g.slug}/stats`}>{t("an.title")}</Link>
+                  {hosting?.enabled && hosting.domain && !isHostedUrl(g.play_url, hosting.domain) && (
+                    <>
+                      {" · "}
+                      <Link to={`/edit/${g.slug}#move`}>{t("move.button")}</Link>
+                    </>
+                  )}
                 </span>
               </div>
               <div className="stats">

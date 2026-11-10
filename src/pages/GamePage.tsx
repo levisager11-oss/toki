@@ -8,7 +8,8 @@ import { markPlayed, visitorId } from "../lib/local";
 import { findGame, plays, recordPlay } from "../lib/games";
 import { usePlaytime } from "../lib/analytics";
 import { useGames } from "../lib/useGames";
-import { useSaveBridge } from "../lib/saves";
+import { browserStorage, useSaveBridge } from "../lib/saves";
+import { listenForPickup, needsPickup, readList } from "../lib/movedSaves";
 import { matchIsolation } from "../lib/isolation";
 import { GameGrid, Plays } from "../components/GameCard";
 import { FavButton } from "../components/FavButton";
@@ -49,6 +50,12 @@ export function GamePage() {
   const gameId = game?.id;
   const userId = session?.user.id;
   const saves = useSaveBridge(gameFrame, gameId, game?.play_url, userId);
+  // A game that moved to Toki: first bring this player's progress over from its old address
+  // (src/lib/movedSaves.ts). Decided once per game, before the game starts.
+  const [recentAtOpen] = useState(() => readList(browserStorage, "toki.recent"));
+  const [pickup, setPickup] = useState<{ id: string; pending: boolean } | null>(null);
+  if (game && authReady && pickup?.id !== game.id) setPickup({ id: game.id, pending: needsPickup(game, userId, browserStorage, recentAtOpen) });
+  const pickingUp = !!game && pickup?.id === game.id && pickup.pending;
   const scores = useScoreBridge(gameFrame, game, userId);
   // Loads the game again, e.g. to continue from newer progress made on another device.
   const [frameRun, setFrameRun] = useState(0);
@@ -174,8 +181,11 @@ export function GamePage() {
               <CloseIcon />
             </button>
           )}
+          {pickingUp && game.moved_from && (
+            <SavePickup key={game.id} from={game.moved_from} gameId={game.id} userId={userId} onDone={() => setPickup({ id: game.id, pending: false })} />
+          )}
           {/* Starts again after logging in or out, so the game gets the right save. */}
-          <iframe
+          {!pickingUp && <iframe
             ref={gameFrame}
             key={frameKey}
             src={src}
@@ -188,7 +198,7 @@ export function GamePage() {
               const active = document.activeElement;
               if (matchMedia("(pointer: fine)").matches && (!active || active === document.body)) e.currentTarget.focus({ preventScroll: true });
             }}
-          />
+          />}
         </div>
         <div className="player-bar">
           <div className="info">
@@ -283,5 +293,26 @@ function AboutText({ gameId, text, translatable }: { gameId: string; text: strin
       <p>{tr.texts?.[0] ?? text}</p>
       <TranslateToggle tr={tr} />
     </>
+  );
+}
+
+/**
+ * The game at its old address, hidden, while it hands over this player's progress. Only its save
+ * script is talked to; the game itself never shows.
+ */
+function SavePickup({ from, gameId, userId, onDone }: { from: string; gameId: string; userId: string | undefined; onDone: () => void }) {
+  const { t } = useI18n();
+  const ref = useRef<HTMLIFrameElement>(null);
+  const done = useRef(onDone);
+  done.current = onDone;
+  useEffect(
+    () => listenForPickup({ frame: () => ref.current?.contentWindow, from, gameId, userId, kv: browserStorage, done: () => done.current() }),
+    [from, gameId, userId],
+  );
+  return (
+    <div className="pickup" aria-live="polite">
+      <p>{t("move.pickingUp")}</p>
+      <iframe ref={ref} src={from} title="" aria-hidden="true" tabIndex={-1} className="pickup-frame" />
+    </div>
   );
 }

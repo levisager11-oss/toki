@@ -47,6 +47,7 @@ export const HOST_ERRORS = [
   "no_files", "too_many_files", "too_big", "bad_file", "no_entry", "zip", "rate_limited", "storage_full", "account_full", "hosting_off",
   "missing_files", "not_allowed", "slug_taken", "no_previous", "storage_error", "too_many_keys", "upload", "error",
   "github_off", "github_error", "no_branch", "no_repo", "repo_too_big",
+  "already_hosted", "move_unreachable", "move_incomplete", "move_slow", "move_no_saves", "not_moved",
 ] as const;
 export type HostErrorCode = (typeof HOST_ERRORS)[number];
 /** The error to show: one Toki knows, "upload" when a file didn't reach Cloudflare, else "error". */
@@ -129,6 +130,11 @@ export async function uploadGame(gameId: string, files: PickedFile[], isolation:
 }
 
 export const rollBackGame = (gameId: string) => api<{ play_url: string }>("/api/hosting", { method: "POST", body: JSON.stringify({ action: "rollback", game_id: gameId }) });
+/** "Move to Toki": Toki downloads the game from its link and hosts it (server/migrate.ts). */
+export const moveToToki = (gameId: string, anyway = false) =>
+  api<{ play_url: string; from: string; files: number; bytes: number; saves: boolean }>("/api/hosting", { method: "POST", body: JSON.stringify({ action: "move", game_id: gameId, anyway }) });
+/** Back to the old link after moving; the files on Toki are deleted. */
+export const moveBack = (gameId: string) => api<{ play_url: string }>("/api/hosting", { method: "POST", body: JSON.stringify({ action: "move_back", game_id: gameId }) });
 export const unhostGame = (gameId: string) => api<{ ok: true }>("/api/hosting", { method: "POST", body: JSON.stringify({ action: "unhost", game_id: gameId }) });
 export const createUploadKey = (name: string) => api<{ id: string; key: string }>("/api/hosting", { method: "POST", body: JSON.stringify({ action: "create_key", name }) });
 

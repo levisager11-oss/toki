@@ -413,7 +413,7 @@ export const supabaseCloud: Cloud = {
   },
 };
 
-const browserStorage: KeyValue = {
+export const browserStorage: KeyValue = {
   get: (k) => {
     try {
       return localStorage.getItem(k);

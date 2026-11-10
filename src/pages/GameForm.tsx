@@ -21,6 +21,7 @@ import { ImportFromLink } from "../components/ImportFromLink";
 import { gitConnect, gitDisconnect, hostError, unhostGame, uploadGame, useHosting, type GitChoice, type GitRow, type Imported } from "../lib/hosting";
 import { GitHubFollow } from "../components/GitHubFollow";
 import { QuickAdd, type QuickCarry } from "../components/QuickAdd";
+import { MovedNotice, MoveToToki, type Moved } from "../components/MoveToToki";
 
 // Developers who chose "Advanced" get the full form straight away next time (this browser only).
 const ADVANCED_KEY = "toki.addAdvanced";
@@ -90,6 +91,8 @@ export function GameForm() {
   const [manual, setManual] = useState(prefersAdvanced);
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Just moved from its link onto Toki (MoveToToki): shown with the way back.
+  const [moved, setMoved] = useState<Moved | null>(null);
   // Pictures uploaded while this form is open. The ones not saved with the game are deleted again.
   const uploaded = useRef<string[]>([]);
   const saved = useRef(false);
@@ -144,6 +147,17 @@ export function GameForm() {
       setJoinParam(g.join_param || "room");
     });
   }, [editSlug]);
+
+  /** After moving to Toki or back: the game's address changed on the server. */
+  const reloadWhere = async (slugNow: string) => {
+    invalidateGames();
+    const g = await getGame(slugNow);
+    if (!g) return;
+    setOrig(g);
+    setUrl(g.play_url);
+    setIsolation(g.needs_isolation === true);
+    setMode(null);
+  };
 
   /** "Advanced": the full form, filled in with what the one-click screen had so far. */
   const toAdvanced = (c: QuickCarry) => {
@@ -404,6 +418,7 @@ export function GameForm() {
           )}
           {hosted ? (
             <>
+              {moved && orig && <MovedNotice gameId={orig.id} moved={moved} onUndone={() => { setMoved(null); reloadWhere(orig.slug); }} />}
               {fromGit ? (
                 <GitHubFollow gameId={orig?.id} row={git} choice={gitChoice} onChoice={(c) => { setGitChoice(c); setDirty(true); }} onChanged={() => orig && loadGit(orig.id)} />
               ) : (
@@ -418,6 +433,9 @@ export function GameForm() {
               <small id="url-help">{t("form.urlHelp")}</small>
               {wasHosted && <p className="check warn">{t("host.leaveWarn")}</p>}
               <LinkCheck url={url.trim()} isolation={isolation} />
+              {orig && !wasHosted && canHost && url.trim() === orig.play_url && (
+                <MoveToToki gameId={orig.id} url={orig.play_url} onMoved={(m) => { setMoved(m); reloadWhere(orig.slug); }} />
+              )}
             </>
           )}
           <label className="check">

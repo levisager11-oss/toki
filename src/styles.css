@@ -146,6 +146,10 @@ h1, h2 { text-wrap: balance; }
 .player { display: flex; flex-direction: column; gap: 14px; }
 .frame { position: relative; background: #000; border: 1px solid var(--fg); aspect-ratio: 16 / 9; max-height: calc(100vh - 220px); width: 100%; }
 .frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
+/* A moved game's old address, hidden, while it hands over the player's progress */
+.pickup { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; color: #fff; text-align: center; }
+.pickup p { margin: 0; font-size: 14px; }
+.frame iframe.pickup-frame { inset: auto; left: 0; top: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .frame.is-full, .frame:fullscreen { max-height: none; aspect-ratio: auto; border: 0; }
 /* Game covers the whole screen edge to edge, including behind the notch and home bar. */
 .frame.pseudo-full { position: fixed; inset: 0; z-index: 100; width: 100vw; height: 100vh; height: 100dvh; max-height: none; aspect-ratio: auto; border: 0; margin: 0; padding: 0; }
@@ -925,6 +929,10 @@ main.content:focus { outline: none; }
 .host-versions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 14px; }
 .host-versions p { margin: 0; }
 .host-more { margin: 0; font-size: 13px; }
+/* "Move to Toki" for games at a link elsewhere */
+.move-box { border: 1px solid var(--line); background: var(--surface); padding: 12px 14px; margin-top: 12px; }
+.move-box p { margin: 0; font-size: 14px; }
+.move-box .actions { margin-top: 2px; }
 .host-box .check p { margin: 0 0 4px; }
 .host-box .sub, .key-list .sub { color: var(--muted); font-size: 13px; }
 .import-box { margin: 0 0 6px; }

@@ -47,6 +47,9 @@ export interface Game {
   join_param?: string;
   /** The game's address name when Toki hosts it (<site>.playtoki.app). Only the server sets it. */
   hosted_site?: string | null;
+  /** Where the game ran before it moved to Toki; players' progress is picked up there. Only the server sets it. */
+  moved_from?: string | null;
+  moved_at?: string | null;
   author?: { username: string } | null;
   stats?: { plays: number; likes: number } | null;
 }
