@@ -155,6 +155,7 @@ export function Layout() {
             <NavLink to="/my-games">{t("nav.myGames")}</NavLink>
             <NavLink to="/add">{t("nav.addGame")}</NavLink>
             <NavLink to="/feedback/inbox">{t("fb.inbox.title")}</NavLink>
+            <NavLink to="/ideas">{t("idea.title")}</NavLink>
             {(ai.strong || ai.free) && <NavLink to="/connect">{t("nav.connect")}</NavLink>}
             {profile.role === "admin" && (
               <NavLink to="/admin" className={() => (ADMIN_PAGE.test(location.pathname) ? "active" : "")}>
@@ -169,6 +170,7 @@ export function Layout() {
             <h4>Toki</h4>
             <NavLink to="/updates">{t("rel.whatsNew")}{newUpdate && <span className="new-dot" title={t("rel.newSinceVisit")}><span className="sr-only">{t("rel.newSinceVisit")}</span></span>}</NavLink>
             <NavLink to="/feedback" end>{t("nav.feedback")}</NavLink>
+            {profile && !canCreate(profile) && <NavLink to="/ideas">{t("idea.mine")}</NavLink>}
           </nav>
           {profile ? (
             <div className="me">
@@ -226,6 +228,7 @@ export function Layout() {
           <footer className="foot mobile-only">
             <Link to="/updates">{t("nav.updates")}{newUpdate && <span className="new-dot" title={t("rel.newSinceVisit")}><span className="sr-only">{t("rel.newSinceVisit")}</span></span>}</Link>
             <Link to="/feedback">{t("nav.tokiFeedback")}</Link>
+            {profile && <Link to="/ideas">{t(canCreate(profile) ? "idea.title" : "idea.mine")}</Link>}
           </footer>
         </main>
       </div>

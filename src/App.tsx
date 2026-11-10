@@ -34,6 +34,8 @@ const Connect = lazy(loadPage(() => import("./pages/Connect").then((m) => ({ def
 const ConnectJob = lazy(loadPage(() => import("./pages/ConnectJob").then((m) => ({ default: m.ConnectJob }))));
 const ConnectGitHub = lazy(loadPage(() => import("./pages/ConnectGitHub").then((m) => ({ default: m.ConnectGitHub }))));
 const ResetPassword = lazy(loadPage(() => import("./pages/ResetPassword").then((m) => ({ default: m.ResetPassword }))));
+const Ideas = lazy(loadPage(() => import("./pages/Ideas").then((m) => ({ default: m.Ideas }))));
+const Idea = lazy(loadPage(() => import("./pages/Idea").then((m) => ({ default: m.Idea }))));
 const Invites = lazy(loadPage(() => import("./pages/Invites").then((m) => ({ default: m.Invites }))));
 
 const Later = ({ children }: { children: ReactNode }) => <Suspense fallback={null}>{children}</Suspense>;
@@ -65,6 +67,8 @@ export function App() {
           <Route path="chat" element={<RequireMember player><Later><Chat /></Later></RequireMember>} />
           <Route path="chat/:id" element={<RequireMember player><Later><Chat /></Later></RequireMember>} />
           <Route path="notifications" element={<RequireMember player><Later><Notifications /></Later></RequireMember>} />
+          <Route path="ideas" element={<RequireMember player><Later><Ideas /></Later></RequireMember>} />
+          <Route path="ideas/:id" element={<RequireMember player><Later><Idea /></Later></RequireMember>} />
           <Route path="reports" element={<RequireMember admin><Later><Reports /></Later></RequireMember>} />
           <Route path="apply" element={<RequireMember player><Later><Apply /></Later></RequireMember>} />
           <Route path="applications" element={<RequireMember admin><Later><Applications /></Later></RequireMember>} />

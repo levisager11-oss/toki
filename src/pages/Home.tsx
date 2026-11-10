@@ -12,6 +12,7 @@ import { PeopleIcon, PlayIcon } from "../components/icons";
 import { useLatestUpdates } from "../lib/releases";
 import { Avatar } from "../components/Avatar";
 import { isOnline, myFriends, type FriendRow } from "../lib/social";
+import { IdeaBanner } from "../components/IdeaBits";
 import type { Category, Game } from "../lib/types";
 
 const ROTATE_MS = 8000;
@@ -95,7 +96,13 @@ export function Home() {
         <section><GridSkeleton /></section>
       </>
     );
-  if (!games.length) return <p className="msg">{t("home.empty")}</p>;
+  if (!games.length)
+    return (
+      <>
+        <p className="msg">{t("home.empty")}</p>
+        <IdeaBanner />
+      </>
+    );
 
   return (
     <>
@@ -153,6 +160,8 @@ export function Home() {
           </div>
         )}
       </section>
+
+      <IdeaBanner />
     </>
   );
 }

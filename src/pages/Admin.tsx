@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
 import { openApplicationCount } from "../lib/applications";
 import { useTitle } from "../lib/useTitle";
+import { saveIdeaBanner, useIdeaBanner } from "../lib/ideas";
 
 // The admin pages, in one place, so the sidebar needs only one link for them.
 const PAGES = [
@@ -43,6 +44,38 @@ export function Admin() {
           </li>
         ))}
       </ul>
+      <IdeaBannerSwitch />
     </section>
+  );
+}
+
+/** Shows or hides "Missing a game you want?" on the home page, for everyone. */
+function IdeaBannerSwitch() {
+  const { t } = useI18n();
+  const shown = useIdeaBanner();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(false);
+  const change = async (on: boolean) => {
+    setBusy(true);
+    setErr(false);
+    try {
+      await saveIdeaBanner(on);
+    } catch {
+      setErr(true);
+    }
+    setBusy(false);
+  };
+  return (
+    <div className="admin-setting">
+      <h2>{t("admin.home")}</h2>
+      <label className="check">
+        <input type="checkbox" checked={shown === true} disabled={busy || shown === null} onChange={(e) => change(e.target.checked)} />
+        <span>
+          {t("admin.ideaBanner")}
+          <span className="sub">{t("admin.ideaBannerHelp")}</span>
+        </span>
+      </label>
+      {err && <p className="error" role="alert">{t("error")}</p>}
+    </div>
   );
 }
