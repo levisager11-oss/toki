@@ -14,6 +14,7 @@ import { github } from "../server/github.js";
 import { body, context, isUuid, json, type Ctx } from "../server/http.js";
 import { buildRepo } from "../server/connect/buildRepo.js";
 import { hostingDeps, r2Config } from "../server/hosting.js";
+import { SITE_URL } from "../src/lib/site.js";
 
 const PUBLIC = "id,repo,features,notes,status,messages,pr_url,error,error_detail,game_id,feedback_id,engine,source,ai,created_at,updated_at";
 // A step holds the run this long at most; a crashed step frees it again after that.
@@ -195,7 +196,7 @@ async function run(ctx: Ctx, b: Record<string, unknown>, origin: string) {
   const gh = github(ctx.env.github);
   const freeOnly = job.ai === "free" ? await freeSettings(ctx.db) : null;
   const result = await step({ ...job, game, bug }, {
-    origin,
+    origin: SITE_URL,
     async repo() {
       if (job.source === "upload") {
         const { config } = await r2Config(ctx.db, ctx.env.serviceKey);
@@ -295,7 +296,7 @@ async function runAgent(ctx: Ctx, row: Row, job: Job, origin: string): Promise<S
     }
     const gh = github(ctx.env.github);
     const result = await agentStep({ ...job, state }, {
-      origin,
+      origin: SITE_URL,
       script: async () => {
         const res = await fetch(new URL("/toki-save.js", origin));
         if (!res.ok) throw new Error("toki-save.js not found");

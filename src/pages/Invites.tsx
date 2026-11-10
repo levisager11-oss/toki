@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
 import { useTitle } from "../lib/useTitle";
+import { SITE_URL } from "../lib/site";
 
 interface Invite {
   code: string;
@@ -63,7 +64,7 @@ export function Invites() {
     load();
   };
   const copy = async (code: string) => {
-    const link = `${window.location.origin}/signup?invite=${encodeURIComponent(code)}`;
+    const link = `${SITE_URL}/signup?invite=${encodeURIComponent(code)}`;
     try {
       await navigator.clipboard.writeText(link);
       setCopied(code);
