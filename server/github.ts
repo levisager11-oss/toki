@@ -160,6 +160,11 @@ export function github(cfg: ServerEnv["github"], fetchImpl: typeof fetch = fetch
         async read(path: string, ref: string): Promise<string> {
           return call<string>(`/repos/${repo}/contents/${enc(path)}?ref=${encodeURIComponent(ref)}`, token, {}, "application/vnd.github.raw+json");
         },
+        /** Whether a pull request is still open, was merged, or was closed without merging. */
+        async pullState(n: number): Promise<"open" | "merged" | "closed"> {
+          const r = await call<{ state: string; merged_at: string | null }>(`/repos/${repo}/pulls/${n}`, token);
+          return r.merged_at ? "merged" : r.state === "open" ? "open" : "closed";
+        },
         /** One commit with all changed files on a new branch, then a pull request. Returns its link. */
         async openPullRequest(p: { base: string; branch: string; files: Record<string, string>; title: string; body: string; message: string }): Promise<string> {
           const ref = await call<{ object: { sha: string } }>(`/repos/${repo}/git/ref/heads/${enc(p.base)}`, token);

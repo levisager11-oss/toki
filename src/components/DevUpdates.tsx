@@ -3,27 +3,45 @@ import { Link, useNavigate } from "react-router-dom";
 import snippet from "../../public/toki-save.js?raw";
 import { useI18n, type Key } from "../lib/i18n";
 import { useAiStatus } from "../lib/assist";
-import { ApiError, connectError, myJobs, type ConnectJob } from "../lib/ai";
-import { GAME_UPDATES, gameRepos, NoSource, startUpdate, updateConnectPath, updateInstructions, updateKeys, updateState, type GameUpdate } from "../lib/gameUpdates";
+import { ApiError, checkPrs, connectError, myJobs, type ConnectJob } from "../lib/ai";
+import { GAME_UPDATES, gameRepos, isDone, NoSource, startUpdate, updateConnectPath, updateInstructions, updateKeys, updateState, type GameUpdate } from "../lib/gameUpdates";
 import type { Game } from "../lib/types";
 
 /**
  * "Updates for your games" on My games: what Toki can do now that needs a small change in the
  * developer's games (src/lib/gameUpdates.ts). Each game gets "Update with Toki Connect" (one
  * click starts the run), and the instructions can be copied for an AI agent instead.
- * Nothing while no update is for one of these games.
+ * Games that have the update (pull request merged, new version live, or had it already) drop
+ * off; an update drops off once all its games have it. Nothing while no update is left.
  */
 export function DevUpdates({ games }: { games: Game[] }) {
   const { t } = useI18n();
   const [jobs, setJobs] = useState<ConnectJob[]>([]);
   const [repos, setRepos] = useState<Record<string, { repo: string; branch: string }>>({});
-  const updates = GAME_UPDATES.map((u) => ({ update: u, games: games.filter(u.applies) })).filter((x) => x.games.length > 0);
-  const ids = [...new Set(updates.flatMap((x) => x.games.map((g) => g.id)))].sort().join(",");
+  const [loaded, setLoaded] = useState(false);
+  const all = GAME_UPDATES.map((u) => ({ update: u, games: games.filter(u.applies) })).filter((x) => x.games.length > 0);
+  const ids = [...new Set(all.flatMap((x) => x.games.map((g) => g.id)))].sort().join(",");
   useEffect(() => {
     if (!ids) return;
-    myJobs().then(setJobs, () => {});
-    gameRepos(ids.split(",")).then(setRepos, () => {});
+    let alive = true;
+    Promise.all([
+      myJobs().then(async (list) => {
+        // Pull requests Toki Connect opened: ask GitHub whether they were merged since.
+        if (!list.some((j) => j.pr_url && (!j.pr_state || j.pr_state === "open"))) return list;
+        const r = await checkPrs().catch(() => null);
+        return r?.changed ? myJobs() : list;
+      }).then((list) => alive && setJobs(list), () => {}),
+      gameRepos(ids.split(",")).then((r) => alive && setRepos(r), () => {}),
+    ]).finally(() => alive && setLoaded(true));
+    return () => {
+      alive = false;
+    };
   }, [ids]);
+  // Until the runs are known, every game would look like it still needs the update.
+  if (!loaded) return null;
+  const updates = all
+    .map((x) => ({ ...x, games: x.games.filter((g) => !isDone(updateState(x.update, { id: g.id, repo: repos[g.id]?.repo }, jobs))) }))
+    .filter((x) => x.games.length > 0);
   if (!updates.length) return null;
   return (
     <section className="dev-updates" aria-labelledby="dev-updates-h">
@@ -78,15 +96,14 @@ function UpdateCard({ update, games, jobs, repos }: {
       <ul className="dev-update-games">
         {games.map((g) => {
           const s = updateState(update, { id: g.id, repo: repos[g.id]?.repo }, jobs);
-          const again = s.state === "todo" || s.state === "failed";
+          const again = s.state === "todo" || s.state === "failed" || s.state === "closed";
           return (
             <li key={g.id}>
               <span className="info">
                 <b>{g.title}</b>
                 {s.state === "run" && <span className="sub">{t("devup.running")} <Link to={`/connect/${s.job.id}`}>{t("connect.open")}</Link></span>}
                 {s.state === "pr" && <span className="sub">✓ {t("devup.pr")} <a href={s.job.pr_url!} target="_blank" rel="noopener noreferrer">{t("connect.openPr")} ↗</a></span>}
-                {s.state === "live" && <span className="sub">✓ {t("devup.live")}</span>}
-                {s.state === "already" && <span className="sub">✓ {t("devup.already")}</span>}
+                {s.state === "closed" && <span className="sub">{t("devup.closed")}</span>}
                 {s.state === "failed" && <span className="sub">{t("devup.failed")} <Link to={`/connect/${s.job.id}`}>{t("connect.open")}</Link></span>}
               </span>
               {again && connect && (

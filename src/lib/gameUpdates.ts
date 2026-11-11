@@ -57,10 +57,16 @@ export const updateInstructions = (update: GameUpdate, script: string) => `${int
 
 /**
  * Where a game stands with an update, from the developer's Toki Connect runs (newest first):
- * "run": one is going; "pr": it opened a pull request that has to be merged; "live": it put a
- * new version live (games uploaded to Toki); "already": the game had it; "failed"; "todo".
+ * "run": one is going; "pr": it opened a pull request that has to be merged; "merged": that pull
+ * request was merged; "live": it put a new version live (games uploaded to Toki); "already": the
+ * game had it; "closed": its pull request was closed without merging; "failed"; "todo".
  */
-export type UpdateState = { state: "todo" } | { state: "run" | "pr" | "live" | "already" | "failed"; job: ConnectJob };
+export type UpdateState =
+  | { state: "todo" }
+  | { state: "run" | "pr" | "merged" | "closed" | "live" | "already" | "failed"; job: ConnectJob };
+
+/** The game has the update: nothing left to do for it. */
+export const isDone = (s: UpdateState) => s.state === "merged" || s.state === "live" || s.state === "already";
 
 export function updateState(update: GameUpdate, game: { id: string; repo?: string | null }, jobs: ConnectJob[]): UpdateState {
   const since = new Date(update.since).getTime();
@@ -71,7 +77,8 @@ export function updateState(update: GameUpdate, game: { id: string; repo?: strin
   if (!job) return { state: "todo" };
   if (job.status === "working" || job.status === "question") return { state: "run", job };
   if (job.status === "failed") return { state: "failed", job };
-  return { state: job.pr_url ? "pr" : job.source === "upload" ? "live" : "already", job };
+  if (job.pr_url) return { state: job.pr_state === "merged" ? "merged" : job.pr_state === "closed" ? "closed" : "pr", job };
+  return { state: job.source === "upload" ? "live" : "already", job };
 }
 
 /** The repository each game follows (games that follow none are left out). */
