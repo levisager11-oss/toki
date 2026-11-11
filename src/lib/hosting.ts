@@ -291,6 +291,10 @@ export interface Proposal {
   has_scores: boolean;
   isolation: boolean;
   multiplayer: boolean;
+  /** The game tells Toki its rooms already (toki.room), so friend invites work */
+  has_rooms?: boolean;
+  /** The game keeps progress outside localStorage, so Toki can't keep it without a copy there */
+  saves_elsewhere?: boolean;
 }
 export interface ScanResult {
   proposal: Proposal;
@@ -324,6 +328,9 @@ export const scanUpload = (name: string, files: PickedFile[], sample: { path: st
 export const scanRepo = (installation_id: number, repo: string, branch: string) =>
   api<ScanResult>("/api/assist", { method: "POST", body: JSON.stringify({ action: "scan", source: "github", installation_id, repo, branch }) });
 
-/** Starts Toki Connect adding leaderboard support (a new live version, or a pull request). */
-export const startLeaderboard = (p: { game_id: string; lang: string } & ({ source: "upload" } | { source: "github"; installation_id: number; repo: string; branch: string })) =>
-  api<{ job: { id: string } }>("/api/connect", { method: "POST", body: JSON.stringify({ action: "start", quick: true, features: ["scores"], ...p }) });
+/**
+ * Starts Toki Connect adding what the developer ticked when adding the game: saves, a
+ * leaderboard, friend invites, all in one run (one new live version, or one pull request).
+ */
+export const startAdditions = (p: { game_id: string; lang: string; features: ("saves" | "scores" | "multiplayer")[] } & ({ source: "upload" } | { source: "github"; installation_id: number; repo: string; branch: string })) =>
+  api<{ job: { id: string } }>("/api/connect", { method: "POST", body: JSON.stringify({ action: "start", quick: true, ...p }) });

@@ -20,11 +20,12 @@ import { applyEdits, MAX_FILE, parseAiJson, pickFiles, readable } from "./files.
 export type Feature = "saves" | "scores" | "multiplayer" | "fix";
 
 /**
- * What a run on a game uploaded to Toki may add: high scores (also when nothing is asked for)
- * and what multiplayer games tell Toki. Not saves: Toki adds its script to uploaded games itself.
+ * What a run on a game uploaded to Toki may add: high scores (also when nothing is asked for),
+ * what multiplayer games tell Toki, and a copy of the save in localStorage for games that save
+ * elsewhere (Toki adds its script itself, so that's all saves need there).
  */
 export function uploadFeatures(asked: unknown): Feature[] {
-  const list = Array.isArray(asked) ? [...new Set(asked.filter((f): f is Feature => f === "scores" || f === "multiplayer"))] : [];
+  const list = Array.isArray(asked) ? [...new Set(asked.filter((f): f is Feature => f === "saves" || f === "scores" || f === "multiplayer"))] : [];
   return list.length ? list : ["scores"];
 }
 
