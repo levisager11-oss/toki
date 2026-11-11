@@ -1363,11 +1363,14 @@ const en = {
   "devup.name.notif": "New for your multiplayer games: players can bring their Toki name into your game's rooms. Add it with one click.",
   "quick.what.scores": "Leaderboard",
   "quick.what.invites": "Friend invites",
-  "quick.what.both": "Leaderboard and friend invites",
   "quick.hasInvites": "Friend invites: your game tells Toki its rooms already.",
   "quick.noCodeAiInvites": "Friend invites: your game can tell Toki its rooms with toki.room(code). (Adding it with AI isn't switched on.)",
   "quick.invitesUpload": "Add friend invites with AI: players invite their Toki friends into your game's rooms, and the game opens a room by itself and uses their Toki name. It changes your game's code and puts that version live (with the leaderboard, if you add both).",
   "quick.invitesGithub": "Add friend invites with AI: players invite their Toki friends into your game's rooms, and the game opens a room by itself and uses their Toki name. It changes your code and opens a pull request (one for both, if you add the leaderboard too).",
+  "quick.what.saves": "Saves",
+  "quick.savesElsewhere": "Saves: your game keeps its progress outside localStorage (e.g. IndexedDB or files), so Toki can't keep it yet. Copy the save to localStorage in your game (step 3 of the instructions on My games). (Adding it with AI isn't switched on.)",
+  "quick.savesUpload": "Add saves with AI: your game keeps its progress outside localStorage, where Toki can't see it. The AI adds a copy there, so players keep their progress on every device. Works for games made with HTML and JavaScript; not for Unity, Godot or GameMaker exports.",
+  "quick.savesGithub": "Add saves with AI: your game keeps its progress outside localStorage, where Toki can't see it. The AI adds a copy there, so players keep their progress on every device. In the same pull request as everything else you tick here.",
 };
 
 export type Key = keyof typeof en;
@@ -2735,11 +2738,14 @@ const de: Record<Key, string> = {
   "devup.name.notif": "Neu für deine Mehrspieler-Spiele: Spieler können ihren Toki-Namen in die Räume deines Spiels mitnehmen. Bau es mit einem Klick ein.",
   "quick.what.scores": "Bestenliste",
   "quick.what.invites": "Freunde einladen",
-  "quick.what.both": "Bestenliste und Freunde einladen",
   "quick.hasInvites": "Freunde einladen: Dein Spiel meldet Toki seine Räume schon.",
   "quick.noCodeAiInvites": "Freunde einladen: Dein Spiel kann Toki seine Räume mit toki.room(code) melden. (Das Hinzufügen mit KI ist nicht eingeschaltet.)",
   "quick.invitesUpload": "Freunde einladen mit KI hinzufügen: Spieler laden ihre Toki-Freunde in die Räume deines Spiels ein, und das Spiel öffnet selbst einen Raum und nutzt ihren Toki-Namen. Sie ändert den Code deines Spiels und stellt diese Version live (zusammen mit der Bestenliste, wenn du beides hinzufügst).",
   "quick.invitesGithub": "Freunde einladen mit KI hinzufügen: Spieler laden ihre Toki-Freunde in die Räume deines Spiels ein, und das Spiel öffnet selbst einen Raum und nutzt ihren Toki-Namen. Sie ändert deinen Code und öffnet einen Pull Request (einen für beides, wenn du auch die Bestenliste hinzufügst).",
+  "quick.what.saves": "Spielstände",
+  "quick.savesElsewhere": "Spielstände: Dein Spiel speichert den Fortschritt ausserhalb von localStorage (z. B. in IndexedDB oder Dateien), deshalb kann Toki ihn noch nicht behalten. Kopier den Spielstand in deinem Spiel nach localStorage (Schritt 3 der Anleitung unter „Meine Spiele“). (Das Hinzufügen mit KI ist nicht eingeschaltet.)",
+  "quick.savesUpload": "Spielstände mit KI hinzufügen: Dein Spiel speichert den Fortschritt ausserhalb von localStorage, wo Toki ihn nicht sieht. Die KI legt dort eine Kopie an, damit Spieler ihren Fortschritt auf jedem Gerät behalten. Klappt bei Spielen aus HTML und JavaScript, nicht bei Exporten aus Unity, Godot oder GameMaker.",
+  "quick.savesGithub": "Spielstände mit KI hinzufügen: Dein Spiel speichert den Fortschritt ausserhalb von localStorage, wo Toki ihn nicht sieht. Die KI legt dort eine Kopie an, damit Spieler ihren Fortschritt auf jedem Gerät behalten. Im selben Pull Request wie alles andere, das du hier ankreuzt.",
 };
 
 export type Lang = "en" | "de";
@@ -2763,6 +2769,13 @@ interface I18n {
 const I18nContext = createContext<I18n>(null!);
 
 /** Fills in {name} placeholders. "one|many" strings pick a form by the number n. */
+/** "Saves, leaderboard and friend invites" (German keeps its nouns capitalized). */
+export function listOf(parts: string[], lang: "en" | "de"): string {
+  const words = parts.map((w, i) => (i > 0 && lang === "en" ? w.charAt(0).toLowerCase() + w.slice(1) : w));
+  if (words.length < 2) return words[0] ?? "";
+  return `${words.slice(0, -1).join(", ")} ${lang === "de" ? "und" : "and"} ${words[words.length - 1]}`;
+}
+
 export function format(text: string, vars?: Record<string, string | number>): string {
   let s = text;
   if (s.includes("|") && typeof vars?.n === "number") s = s.split("|")[vars.n === 1 ? 0 : 1];

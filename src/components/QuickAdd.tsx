@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useI18n } from "../lib/i18n";
+import { useI18n, listOf } from "../lib/i18n";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { slugify } from "../lib/games";
@@ -45,6 +45,8 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
   const [leaderboard, setLeaderboard] = useState(false);
   // Friend invites for a game with online rooms, added by the AI in the same run as the leaderboard.
   const [invites, setInvites] = useState(false);
+  // Saves for a game that keeps its progress outside localStorage: the AI adds a copy there.
+  const [savesAi, setSavesAi] = useState(false);
   const [err, setErr] = useState("");
   // The repository holds the source: GitHub Actions builds it, after its build file is merged.
   const [building, setBuilding] = useState<(BuildSetup & { repo: string; branch: string }) | null>(null);
@@ -71,6 +73,7 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
       setP(r.proposal);
       setLeaderboard(r.proposal.leaderboard && !r.proposal.has_scores && codeAi !== "off");
       setInvites(r.proposal.multiplayer && !r.proposal.has_rooms && codeAi !== "off");
+      setSavesAi(!!r.proposal.saves_elsewhere && codeAi !== "off");
       if (r.folder !== null && git) setGit({ ...git, folder: r.folder });
       setPhase("review");
     } catch (e) {
@@ -146,7 +149,11 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
 
     // A leaderboard and friend invites: Toki Connect changes the code in one run (a new live
     // version, or one pull request).
-    const features = [...(leaderboard ? (["scores"] as const) : []), ...(invites && p.multiplayer ? (["multiplayer"] as const) : [])];
+    const features = [
+      ...(savesAi && p.saves_elsewhere ? (["saves"] as const) : []),
+      ...(leaderboard ? (["scores"] as const) : []),
+      ...(invites && p.multiplayer ? (["multiplayer"] as const) : []),
+    ];
     if (!features.length) {
       set("leaderboard", "skip");
       return setPhase("done");
@@ -287,7 +294,18 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
           </details>
 
           <ul className="quick-features">
-            <li className="check good">{t("quick.saves")}</li>
+            {!p.saves_elsewhere ? (
+              <li className="check good">{t("quick.saves")}</li>
+            ) : codeAi === "off" ? (
+              <li className="check warn">{t("quick.savesElsewhere")}</li>
+            ) : (
+              <li className="check">
+                <label className="fb-check">
+                  <input type="checkbox" checked={savesAi} onChange={(e) => setSavesAi(e.target.checked)} />
+                  <span>{kind === "github" ? t("quick.savesGithub") : t("quick.savesUpload")}</span>
+                </label>
+              </li>
+            )}
             {p.has_scores ? (
               <li className="check good">{t("quick.hasScores")}</li>
             ) : codeAi === "off" ? (
@@ -327,8 +345,12 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
   const mark = (s: StepState) => (s === "ok" ? "✓" : s === "fail" ? "✗" : s === "skip" ? "–" : s === "busy" ? "…" : "·");
   const question = job?.status === "question";
   const madeChange = job?.status === "done" && (job.pr_url || job.messages.some((m) => m.kind === "done" && m.files.length > 0));
-  // What the AI adds: a leaderboard, friend invites, or both.
-  const adding = leaderboard && invites && p?.multiplayer ? t("quick.what.both") : invites && p?.multiplayer ? t("quick.what.invites") : t("quick.what.scores");
+  // What the AI adds: "Saves, leaderboard and friend invites", or some of them.
+  const adding = listOf([
+    ...(savesAi && p?.saves_elsewhere ? [t("quick.what.saves")] : []),
+    ...(leaderboard ? [t("quick.what.scores")] : []),
+    ...(invites && p?.multiplayer ? [t("quick.what.invites")] : []),
+  ], lang);
   return (
     <section className="panel quick-add">
       <h1 className="h">{phase === "done" && steps.files === "ok" ? t("quick.liveTitle") : t("quick.publishing")}</h1>
@@ -371,3 +393,4 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
     </section>
   );
 }
+

@@ -109,10 +109,11 @@ describe("starting an update in one click", () => {
 });
 
 describe("a run on a game uploaded to Toki", () => {
-  it("adds high scores or what multiplayer games tell Toki, never the script itself", () => {
+  it("adds high scores, what multiplayer games tell Toki, or a copy of the save", () => {
     expect(uploadFeatures(["multiplayer"])).toEqual(["multiplayer"]);
     expect(uploadFeatures(["scores", "multiplayer", "scores"])).toEqual(["scores", "multiplayer"]);
-    expect(uploadFeatures(["saves", "fix", 7])).toEqual(["scores"]);
+    expect(uploadFeatures(["saves", "fix", 7])).toEqual(["saves"]);
+    expect(uploadFeatures(["fix", 7])).toEqual(["scores"]);
     expect(uploadFeatures(undefined)).toEqual(["scores"]);
     expect(uploadFeatures("multiplayer")).toEqual(["scores"]);
   });

@@ -3,7 +3,8 @@ import { cleanName, hostFromMessage, invitePath, joinPath, maxPlayers, nameMessa
 import { readTokiJson } from "../src/lib/hostingRules";
 import { integrationGuide } from "../src/lib/integration";
 import { gameLine, task, type Job } from "../server/connect/agent";
-import { basics, readScan, withToki } from "../server/assist/scan";
+import { basics, readScan, savesElsewhere, withToki } from "../server/assist/scan";
+import { listOf } from "../src/lib/i18n";
 
 const game = { play_url: "https://apex.example/play/?lang=de#top", multiplayer: true, join_param: "room" };
 
@@ -119,6 +120,42 @@ describe("what a game says about its multiplayer", () => {
     expect(readScan('{"multiplayer":true}', plain).multiplayer).toBe(true);
     expect(readScan('{"multiplayer":"true"}', plain).multiplayer).toBe(false);
     expect(withToki(plain, { multiplayer: true }).multiplayer).toBe(true);
+  });
+});
+
+describe("saves Toki can't see", () => {
+  it("are found in the game's own code", () => {
+    expect(savesElsewhere("const req = indexedDB.open('game');")).toBe(true);
+    expect(savesElsewhere("localforage.setItem('save', s)")).toBe(true);
+    expect(savesElsewhere("document.cookie = 'save=' + s")).toBe(true);
+    expect(savesElsewhere('var f = FileAccess.open("user://save.dat", FileAccess.WRITE)')).toBe(true);
+  });
+
+  it("aren't when the game saves with localStorage, keeps a copy there, or doesn't save", () => {
+    expect(savesElsewhere("localStorage.setItem('save', s)")).toBe(false);
+    expect(savesElsewhere("indexedDB.open('db'); localStorage.setItem('copy', s)")).toBe(false);
+    // A copy through a variable, as DeepSub does.
+    expect(savesElsewhere("var ls = window.localStorage; indexedDB.open(DB); ls.setItem(KEY, text)")).toBe(false);
+    expect(savesElsewhere("let score = 0")).toBe(false);
+    expect(savesElsewhere("if (document.cookie == 'x') {}")).toBe(false);
+    // Godot's and Unity's engine files always have IndexedDB code: not a sign by itself.
+    expect(savesElsewhere("req=IDBFS.indexedDB().open(name,IDBFS.DB_VERSION)")).toBe(false);
+  });
+
+  it("are proposed by the checks or the AI, never taken back by the AI", () => {
+    const idb = basics([{ path: "index.html", text: "<script>indexedDB.open('x')</script>" }], "x");
+    expect(idb.saves_elsewhere).toBe(true);
+    expect(readScan('{"saves_elsewhere":false}', idb).saves_elsewhere).toBe(true);
+    const plain = basics([{ path: "index.html", text: "<script>let x</script>" }], "x");
+    expect(readScan('{"saves_elsewhere":true}', plain).saves_elsewhere).toBe(true);
+    expect(readScan('{"saves_elsewhere":"yes"}', plain).saves_elsewhere).toBe(false);
+  });
+
+  it("are named with the rest of what the AI adds", () => {
+    expect(listOf(["Saves", "Leaderboard", "Friend invites"], "en")).toBe("Saves, leaderboard and friend invites");
+    expect(listOf(["Spielstände", "Bestenliste"], "de")).toBe("Spielstände und Bestenliste");
+    expect(listOf(["Leaderboard"], "en")).toBe("Leaderboard");
+    expect(listOf([], "en")).toBe("");
   });
 });
 
