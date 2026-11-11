@@ -14,7 +14,7 @@ import { inviteToGame, isOnline, markNotificationsRead, myFriends, SocialError, 
 import { clearInvite, nudge, refreshBadges, setParty, useBadges } from "../lib/useBadges";
 import type { Game } from "../lib/types";
 import { Avatar } from "./Avatar";
-import { CloseIcon, PeopleIcon } from "./icons";
+import { CloseIcon, PeopleIcon, ShareIcon } from "./icons";
 import { PushSwitch } from "./PushSwitch";
 import { ShareButton } from "./ShareButton";
 
@@ -127,6 +127,8 @@ export interface Invites {
   error: string;
   /** Invites now, or as soon as a room is open. A waiting friend is taken off the list again. */
   toggle: (friendId: string) => void;
+  /** Has the game open a room without inviting anyone, for a link to share. */
+  openRoom: () => void;
   /** The last thing that happened, for the line under the game. */
   last: { name: string } | null;
   names: Record<string, string>;
@@ -142,6 +144,8 @@ export function useGameInvites(game: Game | undefined, bridge: RoomBridge, start
   // When the game was asked to open a room; -1 once it didn't in time.
   const [asked, setAsked] = useState(0);
   const [waiting, setWaiting] = useState<string[]>([]);
+  // The player wants a link to share: the game opens a room, also with no friend picked.
+  const [wantLink, setWantLink] = useState(false);
   const [sent, setSent] = useState<Record<string, number>>({});
   const [error, setError] = useState("");
   const [last, setLast] = useState<{ name: string } | null>(null);
@@ -164,14 +168,15 @@ export function useGameInvites(game: Game | undefined, bridge: RoomBridge, start
     if (!before || !gameId || before === gameId) return;
     setTyped(null);
     setWaiting([]);
+    setWantLink(false);
     setSent({});
     setError("");
     setLast(null);
     setAsked(0);
   }, [gameId]);
 
-  // Friends are picked and no room is open: the game opens one, if it can.
-  const wantsRoom = waiting.length > 0 && !code;
+  // Friends are picked (or a link is wanted) and no room is open: the game opens one, if it can.
+  const wantsRoom = (waiting.length > 0 || wantLink) && !code;
   useEffect(() => {
     // The game started again: it may be asked again.
     if (!canHost) return setAsked(0);
@@ -187,7 +192,9 @@ export function useGameInvites(game: Game | undefined, bridge: RoomBridge, start
   }, [asked]);
   // A room is open (however it came about): next time the game may be asked again.
   useEffect(() => {
-    if (code) setAsked(0);
+    if (!code) return;
+    setAsked(0);
+    setWantLink(false);
   }, [code]);
   const host = !canHost || asked < 0 ? "no" : asked > 0 ? "opening" : "can";
 
@@ -225,7 +232,9 @@ export function useGameInvites(game: Game | undefined, bridge: RoomBridge, start
   };
   const setNames = useCallback((friends: Person[]) => setNameMap(Object.fromEntries(friends.map((f) => [f.id, f.username]))), []);
 
-  return { code, fromGame: !!room, setTyped, host, waiting, sent, error, toggle, last, names, setNames };
+  const openRoom = useCallback(() => setWantLink(true), []);
+
+  return { code, fromGame: !!room, setTyped, host, waiting, sent, error, toggle, openRoom, last, names, setNames };
 }
 
 /** "Invite friends" next to the game, and the window to pick them. */
@@ -334,7 +343,13 @@ function InviteDialog({ game, invites, usesName, onClose }: { game: Game; invite
         ) : invites.host === "opening" ? (
           <p className="check" role="status" aria-busy="true">{t("invite.opening")}</p>
         ) : invites.host === "can" ? (
-          <p className="check">{t("invite.autoRoom")}</p>
+          <>
+            <p className="check">{t("invite.autoRoom")}</p>
+            <div className="invite-share">
+              <button type="button" className="btn" onClick={invites.openRoom}><ShareIcon />{t("invite.getLink")}</button>
+              <span className="sub">{t("invite.getLinkHelp")}</span>
+            </div>
+          </>
         ) : (
           <>
             <ol className="invite-steps">
