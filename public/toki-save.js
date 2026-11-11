@@ -1,4 +1,4 @@
-/* Toki save support v8. Put this in the game's HTML <head>, before the game's own scripts.
+/* Toki save support v9. Put this in the game's HTML <head>, before the game's own scripts.
    Inside Toki, it keeps a copy of everything the game stores in localStorage, so progress
    survives closing the app (iPhone deletes storage of games shown inside other sites) and
    follows logged-in players to other devices. Outside Toki it does nothing.
@@ -11,7 +11,9 @@
    room for them in it (and call toki.room(code) as always), so they don't have to.
    toki.onName(fn): Toki calls fn with the name the player goes by (their Toki name, or one they
    chose in Toki), now if it knows it and again when it changes; use it in rooms instead of asking.
-   toki.name has it too (null until Toki said). */
+   toki.name has it too (null until Toki said).
+   On phones inside Toki, swipes and quick taps in the game don't scroll or zoom the Toki page
+   around it (only where the game itself has nothing to scroll). */
 (function () {
   // Games hosted on Toki get this script added for them; a second copy in the game does nothing.
   if (window.__tokiSave) return;
@@ -47,6 +49,33 @@
     if (window.toki.name) try { fn(window.toki.name); } catch (err) { /* the game's own error */ }
   };
   if (!inToki) return;
+  // Phones (iPhone above all) pass a swipe or a fast double tap in a game up to the Toki page,
+  // which then scrolls or zooms away from the game mid-play. Stop that, except where the game
+  // itself has something to scroll. Games keep their own touch-action: this one has no weight.
+  if ("ontouchstart" in window) {
+    var css = document.createElement("style");
+    css.textContent = ":where(html){touch-action:manipulation}";
+    (document.head || document.documentElement).appendChild(css);
+    var scrolls = function (el) {
+      for (; el && el.nodeType === 1; el = el.parentNode) {
+        var st = getComputedStyle(el);
+        if ((/(auto|scroll)/.test(st.overflowY) && el.scrollHeight > el.clientHeight + 1) ||
+            (/(auto|scroll)/.test(st.overflowX) && el.scrollWidth > el.clientWidth + 1)) return true;
+      }
+      var root = document.scrollingElement || document.documentElement;
+      var shut = function (n) { return n && /hidden|clip/.test(getComputedStyle(n).overflow); };
+      if (shut(document.documentElement) || shut(document.body)) return false;
+      return root.scrollHeight > window.innerHeight + 1 || root.scrollWidth > window.innerWidth + 1;
+    };
+    var free = true;
+    document.addEventListener("touchstart", function (e) {
+      free = e.touches.length < 2 && scrolls(e.target);
+    }, { passive: true, capture: true });
+    document.addEventListener("touchmove", function (e) {
+      if ((!free || e.touches.length > 1) && e.cancelable) e.preventDefault();
+    }, { passive: false, capture: true });
+    document.addEventListener("gesturestart", function (e) { e.preventDefault(); }, { passive: false });
+  }
   window.addEventListener("message", function (e) {
     var m = e.data;
     if (e.source !== top || !m || m.toki !== 1) return;

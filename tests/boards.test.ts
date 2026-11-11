@@ -74,7 +74,7 @@ describe("the game script", () => {
 
   it("is v8, and sends scores to the main list or to another one", async () => {
     const { toki, sent, src } = await load();
-    expect(src.startsWith("/* Toki save support v8.")).toBe(true);
+    expect(src.startsWith("/* Toki save support v9.")).toBe(true);
     toki.score(10);
     toki.score(20, "hard");
     toki.score(30, "");
