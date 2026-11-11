@@ -1044,6 +1044,7 @@ main.content:focus { outline: none; }
 .dev-update-games li { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .dev-update-games .info { display: flex; flex-direction: column; gap: 2px; flex: 1 1 220px; min-width: 0; }
 .dev-update .sub { font-size: 13px; color: var(--muted); }
+.dev-update-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
 .dev-update .actions { margin-bottom: 0; }
 .guest-note { margin: 0; padding: 10px 12px; font-size: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
 .guest-note p { margin: 0; flex: 1 1 320px; }
