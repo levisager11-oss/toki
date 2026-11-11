@@ -112,7 +112,9 @@ h1, h2 { text-wrap: balance; }
 .ritem { display: flex; gap: 12px; align-items: center; background: var(--surface); border: 1px solid var(--line); padding: 8px; text-decoration: none; min-width: 0; }
 .ritem:hover { border-color: var(--fg); }
 .ritem .cover { width: 64px; flex: none; }
-.ritem b { display: block; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ritem > span { flex: 1; min-width: 0; }
+.ritem b, .ritem .sub { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ritem b { font-weight: 700; }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .sort-select { margin-left: auto; }
 .sort-select select { background: var(--surface); border: 1px solid var(--line); padding: 5px 8px; font-size: 13px; font-weight: 500; cursor: pointer; }
