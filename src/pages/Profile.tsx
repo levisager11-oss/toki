@@ -17,6 +17,8 @@ import { useTitle } from "../lib/useTitle";
 import { ShareButton } from "../components/ShareButton";
 import { formatDuration } from "../lib/analytics";
 import { currentStreak, playerStreak, utcDay, type Streak } from "../lib/daily";
+import { playerAchievements, type Badge } from "../lib/achievements";
+import { BadgeRow } from "../components/Achievements";
 
 /** A player's page: /u/:username */
 export function Profile() {
@@ -29,6 +31,7 @@ export function Profile() {
   const [p, setP] = useState<ProfilePage | null | undefined>(undefined);
   const [scores, setScores] = useState<{ game_id: string; score: number; rank: number; players: number }[]>([]);
   const [streak, setStreak] = useState<Streak | null>(null);
+  const [badges, setBadges] = useState<{ badges: Badge[]; total: number }>({ badges: [], total: 0 });
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [reload, setReload] = useState(0);
@@ -41,6 +44,7 @@ export function Profile() {
     setP(undefined);
     setScores([]);
     setStreak(null);
+    setBadges({ badges: [], total: 0 });
     setErr("");
     setConfirmBlock(false);
   }, [username]);
@@ -54,6 +58,7 @@ export function Profile() {
         setP(r);
         if (r) playerScores(r.id).then((s) => alive && setScores(s), () => {});
         if (r) playerStreak(r.id).then((s) => alive && setStreak(s), () => {});
+        if (r) playerAchievements(r.id).then((b) => alive && setBadges(b), () => {});
       })
       .catch(() => alive && setP(null));
     return () => {
@@ -170,6 +175,8 @@ export function Profile() {
           )}
         </dl>
       )}
+
+      <BadgeRow badges={badges.badges} total={badges.total} games={byId} />
 
       {most.length > 0 && (
         <section>

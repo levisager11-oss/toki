@@ -267,6 +267,11 @@ export async function finishUpload(deps: Deps, user: HostUser, b: Record<string,
   const shots = toki.screenshots?.map((s) => picture(s, base)).filter((s): s is string => !!s);
   if (shots?.length) patch.screenshots = shots;
   await db.update("games", `id=eq.${game.id}`, patch);
+  // Achievements in toki.json: new ones are added and listed ones updated; none are deleted, so
+  // an upload never takes badges away from players.
+  if (toki.achievements?.length) {
+    await db.rpc("set_achievements", { p_game: game.id, p_list: toki.achievements, p_mode: "merge" }).catch(() => {});
+  }
 
   let release: { version: string; posted: boolean } | null = null;
   if (toki.version) {

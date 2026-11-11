@@ -116,5 +116,18 @@ describe("a run on a game uploaded to Toki", () => {
     expect(uploadFeatures(["fix", 7])).toEqual(["scores"]);
     expect(uploadFeatures(undefined)).toEqual(["scores"]);
     expect(uploadFeatures("multiplayer")).toEqual(["scores"]);
+    expect(uploadFeatures(["achievements", "badges"])).toEqual(["achievements"]);
+  });
+});
+
+describe("the achievements update", () => {
+  const ach = gameUpdate("achievements")!;
+  it("is for every game, and the instructions explain toki.achievement", () => {
+    expect(ach.feature).toBe("achievements");
+    expect(ach.applies({ multiplayer: false })).toBe(true);
+    const text = updateInstructions(ach, "/* script */");
+    expect(text).toContain('window.toki?.achievement("id")');
+    expect(text).toContain('"achievements": [');
+    expect(ach.only).toContain("step 6");
   });
 });

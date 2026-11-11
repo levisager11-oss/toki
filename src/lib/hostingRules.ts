@@ -1,6 +1,7 @@
 // Rules for games hosted on Toki, shared by the website and the server: which files may be
 // uploaded, how big a game may be, the game's address, and what a toki.json may say.
 import { CATEGORIES, type Category } from "./types.js";
+import { readAchievements, type Achievement } from "./achievementRules.js";
 
 export const MAX_GAME_BYTES = 100 * 1024 * 1024;
 export const MAX_GAME_FILES = 3000;
@@ -145,6 +146,8 @@ export interface TokiJson {
   notes?: string;
   /** Only for the upload script: the folder with the game, when it isn't the one with toki.json */
   folder?: string;
+  /** The game's achievements (at most 30): new ones are added and listed ones updated; none are deleted */
+  achievements?: Achievement[];
 }
 
 /** The name of the room code in a game's invite links (<game>?room=ABCD): short and plain. */
@@ -205,6 +208,8 @@ export function readTokiJson(raw: unknown): TokiJson {
   if (notes) out.notes = notes.slice(0, 5000);
   const folder = text(o.folder, 200);
   if (folder) out.folder = folder;
+  const achievements = readAchievements(o.achievements);
+  if (achievements.length) out.achievements = achievements;
   return out;
 }
 
