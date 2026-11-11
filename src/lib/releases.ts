@@ -36,13 +36,20 @@ export class ReleaseError extends Error {
 }
 const fail = (error: { code?: string }) => new ReleaseError(error.code === "23505" ? "rel.err.versionTaken" : "error");
 
-/** Newest first, one page at a time. gameId null: updates of Toki itself. `before`: only updates older than this
- * (published_at of the last one shown). `more`: there are older updates to load. */
-export async function listReleases(gameId: string | null, limit = 50, before?: string): Promise<{ list: Release[]; more: boolean }> {
+/** Newest first, one page at a time. gameId null: updates of Toki itself. `before`: only updates older than this one
+ * (the last one shown; the id breaks ties between updates posted at the same moment). `more`: there are older ones. */
+export async function listReleases(
+  gameId: string | null,
+  limit = 50,
+  before?: Pick<Release, "id" | "published_at">,
+): Promise<{ list: Release[]; more: boolean }> {
   let q = supabase.from("game_releases").select(RELEASE);
   q = gameId ? q.eq("game_id", gameId) : q.is("game_id", null);
-  if (before) q = q.lt("published_at", before);
-  const { data, error } = await q.order("published_at", { ascending: false }).limit(limit + 1);
+  if (before) q = q.or(`published_at.lt."${before.published_at}",and(published_at.eq."${before.published_at}",id.lt.${before.id})`);
+  const { data, error } = await q
+    .order("published_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(limit + 1);
   if (error) throw fail(error);
   const rows = data as Release[];
   const more = rows.length > limit;

@@ -76,11 +76,11 @@ export function Releases() {
     if (!last || gameId === undefined) return;
     setLoadingMore(true);
     try {
-      const r = await listReleases(gameId, 50, last.published_at);
+      const r = await listReleases(gameId, 50, last);
       setReleases((cur) => [...(cur ?? []), ...r.list]);
       setMore(r.more);
     } catch {
-      setError(true);
+      // Keep what's on screen; the button stays so the player can try again.
     }
     setLoadingMore(false);
   };
