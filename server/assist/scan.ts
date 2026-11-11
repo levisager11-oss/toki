@@ -39,6 +39,13 @@ export interface Proposal {
 }
 
 const text = (v: unknown, max: number) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, max) : "");
+/** Like text(), but a long one is cut at the last whole word (and an open bracket is dropped), not mid-word. */
+export const shortText = (v: unknown, max: number) => {
+  const t = text(v, 1000);
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max + 1).replace(/[\s,;/(]+[^\s,;/(]*$/, "").replace(/\s*\([^)]*$/, "").replace(/[\s,;/(]+$/, "");
+  return (cut || t).slice(0, max);
+};
 const decode = (s: string) => s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
 
 /** The game's start page among the files: index.html at the top, else the shallowest. */
@@ -115,7 +122,7 @@ export function scanPrompt(files: ScanFile[], paths: string[], base: Proposal, n
 - title: the game's name (from the code or page title; not "Godot" or "index").
 - description (English) and description_de (German): 2 to 3 sentences each, at most 400 characters, friendly and clear: what you do in the game and what makes it fun. Only facts you can see in the files; no hype.
 - category: one of ${CATEGORIES.join(", ")}.
-- engine: what it's made with (e.g. Godot, Unity, Phaser, Three.js, plain JavaScript), short.
+- engine: what it's made with (e.g. Godot, Unity, Phaser, Three.js, plain JavaScript), at most 30 characters.
 - controls: the keys or touch controls, short (e.g. "Arrow keys to move, Space to jump"). Empty if you can't tell.
 - controls_de: the same controls in German (informal, short, e.g. "Pfeiltasten zum Laufen, Leertaste zum Springen"). Empty if controls is empty.
 - leaderboard: true if the game has a score, points, a level count or a time that players could compete on.
@@ -150,7 +157,7 @@ export function readScan(answer: string, base: Proposal): Proposal {
     description: text(a.description, 1000) || base.description,
     description_de: text(a.description_de, 1000) || base.description_de,
     category: (CATEGORIES as readonly string[]).includes(category) ? (category as Category) : base.category,
-    engine: text(a.engine, 30) || base.engine,
+    engine: shortText(a.engine, 30) || base.engine,
     controls: text(a.controls, 500) || base.controls,
     controls_de: text(a.controls_de, 500) || base.controls_de,
     leaderboard: typeof a.leaderboard === "boolean" ? a.leaderboard : base.leaderboard,
