@@ -2768,7 +2768,7 @@ const de: Record<Key, string> = {
   "quick.savesElsewhere": "Spielstände: Dein Spiel speichert den Fortschritt ausserhalb von localStorage (z. B. in IndexedDB oder Dateien), deshalb kann Toki ihn noch nicht behalten. Kopier den Spielstand in deinem Spiel nach localStorage (Schritt 3 der Anleitung unter „Meine Spiele“). (Das Hinzufügen mit KI ist nicht eingeschaltet.)",
   "quick.savesUpload": "Spielstände mit KI hinzufügen: Dein Spiel speichert den Fortschritt ausserhalb von localStorage, wo Toki ihn nicht sieht. Die KI legt dort eine Kopie an, damit Spieler ihren Fortschritt auf jedem Gerät behalten. Klappt bei Spielen aus HTML und JavaScript, nicht bei Exporten aus Unity, Godot oder GameMaker.",
   "quick.savesGithub": "Spielstände mit KI hinzufügen: Dein Spiel speichert den Fortschritt ausserhalb von localStorage, wo Toki ihn nicht sieht. Die KI legt dort eine Kopie an, damit Spieler ihren Fortschritt auf jedem Gerät behalten. Im selben Pull Request wie alles andere, das du hier ankreuzt.",
-  "nav.terms": "Nutzungsbedingungen",
+  "nav.terms": "AGB",
   "nav.privacy": "Datenschutz",
   "signup.agree": "Mit der Registrierung akzeptierst du die [Nutzungsbedingungen](/terms) und die [Datenschutzerklärung](/privacy).",
   "legal.updated": "Zuletzt geändert: 11. November 2026",
