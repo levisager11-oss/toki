@@ -1335,6 +1335,7 @@ const en = {
   "push.turnOff": "Turn off",
   "push.failed": "That didn't work. Try again.",
   "mp.setup.step3": "Let the game open a room by itself when Toki asks (toki.onHost). Then players only pick their friends, and friends who play together stay together as a party.",
+  "mp.setup.step4": "Let the game use the name from Toki (toki.onName), so players don't type a name again or show up as “You”.",
   "guest.title": "You're playing as a guest",
   "guest.body": "You're in your friend's room and can play right away. Without an account, your progress is only kept on this device, your high scores don't count, and you won't stay together with your friends for the next game.",
   "guest.signup": "Create a free account",
@@ -1352,6 +1353,13 @@ const en = {
   "devup.host.title": "Your game can open the room by itself",
   "devup.host.text": "When a player invites friends before a room is open, Toki asks your game to open one (toki.onHost). Players then only pick their friends, and friends who play together stay together as a party.",
   "devup.host.notif": "New for your multiplayer games: your game can open a room by itself when a player invites friends. Add it with one click.",
+  "name.label": "Your name in the game",
+  "name.help": "Friends see this name in the room. It's your Toki name unless you change it here.",
+  "name.helpGuest": "Friends see this name in the room.",
+  "name.placeholderGuest": "Pick a name",
+  "devup.name.title": "Players keep their name in your game",
+  "devup.name.text": "Toki tells your game the name a player goes by (toki.onName): their Toki name, or one they picked in Toki. Use it in rooms, and players no longer have to type a name or show up as “You”.",
+  "devup.name.notif": "New for your multiplayer games: players can bring their Toki name into your game's rooms. Add it with one click.",
 };
 
 export type Key = keyof typeof en;
@@ -2691,6 +2699,7 @@ const de: Record<Key, string> = {
   "push.turnOff": "Ausschalten",
   "push.failed": "Das hat nicht geklappt. Versuch es nochmal.",
   "mp.setup.step3": "Lass das Spiel selbst einen Raum öffnen, wenn Toki darum bittet (toki.onHost). Dann wählen Spieler nur noch ihre Freunde aus, und wer zusammen spielt, bleibt als Party zusammen.",
+  "mp.setup.step4": "Lass das Spiel den Namen aus Toki nutzen (toki.onName), damit niemand nochmal einen Namen eintippt oder als „Du“ auftaucht.",
   "guest.title": "Du spielst als Gast",
   "guest.body": "Du bist im Raum deines Freundes und kannst gleich losspielen. Ohne Konto bleibt dein Fortschritt nur auf diesem Gerät, deine Highscores zählen nicht, und beim nächsten Spiel bleibst du nicht mit deinen Freunden zusammen.",
   "guest.signup": "Kostenloses Konto erstellen",
@@ -2708,6 +2717,13 @@ const de: Record<Key, string> = {
   "devup.host.title": "Dein Spiel kann den Raum selbst öffnen",
   "devup.host.text": "Wenn ein Spieler Freunde einlädt, bevor ein Raum offen ist, bittet Toki dein Spiel, einen zu öffnen (toki.onHost). Spieler wählen dann nur noch ihre Freunde aus, und wer zusammen spielt, bleibt als Party zusammen.",
   "devup.host.notif": "Neu für deine Mehrspieler-Spiele: Dein Spiel kann selbst einen Raum öffnen, wenn ein Spieler Freunde einlädt. Bau es mit einem Klick ein.",
+  "name.label": "Dein Name im Spiel",
+  "name.help": "Diesen Namen sehen deine Freunde im Raum. Es ist dein Toki-Name, ausser du änderst ihn hier.",
+  "name.helpGuest": "Diesen Namen sehen deine Freunde im Raum.",
+  "name.placeholderGuest": "Wähl einen Namen",
+  "devup.name.title": "Spieler behalten ihren Namen in deinem Spiel",
+  "devup.name.text": "Toki sagt deinem Spiel, mit welchem Namen ein Spieler unterwegs ist (toki.onName): seinem Toki-Namen oder einem, den er in Toki gewählt hat. Nutz ihn in Räumen, dann muss niemand mehr einen Namen eintippen oder als „Du“ auftauchen.",
+  "devup.name.notif": "Neu für deine Mehrspieler-Spiele: Spieler können ihren Toki-Namen in die Räume deines Spiels mitnehmen. Bau es mit einem Klick ein.",
 };
 
 export type Lang = "en" | "de";

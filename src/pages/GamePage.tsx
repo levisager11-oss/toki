@@ -24,7 +24,7 @@ import { Screenshots } from "../components/ShotViewer";
 import { useFreeAi } from "../lib/assist";
 import { CloseIcon, FullscreenIcon, PeopleIcon } from "../components/icons";
 import { ShareButton } from "../components/ShareButton";
-import { InviteFriends, InviteStatus, useGameInvites, useRoomBridge } from "../components/GameInvite";
+import { GameNameField, InviteFriends, InviteStatus, useGameInvites, useRoomBridge } from "../components/GameInvite";
 import { PartyChat, usePartyOnGame } from "../components/Party";
 import { isParty } from "../lib/party";
 import { useBadges } from "../lib/useBadges";
@@ -197,6 +197,7 @@ export function GamePage() {
         {guestInRoom && (
           <div className="check warn guest-note" role="status">
             <p><b>{t("guest.title")}</b> {t("guest.body")}</p>
+            {bridge.usesName && <GameNameField id="guest-name" guest />}
             <div className="actions">
               <Link to={`/signup?next=${backHere}`} className="btn primary">{t("guest.signup")}</Link>
               <Link to={`/login?next=${backHere}`} className="btn">{t("nav.login")}</Link>
@@ -243,7 +244,7 @@ export function GamePage() {
           <div className="actions">
             <FavButton game={game} withLabel />
             {game.multiplayer && (userId
-              ? <InviteFriends key={game.id} game={game} invites={invites} startOpen={!!inviteFirst} />
+              ? <InviteFriends key={game.id} game={game} invites={invites} startOpen={!!inviteFirst} usesName={bridge.usesName} />
               : <Link to={`/login?next=/game/${game.slug}`} className="btn"><PeopleIcon />{t("invite.button")}</Link>)}
             <ShareButton path={`/game/${game.slug}`} title={game.title} />
             {canEdit && <Link to={`/game/${game.slug}/stats`} className="btn">{t("an.title")}</Link>}

@@ -52,6 +52,25 @@ export function hostFromMessage(data: unknown): boolean | undefined {
 /** What Toki sends the game to have it open a room (the game set toki.onHost). */
 export const HOST_MESSAGE = { toki: 1, type: "host" } as const;
 
+/** Longest name a player goes by in games. */
+export const NAME_MAX = 20;
+
+/** A name to go by in games: no control characters or angle brackets, one space at most, 20 characters. */
+export function cleanName(input: string | null | undefined): string {
+  return (input ?? "").replace(/[\u0000-\u001f<>]/g, "").replace(/\s+/g, " ").trim().slice(0, NAME_MAX);
+}
+
+/** What Toki tells the game: the name the player goes by (toki.onName in toki-save.js). */
+export const nameMessage = (name: string) => ({ toki: 1, type: "name", data: cleanName(name) }) as const;
+
+/** Whether the game uses the name from Toki (it called toki.onName); undefined for other messages. */
+export function namesFromMessage(data: unknown): boolean | undefined {
+  const m = data as { toki?: number; type?: string; data?: unknown } | null;
+  if (!m || typeof m !== "object" || m.toki !== 1) return undefined;
+  if (m.type === "hello") return false;
+  return m.type === "names" ? m.data === true : undefined;
+}
+
 /** The game's address that joins this room, or its normal address without a (valid) code. */
 export function playUrl(game: Pick<Game, "play_url" | "multiplayer" | "join_param">, code: string | null): string {
   if (!code || !game.multiplayer || !ROOM_CODE.test(code)) return game.play_url;

@@ -70,7 +70,7 @@ export function MultiplayerSetup({ open, gameId, id }: { open?: boolean; gameId?
   const connect = useAiStatus().strong;
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(`${agentPrompt}\nThis time, add only step 5 (play together). The script from step 1 must be in the page as well: add it if it's missing, and replace an older copy that has no toki.onHost.\n`);
+      await navigator.clipboard.writeText(`${agentPrompt}\nThis time, add only step 5 (play together). The script from step 1 must be in the page as well: add it if it's missing, and replace an older copy that has no toki.onName.\n`);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -88,6 +88,7 @@ export function MultiplayerSetup({ open, gameId, id }: { open?: boolean; gameId?
         <li>{t("mp.setup.step1")}</li>
         <li>{t("mp.setup.step2")}</li>
         <li>{t("mp.setup.step3")}</li>
+        <li>{t("mp.setup.step4")}</li>
       </ol>
       {connect && (
         <div className="save-connect">

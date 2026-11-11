@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hostFromMessage, invitePath, joinPath, maxPlayers, partyId, playUrl, roomCode, roomFromMessage } from "../src/lib/invites";
+import { cleanName, hostFromMessage, invitePath, joinPath, maxPlayers, nameMessage, namesFromMessage, partyId, playUrl, roomCode, roomFromMessage } from "../src/lib/invites";
 import { readTokiJson } from "../src/lib/hostingRules";
 import { integrationGuide } from "../src/lib/integration";
 import { gameLine, task, type Job } from "../server/connect/agent";
@@ -51,6 +51,24 @@ describe("what the game tells Toki about opening rooms", () => {
     for (const other of [null, "host", {}, { type: "host", data: true }, { toki: 1, type: "room", data: "ABCD" }]) {
       expect(hostFromMessage(other)).toBeUndefined();
     }
+  });
+});
+
+describe("the name a player goes by in games", () => {
+  it("is plain text of at most 20 characters", () => {
+    expect(cleanName("  Mia  ")).toBe("Mia");
+    expect(cleanName("Big   Tom\n")).toBe("Big Tom");
+    expect(cleanName("<b>Zoe</b>")).toBe("bZoe/b");
+    expect(cleanName("x".repeat(30))).toHaveLength(20);
+    expect(cleanName(null)).toBe("");
+    expect(nameMessage(" Mia ")).toEqual({ toki: 1, type: "name", data: "Mia" });
+  });
+
+  it("is used by games that say so, until they start again", () => {
+    expect(namesFromMessage({ toki: 1, type: "names", data: true })).toBe(true);
+    expect(namesFromMessage({ toki: 1, type: "hello" })).toBe(false);
+    expect(namesFromMessage({ toki: 1, type: "room", data: "ABCD" })).toBeUndefined();
+    expect(namesFromMessage({ type: "names", data: true })).toBeUndefined();
   });
 });
 
@@ -112,6 +130,7 @@ describe("Toki Connect", () => {
     expect(guide).toContain("window.toki?.room(null)");
     expect(guide).toContain("?room=CODE");
     expect(guide).toContain("window.toki?.onHost(fn)");
+    expect(guide).toContain("window.toki?.onName(fn)");
     const text = task(job, "/* script */");
     expect(text).toContain("add only: friend invites");
     expect(text).not.toContain("high scores (step 4");
@@ -139,7 +158,7 @@ describe("the game script", () => {
     new Function("window", "location", "document", "Storage", "setTimeout", src)(win, { ancestorOrigins: [] }, doc, Storage, () => 0);
     /** A message to the game's page: from Toki, or from anyone else. */
     const tell = (data: unknown, fromToki = true) => listeners.forEach((fn) => fn({ data, source: fromToki ? top : {} }));
-    return { toki: win.toki as { room(code: unknown): void; onHost(fn: unknown): void }, sent, tell };
+    return { toki: win.toki as { room(code: unknown): void; onHost(fn: unknown): void; onName(fn: unknown): void; name: string | null }, sent, tell };
   }
 
   it("tells Toki the room, and that it closed", async () => {
@@ -179,6 +198,33 @@ describe("the game script", () => {
     expect(sent.at(-1)).toEqual([{ toki: 1, type: "host", data: false }, "https://www.playtoki.app"]);
     tell({ toki: 1, type: "host" });
     expect(opened).toBe(1);
+  });
+
+  it("hands the game the player's name from Toki, now and when it changes", async () => {
+    const { toki, sent, tell } = await load(true);
+    sent.length = 0;
+    expect(toki.name).toBeNull();
+    const heard: string[] = [];
+    toki.onName((n: string) => heard.push(n));
+    expect(sent).toEqual([[{ toki: 1, type: "names", data: true }, "https://www.playtoki.app"]]);
+    tell({ toki: 1, type: "name", data: "  Mia " });
+    expect(toki.name).toBe("Mia");
+    // A game that asks later hears it right away.
+    const late: string[] = [];
+    toki.onName((n: string) => late.push(n));
+    tell({ toki: 1, type: "name", data: "Mia" }); // the same again: nothing new
+    tell({ toki: 1, type: "name", data: "<i>Mia 2</i>" });
+    expect(heard).toEqual(["Mia", "iMia 2/i"]);
+    expect(late).toEqual(["Mia", "iMia 2/i"]);
+    // Only from Toki, and only text.
+    tell({ toki: 1, type: "name", data: "Eve" }, false);
+    tell({ toki: 1, type: "name", data: 42 });
+    tell({ toki: 1, type: "name", data: "   " });
+    expect(toki.name).toBe("iMia 2/i");
+    // A game's own error doesn't stop the others.
+    toki.onName(() => { throw new Error("oops"); });
+    expect(() => tell({ toki: 1, type: "name", data: "Tom" })).not.toThrow();
+    expect(heard.at(-1)).toBe("Tom");
   });
 
   it("does nothing outside Toki", async () => {
