@@ -81,6 +81,29 @@ export function updateState(update: GameUpdate, game: { id: string; repo?: strin
   return { state: job.source === "upload" ? "live" : "already", job };
 }
 
+/** A game and an update, as one key ("<game id>:<topic>"). */
+export const markKey = (gameId: string, topic: string) => `${gameId}:${topic}`;
+
+/**
+ * The updates the developer marked "Already done" for these games: they added them themselves,
+ * outside Toki Connect. As markKey keys.
+ */
+export async function updateMarks(gameIds: string[]): Promise<Set<string>> {
+  if (!gameIds.length) return new Set();
+  const { data, error } = await supabase.from("game_update_marks").select("game_id, topic").in("game_id", gameIds);
+  if (error) throw error;
+  return new Set(((data ?? []) as { game_id: string; topic: string }[]).map((r) => markKey(r.game_id, r.topic)));
+}
+
+/** Marks an update as already in a game ("Already done"), or takes that back. */
+export async function setUpdateMark(gameId: string, topic: string, done: boolean): Promise<void> {
+  const { error } = done
+    ? await supabase.from("game_update_marks").insert({ game_id: gameId, topic })
+    : await supabase.from("game_update_marks").delete().eq("game_id", gameId).eq("topic", topic);
+  // Marked already (e.g. in another tab): that's what was wanted.
+  if (error && !(done && error.code === "23505")) throw error;
+}
+
 /** The repository each game follows (games that follow none are left out). */
 export async function gameRepos(gameIds: string[]): Promise<Record<string, { repo: string; branch: string }>> {
   if (!gameIds.length) return {};
