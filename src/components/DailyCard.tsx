@@ -22,6 +22,8 @@ export function DailyCard({ games }: { games: Game[] }) {
   const now = useMinuteClock();
 
   const game = daily ? games.find((g) => g.id === daily.game_id) : undefined;
+  // While loading, a placeholder of about its size, so the page below doesn't jump down.
+  if (daily === undefined) return <DailySkeleton />;
   if (!daily || !game) return null;
   const fmt = (n: number) => formatScore(n, game.score_format, lang);
   const top = daily.top.filter((r) => r.rank <= 3);
@@ -81,6 +83,23 @@ export function DailyCard({ games }: { games: Game[] }) {
         <div className="actions">
           <Link to={path} className="btn primary"><PlayIcon />{t("game.play")}</Link>
         </div>
+      </div>
+    </section>
+  );
+}
+
+/** Today's game while it loads. */
+export function DailySkeleton() {
+  const { t } = useI18n();
+  return (
+    <section className="daily skel" aria-busy="true" aria-label={t("loading")}>
+      <div className="daily-cover"><div className="cover" /></div>
+      <div className="daily-txt">
+        <span className="bar" style={{ width: "40%" }} />
+        <span className="bar big" />
+        <span className="bar" style={{ width: "75%" }} />
+        <span className="bar" style={{ width: "65%" }} />
+        <span className="bar" style={{ width: "55%" }} />
       </div>
     </section>
   );

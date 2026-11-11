@@ -467,8 +467,20 @@ export function InviteToGame({ friend }: { friend: { id: string } }) {
     const onDown = (e: PointerEvent) => {
       if (ref.current?.open && !ref.current.contains(e.target as Node)) ref.current.open = false;
     };
+    // Esc closes it too, and keyboard focus goes back to its button.
+    const onKey = (e: KeyboardEvent) => {
+      const d = ref.current;
+      if (e.key !== "Escape" || !d?.open) return;
+      const inside = d.contains(document.activeElement);
+      d.open = false;
+      if (inside) d.querySelector("summary")?.focus();
+    };
     document.addEventListener("pointerdown", onDown);
-    return () => document.removeEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
   }, []);
   if (!multi.length) return null;
   if (multi.length === 1) return <Link to={invitePath(multi[0].slug, friend.id)} className="btn">{t("invite.toGame")}</Link>;
