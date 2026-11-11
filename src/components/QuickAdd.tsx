@@ -11,7 +11,7 @@ import { siteFor, siteUrl } from "../lib/hostingRules";
 import { ApiError, connectError, runJob, type ConnectJob } from "../lib/ai";
 import {
   type BuildSetup,
-  gitConnect, hostError, scanRepo, scanSample, scanUpload, startLeaderboard, uploadGame, type GitChoice, type HostingStatus, type Proposal, type ScanResult,
+  gitConnect, hostError, scanRepo, scanSample, scanUpload, startAdditions, uploadGame, type GitChoice, type HostingStatus, type Proposal, type ScanResult,
 } from "../lib/hosting";
 import { HostedUpload, type Picked } from "./HostedUpload";
 import { BuildInfo, GitHubFollow, gitFailed } from "./GitHubFollow";
@@ -43,6 +43,8 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
   const [scan, setScan] = useState<ScanResult | null>(null);
   const [p, setP] = useState<Proposal | null>(null);
   const [leaderboard, setLeaderboard] = useState(false);
+  // Friend invites for a game with online rooms, added by the AI in the same run as the leaderboard.
+  const [invites, setInvites] = useState(false);
   const [err, setErr] = useState("");
   // The repository holds the source: GitHub Actions builds it, after its build file is merged.
   const [building, setBuilding] = useState<(BuildSetup & { repo: string; branch: string }) | null>(null);
@@ -68,6 +70,7 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
       setScan(r);
       setP(r.proposal);
       setLeaderboard(r.proposal.leaderboard && !r.proposal.has_scores && codeAi !== "off");
+      setInvites(r.proposal.multiplayer && !r.proposal.has_rooms && codeAi !== "off");
       if (r.folder !== null && git) setGit({ ...git, folder: r.folder });
       setPhase("review");
     } catch (e) {
@@ -141,18 +144,20 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
     }
     invalidateGames();
 
-    // Leaderboard support: Toki Connect changes the code (a new live version, or a pull request).
-    if (!leaderboard) {
+    // A leaderboard and friend invites: Toki Connect changes the code in one run (a new live
+    // version, or one pull request).
+    const features = [...(leaderboard ? (["scores"] as const) : []), ...(invites && p.multiplayer ? (["multiplayer"] as const) : [])];
+    if (!features.length) {
       set("leaderboard", "skip");
       return setPhase("done");
     }
     setPhase("done");
     set("leaderboard", "busy");
     try {
-      const started = await startLeaderboard(
+      const started = await startAdditions(
         kind === "upload" || !git
-          ? { source: "upload", game_id: row.id, lang }
-          : { source: "github", game_id: row.id, lang, installation_id: git.installation_id, repo: git.repo, branch: git.branch },
+          ? { source: "upload", game_id: row.id, lang, features }
+          : { source: "github", game_id: row.id, lang, features, installation_id: git.installation_id, repo: git.repo, branch: git.branch },
       );
       let j = started.job as ConnectJob;
       // Take the run's steps while this page is open; questions are answered on the run's page.
@@ -270,7 +275,7 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
               {t("form.isolation")}
             </label>
             <label className="check">
-              <input type="checkbox" checked={p.multiplayer === true} onChange={(e) => field("multiplayer")(e.target.checked)} />
+              <input type="checkbox" checked={p.multiplayer === true} onChange={(e) => { field("multiplayer")(e.target.checked); setInvites(e.target.checked && !p.has_rooms && codeAi !== "off"); }} />
               {t("form.multiplayer")}
             </label>
             {kind === "github" && git && (
@@ -295,6 +300,18 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
                 </label>
               </li>
             )}
+            {p.multiplayer && (p.has_rooms ? (
+              <li className="check good">{t("quick.hasInvites")}</li>
+            ) : codeAi === "off" ? (
+              <li className="check">{t("quick.noCodeAiInvites")}</li>
+            ) : (
+              <li className="check">
+                <label className="fb-check">
+                  <input type="checkbox" checked={invites} onChange={(e) => setInvites(e.target.checked)} />
+                  <span>{kind === "github" ? t("quick.invitesGithub") : t("quick.invitesUpload")}</span>
+                </label>
+              </li>
+            ))}
           </ul>
           {err && <p className="error" role="alert">{err}</p>}
           <div className="actions">
@@ -310,6 +327,8 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
   const mark = (s: StepState) => (s === "ok" ? "✓" : s === "fail" ? "✗" : s === "skip" ? "–" : s === "busy" ? "…" : "·");
   const question = job?.status === "question";
   const madeChange = job?.status === "done" && (job.pr_url || job.messages.some((m) => m.kind === "done" && m.files.length > 0));
+  // What the AI adds: a leaderboard, friend invites, or both.
+  const adding = leaderboard && invites && p?.multiplayer ? t("quick.what.both") : invites && p?.multiplayer ? t("quick.what.invites") : t("quick.what.scores");
   return (
     <section className="panel quick-add">
       <h1 className="h">{phase === "done" && steps.files === "ok" ? t("quick.liveTitle") : t("quick.publishing")}</h1>
@@ -321,6 +340,7 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
         {steps.leaderboard !== "skip" && (
           <li className={steps.leaderboard}>
             <b aria-hidden="true">{mark(steps.leaderboard)}</b>{" "}
+            <b>{adding}:</b>{" "}
             {steps.leaderboard === "busy" && !question ? t("quick.step.leaderboardBusy")
               : question ? t("quick.step.question")
               : steps.leaderboard === "ok" ? (madeChange ? (job?.pr_url ? t("quick.step.leaderboardPr") : t("quick.step.leaderboardLive")) : t("quick.step.leaderboardAlready"))

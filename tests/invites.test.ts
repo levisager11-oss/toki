@@ -112,6 +112,10 @@ describe("what a game says about its multiplayer", () => {
     const plain = basics([{ path: "index.html", text: "<title>Moon Hop</title><script>let lobby, score</script>" }], "moon-hop");
     expect(plain.multiplayer).toBe(false);
     expect(basics([{ path: "index.html", text: "<script>window.toki?.room(code)</script>" }], "x").multiplayer).toBe(true);
+    // A game that tells Toki its rooms already doesn't need friend invites added; one with rooms of its own does.
+    expect(basics([{ path: "index.html", text: "<script>window.toki?.room(code)</script>" }], "x").has_rooms).toBe(true);
+    expect(plain.has_rooms).toBe(false);
+    expect(readScan('{"multiplayer":true}', plain)).toMatchObject({ multiplayer: true, has_rooms: false });
     expect(readScan('{"multiplayer":true}', plain).multiplayer).toBe(true);
     expect(readScan('{"multiplayer":"true"}', plain).multiplayer).toBe(false);
     expect(withToki(plain, { multiplayer: true }).multiplayer).toBe(true);

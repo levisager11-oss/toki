@@ -28,6 +28,8 @@ export interface Proposal {
   isolation: boolean;
   /** The game has multiplayer rooms (friends can be invited into them on Toki) */
   multiplayer: boolean;
+  /** The game tells Toki its rooms already (toki.room), so friend invites work */
+  has_rooms: boolean;
 }
 
 const text = (v: unknown, max: number) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, max) : "");
@@ -61,6 +63,7 @@ export function basics(files: ScanFile[], name: string): Proposal {
     isolation: /GODOT_THREADS_ENABLED\s*=\s*true|"threads"\s*:\s*true|SharedArrayBuffer/.test(page),
     // Only a sure sign: the game tells Toki its room already. The AI looks closer.
     multiplayer: /toki\??\.room\s*\(/.test(all),
+    has_rooms: /toki\??\.room\s*\(/.test(all),
   };
 }
 
