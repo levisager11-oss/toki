@@ -34,7 +34,7 @@ export function GameUpdates({ game }: { game: Game }) {
     let alive = true;
     // The main version stays on show; small updates after it are listed below it.
     listReleases(game.id, 10)
-      .then((list) => {
+      .then(({ list }) => {
         if (!alive) return;
         const [g] = groupReleases(list);
         setLatest(g ? g.main ?? g.small[0] : null);

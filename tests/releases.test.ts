@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { groupReleases, nextSmallVersion, nextVersion, noteBlocks, type Release } from "../src/lib/releases";
+import { groupReleases, wholeVersions, nextSmallVersion, nextVersion, noteBlocks, type Release } from "../src/lib/releases";
 import { releaseUrl } from "../src/lib/feedback";
 
 describe("noteBlocks", () => {
@@ -45,6 +45,21 @@ describe("groupReleases", () => {
   it("lists small updates without any main version on their own", () => {
     expect(groupReleases([rel("0.0.1", true)])).toEqual([{ main: null, small: [rel("0.0.1", true)] }]);
     expect(groupReleases([])).toEqual([]);
+  });
+  it("puts small updates older than every main version last", () => {
+    const g = groupReleases([rel("1.3"), rel("1.2.1", true)]);
+    expect(g.map((x) => x.main?.version ?? null)).toEqual(["1.3", null]);
+  });
+});
+
+describe("wholeVersions", () => {
+  const page = [rel("1.3"), rel("1.2.2", true), rel("1.2.1", true)];
+  it("drops small updates whose main version is on the next page", () =>
+    expect(wholeVersions(page, true).map((r) => r.version)).toEqual(["1.3"]));
+  it("keeps everything on the last page", () => expect(wholeVersions(page, false)).toEqual(page));
+  it("keeps a page that holds only small updates", () => {
+    const smalls = [rel("1.2.2", true), rel("1.2.1", true)];
+    expect(wholeVersions(smalls, true)).toEqual(smalls);
   });
 });
 

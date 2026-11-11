@@ -36,13 +36,33 @@ export class ReleaseError extends Error {
 }
 const fail = (error: { code?: string }) => new ReleaseError(error.code === "23505" ? "rel.err.versionTaken" : "error");
 
-/** Newest first. gameId null: updates of Toki itself. */
-export async function listReleases(gameId: string | null, limit = 50): Promise<Release[]> {
+/** Newest first, one page at a time. gameId null: updates of Toki itself. `before`: only updates older than this one
+ * (the last one shown; the id breaks ties between updates posted at the same moment). `more`: there are older ones. */
+export async function listReleases(
+  gameId: string | null,
+  limit = 50,
+  before?: Pick<Release, "id" | "published_at">,
+): Promise<{ list: Release[]; more: boolean }> {
   let q = supabase.from("game_releases").select(RELEASE);
   q = gameId ? q.eq("game_id", gameId) : q.is("game_id", null);
-  const { data, error } = await q.order("published_at", { ascending: false }).limit(limit);
+  if (before) q = q.or(`published_at.lt."${before.published_at}",and(published_at.eq."${before.published_at}",id.lt.${before.id})`);
+  const { data, error } = await q
+    .order("published_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(limit + 1);
   if (error) throw fail(error);
-  return data as Release[];
+  const rows = data as Release[];
+  const more = rows.length > limit;
+  return { list: wholeVersions(rows.slice(0, limit), more), more };
+}
+
+/** When older updates follow, drops the small updates at the end of a page: their main version is on the next
+ * page, and they're shown with it there instead of on their own. */
+export function wholeVersions(list: Release[], more: boolean): Release[] {
+  if (!more) return list;
+  let end = list.length;
+  while (end > 0 && list[end - 1].small) end--;
+  return end > 0 ? list.slice(0, end) : list;
 }
 
 export interface ReleaseInput {
@@ -141,7 +161,7 @@ export function groupReleases(list: Release[]): ReleaseGroup[] {
       small = [];
     }
   }
-  if (small.length) groups.unshift({ main: null, small }); // only reachable when no main version is older
+  if (small.length) groups.push({ main: null, small }); // older than every main version: they go last
   return groups;
 }
 

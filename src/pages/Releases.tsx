@@ -21,6 +21,8 @@ export function Releases() {
   const game = slug ? findGame(games, slug) : undefined;
   const gameId = slug ? game?.id : null; // undefined while loading
   const [releases, setReleases] = useState<Release[] | null>(null);
+  const [more, setMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -33,7 +35,11 @@ export function Releases() {
     if (gameId === undefined) return;
     let alive = true;
     listReleases(gameId)
-      .then((r) => alive && setReleases(r))
+      .then((r) => {
+        if (!alive) return;
+        setReleases(r.list);
+        setMore(r.more);
+      })
       .catch(() => alive && setError(true));
     return () => {
       alive = false;
@@ -64,6 +70,19 @@ export function Releases() {
     setWriting(false);
     setEditing(null);
     setReload((n) => n + 1);
+  };
+  const loadOlder = async () => {
+    const last = releases?.[releases.length - 1];
+    if (!last || gameId === undefined) return;
+    setLoadingMore(true);
+    try {
+      const r = await listReleases(gameId, 50, last);
+      setReleases((cur) => [...(cur ?? []), ...r.list]);
+      setMore(r.more);
+    } catch {
+      // Keep what's on screen; the button stays so the player can try again.
+    }
+    setLoadingMore(false);
   };
   const remove = async (id: string) => {
     try {
@@ -139,6 +158,11 @@ export function Releases() {
               )}
             </div>
           ))}
+          {more && (
+            <div className="actions">
+              <button type="button" className="btn" onClick={loadOlder} disabled={loadingMore}>{t(loadingMore ? "loading" : "rel.older")}</button>
+            </div>
+          )}
         </div>
       )}
     </section>
