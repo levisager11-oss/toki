@@ -12,5 +12,7 @@ describe("tab title", () => {
     expect(titleFor("Chat", 0)).toBe("Chat · Toki");
     expect(titleFor("Chat", 3)).toBe("(3) Chat · Toki");
     expect(titleFor(null, 150)).toBe("(99+) Toki");
+    expect(titleFor("Toki: free browser games", 0, true)).toBe("Toki: free browser games");
+    expect(titleFor("Toki: free browser games", 2, true)).toBe("(2) Toki: free browser games");
   });
 });

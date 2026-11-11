@@ -185,12 +185,16 @@ export function Layout() {
         )}
         <div className="side-foot">
           <nav className="navgroup" aria-label="Toki">
-            <h4>Toki</h4>
+            <div className="navgroup-head">
+              <h4>Toki</h4>
+              <span className="side-legal">
+                <Link to="/terms">{t("nav.terms")}</Link>
+                <Link to="/privacy">{t("nav.privacy")}</Link>
+              </span>
+            </div>
             <NavLink to="/updates">{t("rel.whatsNew")}{newUpdate && <span className="new-dot" title={t("rel.newSinceVisit")}><span className="sr-only">{t("rel.newSinceVisit")}</span></span>}</NavLink>
             <NavLink to="/feedback" end>{t("nav.feedback")}</NavLink>
             {profile && !canCreate(profile) && <NavLink to="/ideas">{t("idea.mine")}</NavLink>}
-            <NavLink to="/terms">{t("nav.terms")}</NavLink>
-            <NavLink to="/privacy">{t("nav.privacy")}</NavLink>
           </nav>
           {profile ? (
             <div className="me">

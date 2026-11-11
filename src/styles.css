@@ -722,6 +722,12 @@ a.author:hover { text-decoration: underline; color: var(--fg); }
 .me-out:hover { color: var(--danger); background: var(--surface); }
 .me-guest { display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 0 8px; font-size: 14px; }
 .me-guest .linkish { text-align: center; }
+/* Terms and privacy: small links on the "Toki" heading's row, so they take no extra height. */
+.navgroup-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0 0 6px 8px; }
+.navgroup-head h4 { margin: 0; }
+.side-legal { display: flex; gap: 10px; font-size: 12px; line-height: 1; }
+.navgroup .side-legal a { padding: 0; border: 0; font-weight: 400; color: var(--muted); }
+.navgroup .side-legal a:hover { color: var(--fg); text-decoration: underline; }
 
 /* developer applications */
 .dev-card { margin-top: 8px; border: 1px solid var(--line); border-left: 3px solid var(--accent); background: var(--surface); padding: 14px 16px; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }

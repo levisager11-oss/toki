@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
+import { useTitle } from "../lib/useTitle";
 import { clearRecent, useRecent } from "../lib/local";
 import { useGames } from "../lib/useGames";
 import { matches, plays, SORTS, sortGames, type Sort } from "../lib/games";
@@ -29,6 +30,7 @@ function savedSort(): Sort {
 
 export function Home() {
   const { t } = useI18n();
+  useTitle(t("home.tabTitle"), { full: true });
   const { games, error } = useGames();
   const recentSlugs = useRecent();
   const [params, setParams] = useSearchParams();
