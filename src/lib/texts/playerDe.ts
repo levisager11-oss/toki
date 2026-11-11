@@ -117,6 +117,7 @@ export const playerDe: Record<GroupKey["player"], string> = {
   "fb.reply.login": "Melde dich an, um zu antworten",
   "fb.reply.delete": "Antwort löschen",
   "fb.reply.edit": "Antwort bearbeiten",
+  "fb.inbox.showAll": "Alles anzeigen",
   "fb.inbox.lead": "Fehlermeldungen und Ideen zu deinen Spielen. Antworte und setze einen Status, damit Spieler sehen, was passiert.",
   "fb.inbox.leadAdmin": "Fehlermeldungen und Ideen zu allen Spielen und zu Toki selbst. Antworte und setze einen Status, damit Spieler sehen, was passiert.",
   "fb.inbox.needsReply": "Ohne Antwort",

@@ -115,6 +115,7 @@ export const playerEn = {
   "fb.reply.login": "Log in to reply",
   "fb.reply.delete": "Delete reply",
   "fb.reply.edit": "Edit reply",
+  "fb.inbox.showAll": "Show everything",
   "fb.inbox.lead": "Bug reports and ideas for your games. Reply and set a status, so players see what's happening.",
   "fb.inbox.leadAdmin": "Bug reports and ideas for all games and for Toki itself. Reply and set a status, so players see what's happening.",
   "fb.inbox.needsReply": "Need a reply",

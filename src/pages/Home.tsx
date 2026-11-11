@@ -14,7 +14,7 @@ import { useLatestUpdates } from "../lib/releases";
 import { Avatar } from "../components/Avatar";
 import { isOnline, myFriends, type FriendRow } from "../lib/social";
 import { IdeaBanner } from "../components/IdeaBits";
-import { DailyCard } from "../components/DailyCard";
+import { DailyCard, DailySkeleton } from "../components/DailyCard";
 import type { Category, Game } from "../lib/types";
 
 const ROTATE_MS = 8000;
@@ -92,6 +92,7 @@ export function Home() {
   if (!games)
     return (
       <>
+        {!q && <DailySkeleton />}
         <section className="feature skel" aria-busy="true" aria-label={t("loading")}>
           <div className="cover" />
           <div className="txt"><span className="bar" style={{ width: "30%" }} /><span className="bar big" /><span className="bar" style={{ width: "80%" }} /></div>

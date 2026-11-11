@@ -45,7 +45,7 @@ export function Reports() {
         </div>
       </div>
       <p className="lead">{t("rep.help")}</p>
-      {open && (
+      {open && !!list?.length && (
         <label className="inline-form">
           {t("rep.banFor")}
           <select value={days} onChange={(e) => setDays(Number(e.target.value))}>
@@ -65,7 +65,7 @@ export function Reports() {
               <blockquote>{r.body}</blockquote>
               <p className="sub">
                 {t("rep.by", { who: r.reporter ? `@${r.reporter.username}` : "?" })}
-                {r.reason && <> · “{r.reason}”</>}
+                {r.reason && <> · {lang === "de" ? `„${r.reason}“` : `“${r.reason}”`}</>}
                 {r.chat_id && <> · <Link to={`/chat/${r.chat_id}`}>{t("rep.openChat")}</Link></>}
               </p>
               {open ? (
