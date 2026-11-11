@@ -1187,3 +1187,36 @@ main.content:focus { outline: none; }
 .legal p, .legal ul { margin: 0 0 10px; }
 .legal ul { padding-left: 22px; }
 .legal li + li { margin-top: 4px; }
+
+/* Today's game (top of the home page) and the high score lists by week and day */
+.daily { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); border: 1px solid var(--fg); border-left: 6px solid var(--accent); background: var(--surface); }
+.daily-cover { display: block; border-right: 1px solid var(--fg); min-width: 0; }
+.daily .daily-cover .cover { aspect-ratio: 2 / 1; height: 100%; }
+.daily-txt { padding: 20px 22px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.daily-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.daily-head .sub { font-variant-numeric: tabular-nums; }
+.daily h2 { margin: 0; font-size: clamp(24px, 3vw, 32px); line-height: 1.05; font-weight: 800; letter-spacing: -.02em; overflow-wrap: anywhere; }
+.daily h2 a { text-decoration: none; }
+.daily h2 a:hover { text-decoration: underline; text-underline-offset: 4px; }
+.daily-streak { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.streak { display: inline-block; font-weight: 700; font-size: 14px; padding: 2px 8px; border: 1px solid var(--line); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.streak.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent-ink); }
+.daily-board { display: flex; flex-direction: column; gap: 6px; }
+.daily-board h3 { margin: 0; font-weight: 400; }
+.daily-board p { margin: 0; }
+.board.compact { margin: 0; max-width: none; }
+.board.compact li { padding: 6px 4px; gap: 10px; }
+.board.compact .score { font-size: 15px; }
+.daily .actions { margin-top: 4px; }
+.leaderboard .sechead { justify-content: flex-start; }
+.board-tabs label { padding: 5px 12px; font-size: 13px; }
+.daily-plan { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+@media (max-width: 860px) {
+  .daily { grid-template-columns: minmax(0, 1fr); border-left-width: 1px; border-top: 6px solid var(--accent); }
+  .daily-cover { border-right: 0; border-bottom: 1px solid var(--fg); }
+  .daily .daily-cover .cover { aspect-ratio: 5 / 2; }
+  .daily-txt { padding: 16px; }
+  .daily .actions .btn.primary { flex: 1; padding-block: 12px; }
+  .board-tabs { flex: 1 1 100%; }
+  .board-tabs label { padding: 9px 6px; font-size: 14px; }
+}
