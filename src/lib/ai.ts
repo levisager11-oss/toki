@@ -1,24 +1,9 @@
 // AI settings and spending (admins) and Toki Connect (developers) for the pages.
 // The AI itself only runs on the server (api/ai.ts, api/github.ts, api/connect.ts).
 import { supabase } from "./supabase";
+import { api, ApiError } from "./api";
 
-export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const { data } = await supabase.auth.getSession();
-  const res = await fetch(path, {
-    ...init,
-    headers: { ...(init.body ? { "content-type": "application/json" } : {}), authorization: `Bearer ${data.session?.access_token ?? ""}` },
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(typeof body?.error === "string" ? body.error : "error", typeof body?.message === "string" ? body.message : "");
-  return body as T;
-}
-
-export class ApiError extends Error {
-  /** The server's explanation, when it gave one (e.g. what the AI endpoint answered). */
-  constructor(code: string, readonly detail = "") {
-    super(code);
-  }
-}
+export { api, ApiError };
 
 /** "$1.23", or more digits for amounts below a cent. */
 export function usd(n: number): string {
