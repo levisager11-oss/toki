@@ -2,6 +2,7 @@
 // uploaded, how big a game may be, the game's address, and what a toki.json may say.
 import { CATEGORIES, type Category } from "./types.js";
 import { readAchievements, type Achievement } from "./achievementRules.js";
+import { readBoards, type BoardInput } from "./boardRules.js";
 
 export const MAX_GAME_BYTES = 100 * 1024 * 1024;
 export const MAX_GAME_FILES = 3000;
@@ -148,6 +149,11 @@ export interface TokiJson {
   folder?: string;
   /** The game's achievements (at most 30): new ones are added and listed ones updated; none are deleted */
   achievements?: Achievement[];
+  /**
+   * The game's other high-score lists (at most 10; an entry with id "" names the main one): new
+   * ones are added and listed ones updated; none are deleted
+   */
+  boards?: BoardInput[];
 }
 
 /** The name of the room code in a game's invite links (<game>?room=ABCD): short and plain. */
@@ -210,6 +216,8 @@ export function readTokiJson(raw: unknown): TokiJson {
   if (folder) out.folder = folder;
   const achievements = readAchievements(o.achievements);
   if (achievements.length) out.achievements = achievements;
+  const boards = readBoards(o.boards);
+  if (boards.length) out.boards = boards;
   return out;
 }
 

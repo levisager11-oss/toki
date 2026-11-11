@@ -14,6 +14,7 @@ import { MultiplayerSetup, SaveSupport } from "../components/SaveSupport";
 import { AiBox } from "../components/AiBits";
 import { HelperSetup } from "../components/HelperSetup";
 import { AchievementsSetup } from "../components/AchievementsSetup";
+import { BoardsSetup } from "../components/BoardsSetup";
 import { assistError, describeGame, useFreeAi } from "../lib/assist";
 import { useTitle } from "../lib/useTitle";
 import { extFor, removeGameImages, shrinkGameImage } from "../lib/gameImages";
@@ -599,6 +600,7 @@ export function GameForm() {
 
         {orig && <HelperSetup gameId={orig.id} />}
         {orig && <AchievementsSetup gameId={orig.id} />}
+        {orig && <BoardsSetup gameId={orig.id} mainName={orig.board_name} mainNameDe={orig.board_name_de} />}
 
         <div className="form-foot">
           {err && <p className="error" role="alert">{err}</p>}

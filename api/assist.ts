@@ -455,7 +455,7 @@ async function help(ctx: Ctx, b: Record<string, unknown>, lang: Lang) {
     // Where the player is: their save as the game page has it, and their best score and playtime.
     const [[h], [best], [time]] = await Promise.all([
       ctx.db.select<{ notes: string; guide: string }>("game_help", `game_id=eq.${b.game_id}&select=notes,guide`),
-      ctx.db.select<{ score: number }>("game_scores", `${mine}&select=score`).catch(() => []),
+      ctx.db.select<{ score: number }>("game_scores", `${mine}&board=eq.&select=score`).catch(() => []),
       ctx.db.select<{ seconds: number }>("playtime", `${mine}&select=seconds`).catch(() => []),
     ]);
     const save = str(b.save, MAX_SAVE_SUMMARY);

@@ -30,6 +30,14 @@ export interface GameUpdate {
 /** Newest first. */
 export const GAME_UPDATES: GameUpdate[] = [
   {
+    topic: "boards",
+    feature: "boards",
+    since: "2026-11-11T17:00:00Z",
+    // Any game with a score can have more lists (one per level, mode or difficulty).
+    applies: () => true,
+    only: 'This time, add only "More lists" from step 4: send scores to the game\'s other high-score lists on Toki with `toki.score(points, "id")`, where the code knows which list a score belongs to, and keep sending the main score with `toki.score(points)` as before. If the game has no other lists on Toki yet, propose some as that part says. Leave everything else as it is in the game. The script from step 1 must be the current one: replace an older copy (its first line says v7 or lower), since it sends every score to the main list.',
+  },
+  {
     topic: "achievements",
     feature: "achievements",
     since: "2026-11-11T15:53:00Z",

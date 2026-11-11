@@ -55,6 +55,11 @@ build). Every field is optional:
   "folder": "build",
   "achievements": [
     { "id": "first-star", "name": "First star", "name_de": "Erster Stern", "description": "Collect your first star.", "description_de": "Sammle deinen ersten Stern.", "icon": "⭐" }
+  ],
+  "boards": [
+    { "id": "", "name": "Normal", "name_de": "Normal" },
+    { "id": "hard", "name": "Hard mode", "name_de": "Schwer", "score_order": "high", "score_format": "points" },
+    { "id": "speedrun", "name": "Speedrun", "score_order": "low", "score_format": "time" }
   ]
 }
 ```
@@ -80,6 +85,13 @@ build). Every field is optional:
   characters), `description` (one line, at most 120), the German ones optional, `icon` one emoji.
   Each upload adds new ones and updates the ones listed; it never deletes any (the developer
   removes them on Toki, in the game's settings).
+- `boards`: more high-score lists besides the main one (at most 10), e.g. one per level, mode or
+  difficulty. `id`: what the game calls `toki.score(points, id)` with (letters, digits, `_`, `-`
+  and `.`, at most 32). `name` (at most 40 characters), `name_de` optional, `score_order` `high`
+  or `low`, `score_format` `points` or `time` (milliseconds). An entry with `"id": ""` only names
+  the main list (its order and format are `score_order`/`score_format` above). Each upload adds
+  new lists and updates the ones listed; it never deletes any (the developer removes them on
+  Toki, in the game's settings, which also removes their scores).
 
 ## 3. Saves and high scores
 
@@ -88,6 +100,8 @@ build). Every field is optional:
   `localStorage` follows the player to other devices.
 - **High scores**: call `window.toki && window.toki.score(points)` when a round ends (for times:
   milliseconds). Outside Toki it does nothing.
+- **More lists** (if the game has `boards`): `window.toki && window.toki.score(points, "hard")`
+  sends the score to that list instead of the main one. Ids Toki doesn't know are ignored.
 - **Achievements** (if the developer wants them): call
   `window.toki && window.toki.achievement("first-star")` when the player earns one, with an id
   from `achievements` in toki.json (or from the game's settings on Toki). Calling it again is free;

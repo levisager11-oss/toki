@@ -230,7 +230,7 @@ export function llmsTxt(games: SeoGame[], origin: string): string {
     "",
     `- [Publishing a game on Toki](${origin}/agents.md): web builds, toki.json, the upload script, GitHub Actions and the upload API.`,
     `- [Upload script](${origin}/toki-upload.mjs): \`TOKI_KEY=toki_… node toki-upload.mjs <folder>\` (Node.js 18+).`,
-    `- [Save script](${origin}/toki-save.js): saves, \`toki.score(points)\` and \`toki.achievement(id)\` for games that run elsewhere (hosted games get it automatically).`,
+    `- [Save script](${origin}/toki-save.js): saves, \`toki.score(points)\` (or \`toki.score(points, board)\` for a game's other lists) and \`toki.achievement(id)\` for games that run elsewhere (hosted games get it automatically).`,
     "",
   ].join("\n");
 }

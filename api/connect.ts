@@ -181,6 +181,12 @@ async function run(ctx: Ctx, b: Record<string, unknown>, origin: string) {
         "game_achievements", `game_id=eq.${job.game_id}&select=id,name,description&order=position,id`,
       );
     }
+    // The game's other high-score lists, so the AI sends scores to the right one.
+    if (game && (job.features.includes("boards") || job.features.includes("scores"))) {
+      game.boards = await ctx.db.select<{ id: string; name: string; score_order: "high" | "low"; score_format: "points" | "time" }>(
+        "game_boards", `game_id=eq.${job.game_id}&select=id,name,score_order,score_format&order=position,id`,
+      ).catch(() => []);
+    }
   }
   let bug: Bug | null = null;
   if (job.feedback_id) {
@@ -263,6 +269,10 @@ async function saveStep(ctx: Ctx, job: Row, result: StepResult): Promise<boolean
   // ones it doesn't have yet are added, so nothing the developer set is changed).
   if (rows.length && result.status === "done" && result.achievements?.length && job.game_id) {
     await ctx.db.rpc("set_achievements", { p_game: job.game_id, p_list: result.achievements, p_mode: "add" }).catch(() => {});
+  }
+  // High-score lists the AI proposed for a game that had none: likewise, only new ones are added.
+  if (rows.length && result.status === "done" && result.boards?.length && job.game_id) {
+    await ctx.db.rpc("set_boards", { p_game: job.game_id, p_list: result.boards, p_mode: "add" }).catch(() => {});
   }
   return rows.length > 0;
 }

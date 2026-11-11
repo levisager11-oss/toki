@@ -8,7 +8,7 @@
 // install or run anything long, a hard dollar cap per run (enforced by Anthropic), and each step
 // here only looks at the session (no AI call of Toki's own).
 import { MAX_CHANGED, MAX_WRITE, safePath } from "./files.js";
-import { gameLine, proposed, proposing, questions, task, type Job, type JobState, type Message, type StepResult } from "./agent.js";
+import { gameLine, proposed, proposing, proposingBoards, questions, task, type Job, type JobState, type Message, type StepResult } from "./agent.js";
 
 export const REPO_PATH = "/workspace/repo";
 export const CHANGES_FILE = "toki-changes.json";
@@ -69,6 +69,18 @@ export const AGENT_TOOLS = [
             required: ["id", "name"],
           },
         },
+        boards: {
+          type: "array",
+          description: "Only when the task asks you to propose high-score lists: the ones you send scores to. Toki adds them to the game.",
+          items: {
+            type: "object",
+            properties: {
+              id: { type: "string" }, name: { type: "string" }, name_de: { type: "string" },
+              score_order: { type: "string", enum: ["high", "low"] }, score_format: { type: "string", enum: ["points", "time"] },
+            },
+            required: ["id", "name"],
+          },
+        },
       },
       required: ["result", "summary"],
     },
@@ -87,7 +99,7 @@ export function kickoff(job: Job, script: string, lang: "en" | "de"): string {
   if (job.notes) parts.push(`The developer's notes:\n${job.notes}`);
   parts.push(
     `Write everything the developer reads (questions, title, summary) in ${lang === "de" ? "German" : "English"}, short and friendly, without jargon.`,
-    `When your change is done, run exactly:\n${CHANGES_COMMAND}\nthen call finish with result "changed"${proposing(job) ? ", and the achievements you propose in its \"achievements\"" : ""}.`,
+    `When your change is done, run exactly:\n${CHANGES_COMMAND}\nthen call finish with result "changed"${proposing(job) ? ", and the achievements you propose in its \"achievements\"" : ""}${proposingBoards(job) ? ", and the high-score lists you propose in its \"boards\"" : ""}.`,
   );
   return parts.join("\n\n");
 }
@@ -244,7 +256,7 @@ async function finish(
   if (result === "already" && !job.features.includes("fix")) {
     await done();
     messages.push({ from: "ai", kind: "done", text: summary, files: [], at });
-    return { status: "done", messages, state, error: null, cost, ...proposed(job, e.input.achievements) };
+    return { status: "done", messages, state, error: null, cost, ...proposed(job, e.input) };
   }
   if (result === "impossible" || result === "already") {
     await done();
@@ -272,5 +284,5 @@ async function finish(
   });
   await done();
   messages.push({ from: "ai", kind: "done", text: summary, files: Object.keys(changes.files), at });
-  return { status: "done", messages, state, pr_url: pr, error: null, cost, ...proposed(job, e.input.achievements) };
+  return { status: "done", messages, state, pr_url: pr, error: null, cost, ...proposed(job, e.input) };
 }

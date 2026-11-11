@@ -449,6 +449,21 @@ describe("Toki Connect run", () => {
     expect((await step(newJob(), g.deps)).achievements).toBeUndefined();
   });
 
+  it("proposes high-score lists for a game that has none, and hands them to Toki", async () => {
+    const f = fixture([JSON.stringify({
+      action: "change", title: "Listen", summary: "Eine Liste pro Modus.",
+      edits: [{ path: "game.js", search: "  showScreen('over');", replace: "  window.toki?.score(points, 'hard');\n  showScreen('over');" }],
+      boards: [{ id: "hard", name: "Hard mode", score_order: "high" }, { id: "bad id", name: "Bad" }],
+      achievements: [{ id: "a", name: "A" }],
+    })]);
+    const r = await step(newJob({ features: ["boards"] }), f.deps);
+    expect(f.prompts[0]).toContain("no other high-score lists on Toki yet");
+    expect(f.prompts[0]).toContain('"boards":[...]');
+    expect(f.prompts[0]).not.toContain('"achievements":[...]');
+    expect(r).toMatchObject({ status: "done", boards: [{ id: "hard", name: "Hard mode", name_de: null, score_order: "high" }] });
+    expect(r.achievements).toBeUndefined();
+  });
+
   it("stops with the reason when the budget is used up", async () => {
     const f = fixture([]);
     f.deps.ai = async () => {

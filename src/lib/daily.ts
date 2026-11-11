@@ -136,9 +136,10 @@ export function useMinuteClock(): Date {
   return now;
 }
 
-/** This week's ("week") or today's ("day") list of a game, like leaderboard(). */
-export async function periodLeaderboard(gameId: string, period: "week" | "day", limit = 10): Promise<ScoreRow[]> {
-  const { data, error } = await supabase.rpc("period_leaderboard", { p_game: gameId, p_period: period, p_limit: limit });
+/** This week's ("week") or today's ("day", main board only) list of a game's board, like leaderboard(). */
+export async function periodLeaderboard(gameId: string, period: "week" | "day", limit = 10, board = ""): Promise<ScoreRow[]> {
+  const args = { p_game: gameId, p_period: period, p_limit: limit };
+  const { data, error } = await supabase.rpc("period_leaderboard", board ? { ...args, p_board: board } : args);
   if (error) throw error;
   return (data as ScoreRow[]).map((r) => ({ ...r, id: r.user_id, rank: Number(r.rank), score: Number(r.score) }));
 }

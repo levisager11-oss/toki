@@ -38,6 +38,9 @@ export interface Game {
   score_order?: "high" | "low";
   /** High scores are points, or a time in milliseconds. */
   score_format?: "points" | "time";
+  /** What the main high-score list is called, when the game has more (src/lib/boardRules.ts); null: "Main". */
+  board_name?: string | null;
+  board_name_de?: string | null;
   /** The game only runs with cross-origin isolation (e.g. Godot 4 with threads). Off for most games. */
   needs_isolation?: boolean;
   /** The game has multiplayer rooms that friends can be invited into. */

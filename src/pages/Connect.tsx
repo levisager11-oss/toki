@@ -180,7 +180,7 @@ export function Connect() {
 }
 
 export const featureKey = (f: Feature) =>
-  f === "fix" ? "connect.fix" : f === "saves" ? "connect.saves" : f === "multiplayer" ? "connect.multiplayer" : f === "achievements" ? "ach.connect" : "connect.scores";
+  f === "fix" ? "connect.fix" : f === "saves" ? "connect.saves" : f === "multiplayer" ? "connect.multiplayer" : f === "achievements" ? "ach.connect" : f === "boards" ? "boards.connect" : "connect.scores";
 
 /** pr: whether the run opened a pull request (a finished run without one found nothing to do). */
 export function JobBadge({ status, pr }: { status: ConnectJob["status"]; pr: boolean }) {
@@ -218,7 +218,7 @@ function NewRun({ repos, games, initialGame, fix, lang, onStarted }: {
   const [update] = useState(() => gameUpdate(new URLSearchParams(location.search).get("update")));
   const [features, setFeatures] = useState<Feature[]>(() => {
     const add = update?.feature ?? new URLSearchParams(location.search).get("add");
-    return add === "multiplayer" || add === "scores" || add === "saves" || add === "achievements" ? [add] : ["saves", "scores"];
+    return add === "multiplayer" || add === "scores" || add === "saves" || add === "achievements" || add === "boards" ? [add] : ["saves", "scores"];
   });
   const [notes, setNotes] = useState(() => update?.only ?? "");
   const [busy, setBusy] = useState(false);
@@ -279,6 +279,10 @@ function NewRun({ repos, games, initialGame, fix, lang, onStarted }: {
           <label className="fb-check">
             <input type="checkbox" checked={features.includes("achievements")} onChange={() => toggle("achievements")} />
             <span><b>{t("ach.connect")}</b> <span className="sub">{t("ach.connectHelp")}</span></span>
+          </label>
+          <label className="fb-check">
+            <input type="checkbox" checked={features.includes("boards")} onChange={() => toggle("boards")} />
+            <span><b>{t("boards.connect")}</b> <span className="sub">{t("boards.connectHelp")}</span></span>
           </label>
         </>
       )}
