@@ -3,10 +3,18 @@ import { useI18n } from "../lib/i18n";
 import { githubConnectLink, githubManage, githubRepos, type GitHubInfo } from "../lib/ai";
 import { gitBranches, gitBuild, gitDeploy, gitDisconnect, hostError, type GitChoice, type GitResult, type GitRow } from "../lib/hosting";
 
+/** The error code of a failed update, also for GitHub's own answers saved before Toki knew them. */
+export function gitErrorCode(error: string | null | undefined): string {
+  const e = error ?? "";
+  if (/^github: GitHub 40[34]\b/.test(e)) return "repo_lost";
+  if (/^github: GitHub (5\d\d|429)\b/.test(e) || /rate limit|timed? ?out/i.test(e)) return "github_error";
+  return e;
+}
+
 /** Why an update from GitHub failed, in words where Toki knows the reason. */
 export function gitFailed(t: ReturnType<typeof useI18n>["t"], error: string | undefined, engine?: string): string {
   if (error === "cant_build") return t("git.cantBuild", { engine: engine && engine !== "unknown" ? engine : t("git.thisEngine") });
-  const code = hostError(error ?? "");
+  const code = hostError(gitErrorCode(error));
   return code === "error" ? t("git.failed", { error: error ?? "" }) : t(`host.err.${code}`, { mb: "100 MB" });
 }
 
@@ -69,9 +77,12 @@ export function GitHubFollow({ gameId, row, choice, onChoice, onChanged }: {
   // "More repositories" opens GitHub in a new tab; the list is read again when this tab is back.
   const stopWatching = useRef<() => void>();
   useEffect(() => () => stopWatching.current?.(), []);
-  const moreRepos = () => {
+  const moreRepos = (then?: () => void) => {
     stopWatching.current?.();
-    stopWatching.current = githubManage(info!.installUrl!, loadRepos);
+    stopWatching.current = githubManage(info!.installUrl!, () => {
+      void loadRepos();
+      then?.();
+    });
   };
   useEffect(() => {
     setEditing(!row);
@@ -127,7 +138,13 @@ export function GitHubFollow({ gameId, row, choice, onChoice, onChanged }: {
             </p>
           )}
           {row.status === "failed" && row.error && (
-            <p className="sub">{t("git.error", { error: hostError(row.error) === "error" ? row.error : t(`host.err.${hostError(row.error)}`, { mb: "100 MB" }) })}</p>
+            <p className="sub">{t("git.error", { error: hostError(gitErrorCode(row.error)) === "error" ? row.error : t(`host.err.${hostError(gitErrorCode(row.error))}`, { mb: "100 MB" }) })}</p>
+          )}
+          {row.status === "failed" && gitErrorCode(row.error) === "repo_lost" && info?.installUrl && (
+            <p className="sub">
+              {/* Back from GitHub, Toki tries the update again by itself. */}
+              <button type="button" className="btn primary" onClick={() => moreRepos(() => run("deploy"))} disabled={busy}>{t("git.giveAccess")}</button>
+            </p>
           )}
           {row.build === "action" && <BuildInfo repo={row.repo} branch={row.branch} link={row.build_pr} ready={row.status === "live" || !!row.last_sha} />}
           {row.build !== "action" && row.error === "needs_build" && (
@@ -163,7 +180,7 @@ export function GitHubFollow({ gameId, row, choice, onChoice, onChanged }: {
           <div className="drop">
             <p>{info.unreachable ? t("connect.githubLoadError") : t("connect.noRepos")}</p>
             <div className="actions">
-              {!info.unreachable && <button type="button" className="btn primary" onClick={moreRepos}>{t("git.moreRepos")}</button>}
+              {!info.unreachable && <button type="button" className="btn primary" onClick={() => moreRepos()}>{t("git.moreRepos")}</button>}
               <button type="button" className="btn" onClick={loadRepos}>{t("git.refreshRepos")}</button>
             </div>
           </div>
@@ -177,7 +194,7 @@ export function GitHubFollow({ gameId, row, choice, onChoice, onChanged }: {
               ))}
             </select>
             <small>
-              <button type="button" className="linkish" onClick={moreRepos}>{t("git.moreRepos")}</button>
+              <button type="button" className="linkish" onClick={() => moreRepos()}>{t("git.moreRepos")}</button>
               {" · "}
               <button type="button" className="linkish" onClick={loadRepos}>{t("git.refreshRepos")}</button>
             </small>

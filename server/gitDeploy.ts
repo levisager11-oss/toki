@@ -6,7 +6,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { gunzipSync } from "node:zlib";
 import type { Db } from "./db.js";
-import { GitHubError, type GitHubClient } from "./github.js";
+import { GitHubError, type GitHubClient, type RepoClient } from "./github.js";
 import { finishUpload, HostingError, startUpload, type Deps, type HostUser } from "./hosting.js";
 import { cleanPath, MAX_GAME_BYTES, readTokiJson } from "../src/lib/hostingRules.js";
 import { isSourcePage } from "./assist/scan.js";
@@ -84,9 +84,59 @@ export interface GitRow {
 
 const short = (e: unknown) => {
   if (e instanceof HostingError) return e.code;
-  if (e instanceof GitHubError) return e.message === "repo_too_big" ? "repo_too_big" : `github: ${e.message}`.slice(0, 300);
+  if (e instanceof GitHubError) {
+    if (e.message === "repo_too_big") return "repo_too_big";
+    // GitHub itself had a problem, or didn't answer: trying again later helps.
+    if (e.status >= 500 || e.status === 429 || /rate limit/i.test(e.message)) return "github_error";
+    return `github: ${e.message}`.slice(0, 300);
+  }
+  if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) return "github_error";
   return e instanceof Error ? e.message.slice(0, 300) : "error";
 };
+
+/**
+ * Whether GitHub says this connection can't reach the repository: the Toki app was uninstalled
+ * (installing it again gives it a new id), it is suspended, or the repository was taken out of it.
+ */
+const lost = (e: unknown) => e instanceof GitHubError && (e.status === 404 || (e.status === 403 && !/rate limit/i.test(e.message)));
+
+/**
+ * The game's repository, through a GitHub connection that still reaches it. When the one saved
+ * with the game doesn't any more, the developer's other connections are tried, and the one that
+ * works is saved for next time (also a new name, when the repository was renamed). Throws
+ * "repo_lost" when none of them reaches it.
+ */
+export async function openRepo(db: Db, gh: GitHubClient, row: GitRow, ownerId?: string | null): Promise<RepoClient> {
+  const tried = new Set<number>();
+  const reach = async (id: number): Promise<RepoClient> => {
+    tried.add(id);
+    let repo = await gh.repo(id, row.repo);
+    const name = await repo.name();
+    if (Number(row.installation_id) !== id || name !== row.repo) {
+      if (name !== row.repo) repo = await gh.repo(id, name);
+      row.installation_id = id;
+      row.repo = name;
+      await db.update("game_git", `game_id=eq.${row.game_id}`, { installation_id: id, repo: name }).catch(() => {});
+    }
+    return repo;
+  };
+  try {
+    return await reach(Number(row.installation_id));
+  } catch (e) {
+    if (!lost(e)) throw e;
+  }
+  const users = [...new Set([ownerId, row.created_by].filter((u): u is string => !!u))];
+  const mine = users.length ? await db.select<{ installation_id: number }>("github_installations", `user_id=in.(${users.join(",")})&select=installation_id`) : [];
+  for (const id of new Set(mine.map((i) => Number(i.installation_id)))) {
+    if (tried.has(id)) continue;
+    try {
+      return await reach(id);
+    } catch (e) {
+      if (!lost(e)) throw e;
+    }
+  }
+  throw new HostingError("repo_lost", 404);
+}
 
 /**
  * Deploys one commit of a game's repository. Records how it went on the game's game_git row
@@ -97,8 +147,12 @@ export async function deployCommit(deps: Deps, gh: GitHubClient, row: GitRow, co
   const mark = (patch: Record<string, unknown>) => db.update("game_git", `game_id=eq.${row.game_id}`, { ...patch, updated_at: new Date().toISOString() }).catch(() => {});
   try {
     const user = await owner(db, row);
-    const repo = await gh.repo(row.installation_id, row.repo);
-    const head = commit ?? (await repo.head(row.branch));
+    const repo = await openRepo(db, gh, row, user.id);
+    const head =
+      commit ??
+      (await repo.head(row.branch).catch((e) => {
+        throw e instanceof GitHubError && (e.status === 404 || e.status === 422) ? new HostingError("no_branch") : e;
+      }));
     await mark({ status: "deploying", last_sha: head.sha, last_message: head.message || null, error: null });
     const all = readTar(gunzipSync(await repo.tarball(head.sha, MAX_TARBALL), { maxOutputLength: 1024 ** 3 }));
     // toki.json at the top of the repository may name the folder ("folder": "build").
@@ -179,7 +233,22 @@ export async function gamesForPush(db: Db, ev: PushEvent): Promise<{ rows: GitRo
     "game_git",
     `repo=eq.${encodeURIComponent(repo)}&branch=eq.${encodeURIComponent(branch)}&build=eq.none&select=game_id,installation_id,repo,branch,folder,created_by`,
   );
-  const mine = rows.filter((r) => Number(r.installation_id) === ev.installation?.id);
+  const from = ev.installation?.id;
+  if (!rows.length || typeof from !== "number") return null;
+  // A game saved with an older connection (the Toki app was installed again on GitHub, which
+  // gives it a new id) follows this push too, when this connection is one of its developer's.
+  const others = rows.filter((r) => Number(r.installation_id) !== from && r.created_by);
+  const owners = others.length
+    ? new Set((await db.select<{ user_id: string }>("github_installations", `installation_id=eq.${from}&select=user_id`)).map((i) => i.user_id))
+    : new Set<string>();
+  const mine: GitRow[] = [];
+  for (const r of rows) {
+    if (Number(r.installation_id) === from) mine.push(r);
+    else if (r.created_by && owners.has(r.created_by)) {
+      await db.update("game_git", `game_id=eq.${r.game_id}`, { installation_id: from }).catch(() => {});
+      mine.push({ ...r, installation_id: from });
+    }
+  }
   if (!mine.length) return null;
   return { rows: mine, commit: { sha: ev.after, message: (ev.head_commit?.message ?? "").split("\n")[0].trim().slice(0, 200) } };
 }
