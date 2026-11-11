@@ -6,7 +6,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
 import { useGames } from "../lib/useGames";
-import { HOST_MESSAGE, hostFromMessage, invitePath, joinPath, maxPlayers, roomCode, roomFromMessage } from "../lib/invites";
+import { HOST_MESSAGE, hostFromMessage, invitePath, joinPath, maxPlayers, NAME_MAX, nameMessage, namesFromMessage, roomCode, roomFromMessage } from "../lib/invites";
+import { usePlayerName } from "../lib/playerName";
 import { openParty } from "../lib/party";
 import { pushInvite } from "../lib/push";
 import { inviteToGame, isOnline, markNotificationsRead, myFriends, SocialError, type FriendRow, type Person } from "../lib/social";
@@ -24,6 +25,8 @@ export interface RoomBridge {
   canHost: boolean;
   /** Asks the game to open a room. */
   askHost: () => void;
+  /** The game uses the name the player goes by, from Toki (toki.onName). */
+  usesName: boolean;
 }
 
 /**
@@ -34,6 +37,11 @@ export interface RoomBridge {
 export function useRoomBridge(frame: RefObject<HTMLIFrameElement>, game: Game | undefined, run: string): RoomBridge {
   const [room, setRoom] = useState<string | null>(null);
   const [canHost, setCanHost] = useState(false);
+  const [usesName, setUsesName] = useState(false);
+  // The game hears the name as soon as its script says hello, and again when it changes.
+  const { name } = usePlayerName();
+  const nameNow = useRef(name);
+  nameNow.current = name;
   const playUrl = game?.multiplayer ? game.play_url : undefined;
   const origin = useMemo(() => {
     try {
@@ -45,6 +53,7 @@ export function useRoomBridge(frame: RefObject<HTMLIFrameElement>, game: Game | 
   useEffect(() => {
     setRoom(null);
     setCanHost(false);
+    setUsesName(false);
     if (!origin) return;
     const onMessage = (e: MessageEvent) => {
       const win = frame.current?.contentWindow;
@@ -53,6 +62,9 @@ export function useRoomBridge(frame: RefObject<HTMLIFrameElement>, game: Game | 
       if (next !== undefined) setRoom(next);
       const host = hostFromMessage(e.data);
       if (host !== undefined) setCanHost(host);
+      const names = namesFromMessage(e.data);
+      if (names !== undefined) setUsesName(names);
+      if ((e.data as { type?: string } | null)?.type === "hello" && nameNow.current) win.postMessage(nameMessage(nameNow.current), origin);
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
@@ -60,7 +72,35 @@ export function useRoomBridge(frame: RefObject<HTMLIFrameElement>, game: Game | 
   const askHost = useCallback(() => {
     if (origin) frame.current?.contentWindow?.postMessage(HOST_MESSAGE, origin);
   }, [frame, origin]);
-  return { room, canHost, askHost };
+  // A new name (chosen in Toki while playing) reaches the game at once.
+  useEffect(() => {
+    if (origin && name) frame.current?.contentWindow?.postMessage(nameMessage(name), origin);
+  }, [frame, origin, name]);
+  return { room, canHost, askHost, usesName };
+}
+
+/**
+ * "Your name in the game", for games that use the name from Toki: the player's Toki name until
+ * they choose another (guests choose one). Saved as they type; the game hears it at once.
+ */
+export function GameNameField({ id, guest }: { id: string; guest?: boolean }) {
+  const { t } = useI18n();
+  const { chosen, fallback, setName } = usePlayerName();
+  const [text, setText] = useState(chosen || fallback);
+  useEffect(() => setText(chosen || fallback), [chosen, fallback]);
+  return (
+    <div className="form game-name">
+      <label htmlFor={id}>{t("name.label")}</label>
+      <input
+        id={id} value={text} maxLength={NAME_MAX} autoComplete="nickname" spellCheck={false}
+        placeholder={guest ? t("name.placeholderGuest") : fallback}
+        onChange={(e) => { setText(e.target.value); setName(e.target.value); }}
+        onBlur={() => setText(chosen || fallback)}
+        aria-describedby={`${id}-help`}
+      />
+      <small id={`${id}-help`}>{t(guest ? "name.helpGuest" : "name.help")}</small>
+    </div>
+  );
 }
 
 // The game gets this long to open the room Toki asked for; then the player is told how to.
@@ -189,7 +229,7 @@ export function useGameInvites(game: Game | undefined, bridge: RoomBridge, start
 }
 
 /** "Invite friends" next to the game, and the window to pick them. */
-export function InviteFriends({ game, invites, startOpen }: { game: Game; invites: Invites; startOpen?: boolean }) {
+export function InviteFriends({ game, invites, startOpen, usesName }: { game: Game; invites: Invites; startOpen?: boolean; usesName?: boolean }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(!!startOpen);
   return (
@@ -198,12 +238,12 @@ export function InviteFriends({ game, invites, startOpen }: { game: Game; invite
         <PeopleIcon />{t("invite.button")}
       </button>
       {/* Outside the game's button row, so that row's layout rules don't reach into the window. */}
-      {open && createPortal(<InviteDialog game={game} invites={invites} onClose={() => setOpen(false)} />, document.body)}
+      {open && createPortal(<InviteDialog game={game} invites={invites} usesName={!!usesName} onClose={() => setOpen(false)} />, document.body)}
     </>
   );
 }
 
-function InviteDialog({ game, invites, onClose }: { game: Game; invites: Invites; onClose: () => void }) {
+function InviteDialog({ game, invites, usesName, onClose }: { game: Game; invites: Invites; usesName: boolean; onClose: () => void }) {
   const { t } = useI18n();
   const { session } = useAuth();
   const { party } = useBadges();
@@ -277,6 +317,7 @@ function InviteDialog({ game, invites, onClose }: { game: Game; invites: Invites
           <button type="button" className="icon-btn" onClick={onClose} aria-label={t("invite.close")}><CloseIcon /></button>
         </div>
 
+        {usesName && <GameNameField id="invite-name" />}
         {invites.code ? (
           <>
             <p className="check good">

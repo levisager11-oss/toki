@@ -1042,6 +1042,10 @@ main.content:focus { outline: none; }
 .guest-note { margin: 0; padding: 10px 12px; font-size: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
 .guest-note p { margin: 0; flex: 1 1 320px; }
 .guest-note .actions { gap: 8px; }
+.game-name { margin: 0; gap: 4px; }
+.game-name input { max-width: 320px; }
+.game-name small { color: var(--muted); font-size: 13px; }
+.guest-note .game-name { flex: 1 1 100%; }
 .invite-share { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .invite-share .sub { flex: 1 1 180px; font-size: 13px; color: var(--muted); }
 

@@ -30,6 +30,13 @@ export interface GameUpdate {
 /** Newest first. */
 export const GAME_UPDATES: GameUpdate[] = [
   {
+    topic: "name",
+    feature: "multiplayer",
+    since: "2026-11-11T04:47:00Z",
+    applies: (g) => g.multiplayer === true,
+    only: 'This time, add only `toki.onName` from step 5 ("Use the name from Toki"): use the name Toki gives as the player\'s name in rooms instead of asking for it. Leave the rest of step 5 as it is in the game. The script from step 1 must be the current one: replace an older copy that has no toki.onName.',
+  },
+  {
     topic: "host",
     feature: "multiplayer",
     since: "2026-11-10T22:01:00Z",

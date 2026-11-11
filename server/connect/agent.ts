@@ -331,7 +331,7 @@ async function explore(job: Job, state: JobState, messages: Message[], script: s
 const FEATURES: Record<Feature, string> = {
   saves: "saves (steps 1-3 of the guide)",
   scores: "high scores (step 4 of the guide; the script from step 1 must be in the page as well, add it if it's missing)",
-  multiplayer: "friend invites for the game's multiplayer (step 5 of the guide; the script from step 1 must be in the page as well: add it if it's missing, and replace an older copy of it that has no toki.onHost)",
+  multiplayer: "friend invites for the game's multiplayer (step 5 of the guide; the script from step 1 must be in the page as well: add it if it's missing, and replace an older copy of it that has no toki.onName)",
   fix: "a bug fix",
 };
 
