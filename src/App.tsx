@@ -1,4 +1,5 @@
-import { lazy, Suspense, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
+import { useI18n } from "./lib/i18n";
 import { Route, Routes } from "react-router-dom";
 import { Analytics } from "@vercel/analytics/react";
 import { Layout } from "./components/Layout";
@@ -39,7 +40,25 @@ const Idea = lazy(loadPage(() => import("./pages/Idea").then((m) => ({ default: 
 const Invites = lazy(loadPage(() => import("./pages/Invites").then((m) => ({ default: m.Invites }))));
 const Legal = lazy(loadPage(() => import("./pages/Legal").then((m) => ({ default: m.Legal }))));
 
-const Later = ({ children }: { children: ReactNode }) => <Suspense fallback={null}>{children}</Suspense>;
+/** Shown while a page's code is still downloading (slow connections); after a short wait, so fast loads don't flash. */
+function PageLoading() {
+  const { t } = useI18n();
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const id = setTimeout(() => setShow(true), 250);
+    return () => clearTimeout(id);
+  }, []);
+  if (!show) return null;
+  return (
+    <section className="panel narrow skel" style={{ minHeight: "60vh" }} aria-busy="true" aria-label={t("loading")}>
+      <span className="bar big" />
+      <span className="bar" style={{ width: "80%" }} />
+      <span className="bar" style={{ width: "55%" }} />
+    </section>
+  );
+}
+
+const Later = ({ children }: { children: ReactNode }) => <Suspense fallback={<PageLoading />}>{children}</Suspense>;
 
 export function App() {
   return (
