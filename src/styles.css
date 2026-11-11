@@ -197,6 +197,8 @@ h1, h2 { text-wrap: balance; }
 .form-foot .btn.primary { margin-top: 0; }
 .form-foot .actions { margin-top: 16px; }
 .error { color: var(--danger); margin: 8px 0 0; font-weight: 500; }
+.captcha { display: flex; justify-content: center; }
+.captcha:empty { display: none; }
 .alt { color: var(--muted); margin-top: 20px; }
 .inline-form { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
 .inline-form input { flex: 1 1 220px; width: auto; }
