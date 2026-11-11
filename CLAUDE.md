@@ -32,4 +32,4 @@ New changes go in `supabase/migrations/` (one file per change). They are tested 
 
 ## Texts
 
-Every text is in English and German (`src/lib/i18n.tsx`). The German texts use „…“ quotes and “ss” instead of “ß”.
+Every text is in English and German. The German texts use „…“ quotes and “ss” instead of “ß”. Texts live in `src/lib/i18n.tsx`; texts that only pages loaded on demand use (player pages, developer and admin pages, terms and privacy) can live in `src/lib/texts/` and are named in that page's `page()` call in `src/App.tsx`. A new text can always go into `i18n.tsx`; `tests/texts.test.ts` says when one is in the wrong place.
