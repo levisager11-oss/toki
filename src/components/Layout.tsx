@@ -189,6 +189,8 @@ export function Layout() {
             <NavLink to="/updates">{t("rel.whatsNew")}{newUpdate && <span className="new-dot" title={t("rel.newSinceVisit")}><span className="sr-only">{t("rel.newSinceVisit")}</span></span>}</NavLink>
             <NavLink to="/feedback" end>{t("nav.feedback")}</NavLink>
             {profile && !canCreate(profile) && <NavLink to="/ideas">{t("idea.mine")}</NavLink>}
+            <NavLink to="/terms">{t("nav.terms")}</NavLink>
+            <NavLink to="/privacy">{t("nav.privacy")}</NavLink>
           </nav>
           {profile ? (
             <div className="me">
@@ -248,6 +250,8 @@ export function Layout() {
             <Link to="/updates">{t("nav.updates")}{newUpdate && <span className="new-dot" title={t("rel.newSinceVisit")}><span className="sr-only">{t("rel.newSinceVisit")}</span></span>}</Link>
             <Link to="/feedback">{t("nav.tokiFeedback")}</Link>
             {profile && <Link to="/ideas">{t(canCreate(profile) ? "idea.title" : "idea.mine")}</Link>}
+            <Link to="/terms">{t("nav.terms")}</Link>
+            <Link to="/privacy">{t("nav.privacy")}</Link>
           </footer>
         </main>
       </div>

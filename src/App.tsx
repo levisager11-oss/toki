@@ -37,6 +37,7 @@ const ResetPassword = lazy(loadPage(() => import("./pages/ResetPassword").then((
 const Ideas = lazy(loadPage(() => import("./pages/Ideas").then((m) => ({ default: m.Ideas }))));
 const Idea = lazy(loadPage(() => import("./pages/Idea").then((m) => ({ default: m.Idea }))));
 const Invites = lazy(loadPage(() => import("./pages/Invites").then((m) => ({ default: m.Invites }))));
+const Legal = lazy(loadPage(() => import("./pages/Legal").then((m) => ({ default: m.Legal }))));
 
 const Later = ({ children }: { children: ReactNode }) => <Suspense fallback={null}>{children}</Suspense>;
 
@@ -55,6 +56,8 @@ export function App() {
           <Route path="feedback" element={<Later><FeedbackBoard /></Later>} />
           <Route path="feedback/inbox" element={<RequireMember><Later><FeedbackInbox /></Later></RequireMember>} />
           <Route path="feedback/:id" element={<Later><FeedbackPost /></Later>} />
+          <Route path="terms" element={<Later><Legal page="terms" /></Later>} />
+          <Route path="privacy" element={<Later><Legal page="privacy" /></Later>} />
           <Route path="login" element={<Later><Login /></Later>} />
           <Route path="signup" element={<Later><Signup /></Later>} />
           <Route path="reset-password" element={<Later><ResetPassword /></Later>} />

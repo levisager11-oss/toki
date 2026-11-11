@@ -5,6 +5,7 @@ import { useI18n } from "../lib/i18n";
 import { safeNext } from "../lib/nav";
 import { useTitle } from "../lib/useTitle";
 import { useAuth } from "../lib/auth";
+import { inlineLinks } from "../lib/inlineLinks";
 import { passwordError } from "../components/PasswordForm";
 
 export function Signup() {
@@ -94,6 +95,9 @@ export function Signup() {
           </p>
         )}
         <button className="btn primary" disabled={busy}>{busy ? t("loading") : t("signup.submit")}</button>
+        <p className="hint">
+          {inlineLinks(t("signup.agree"))}
+        </p>
       </form>
       <p className="alt">{t("signup.haveAccount")} <Link to={`/login${location.search}`}>{t("nav.login")}</Link></p>
     </section>

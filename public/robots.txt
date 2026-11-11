@@ -1,0 +1,27 @@
+# Toki: free browser games. Search engines and AI search are welcome on the public pages.
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /account
+Disallow: /add$
+Disallow: /admin
+Disallow: /applications
+Disallow: /apply
+Disallow: /chat
+Disallow: /connect
+Disallow: /edit/
+Disallow: /favorites
+Disallow: /feedback/inbox
+Disallow: /friends
+Disallow: /game/*/stats
+Disallow: /ideas
+Disallow: /invites
+Disallow: /login
+Disallow: /my-games
+Disallow: /notifications
+Disallow: /reports
+Disallow: /reset-password
+Disallow: /signup
+Allow: /api/og
+
+Sitemap: https://www.playtoki.app/sitemap.xml
