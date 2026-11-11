@@ -332,8 +332,24 @@ export async function playerScores(userId: string): Promise<{ game_id: string; s
   return rows.map((r) => ({ game_id: r.game_id, score: Number(r.score), rank: Number(r.rank), players: Number(r.players) }));
 }
 
+/**
+ * What a score changed. best / new: all time. week / day: the player's best this week and
+ * today (day only on Today's game). bar: what a later score must beat to change anything.
+ * Servers before 20261127090000_daily_and_weekly.sql only send best and new.
+ */
+export interface ScoreResult {
+  best: number;
+  new: boolean;
+  week?: number;
+  week_new?: boolean;
+  day?: number | null;
+  day_new?: boolean;
+  daily?: boolean;
+  bar?: number;
+}
+
 export const submitScore = (gameId: string, score: number) =>
-  rpc<{ best: number; new: boolean }>("submit_score", { p_game: gameId, p_score: Math.round(score) });
+  rpc<ScoreResult>("submit_score", { p_game: gameId, p_score: Math.round(score) });
 
 export async function removeScore(gameId: string, userId: string) {
   const { error } = await supabase.from("game_scores").delete().eq("game_id", gameId).eq("user_id", userId);

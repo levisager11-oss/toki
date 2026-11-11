@@ -16,6 +16,7 @@ import { NotFound } from "./NotFound";
 import { useTitle } from "../lib/useTitle";
 import { ShareButton } from "../components/ShareButton";
 import { formatDuration } from "../lib/analytics";
+import { currentStreak, playerStreak, utcDay, type Streak } from "../lib/daily";
 
 /** A player's page: /u/:username */
 export function Profile() {
@@ -27,6 +28,7 @@ export function Profile() {
   const location = useLocation();
   const [p, setP] = useState<ProfilePage | null | undefined>(undefined);
   const [scores, setScores] = useState<{ game_id: string; score: number; rank: number; players: number }[]>([]);
+  const [streak, setStreak] = useState<Streak | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [reload, setReload] = useState(0);
@@ -38,6 +40,7 @@ export function Profile() {
   useEffect(() => {
     setP(undefined);
     setScores([]);
+    setStreak(null);
     setErr("");
     setConfirmBlock(false);
   }, [username]);
@@ -50,6 +53,7 @@ export function Profile() {
         if (!alive) return;
         setP(r);
         if (r) playerScores(r.id).then((s) => alive && setScores(s), () => {});
+        if (r) playerStreak(r.id).then((s) => alive && setStreak(s), () => {});
       })
       .catch(() => alive && setP(null));
     return () => {
@@ -158,6 +162,12 @@ export function Profile() {
           <div><dt>{t("score.best")}</dt><dd>{p.stats.scores}</dd></div>
           <div><dt>{t("nav.favorites")}</dt><dd>{p.stats.likes}</dd></div>
           {made.length > 0 && <div><dt>{t("prof.gamesMade")}</dt><dd>{made.length}</dd></div>}
+          {streak && (
+            <div>
+              <dt>{t("daily.profileStreak")}</dt>
+              <dd>{t("daily.streak", { n: currentStreak(streak, utcDay(new Date())) })} <small>{t("daily.bestStreak", { n: streak.best_streak })}</small></dd>
+            </div>
+          )}
         </dl>
       )}
 

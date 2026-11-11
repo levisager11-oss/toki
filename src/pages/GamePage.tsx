@@ -6,6 +6,7 @@ import { useAuth } from "../lib/auth";
 import { useMediaQuery } from "../lib/useMediaQuery";
 import { markPlayed, visitorId } from "../lib/local";
 import { findGame, plays, recordPlay } from "../lib/games";
+import { dailyChanged } from "../lib/daily";
 import { usePlaytime } from "../lib/analytics";
 import { useGames } from "../lib/useGames";
 import { browserStorage, useSaveBridge } from "../lib/saves";
@@ -101,7 +102,8 @@ export function GamePage() {
 
   useEffect(() => {
     if (!gameId) return;
-    const id = setTimeout(() => recordPlay(gameId, visitorId()).catch(() => {}), PLAY_AFTER_MS);
+    // A play of Today's game counts for the streak: the home page's card asks again.
+    const id = setTimeout(() => recordPlay(gameId, visitorId()).then(() => dailyChanged(gameId), () => {}), PLAY_AFTER_MS);
     return () => clearTimeout(id);
   }, [gameId]);
 

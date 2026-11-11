@@ -240,8 +240,8 @@ describe("notifications", () => {
 describe("high scores", () => {
   it("keep each player's best, and tell whoever left the top 3", async () => {
     const g = await t.game(dev);
-    expect(await rpc(a, "submit_score", [g.id, 100], ["uuid", "bigint"])).toEqual({ best: 100, new: true });
-    expect(await rpc(a, "submit_score", [g.id, 50], ["uuid", "bigint"])).toEqual({ best: 100, new: false });
+    expect(await rpc(a, "submit_score", [g.id, 100], ["uuid", "bigint"])).toMatchObject({ best: 100, new: true });
+    expect(await rpc(a, "submit_score", [g.id, 50], ["uuid", "bigint"])).toMatchObject({ best: 100, new: false });
     await rpc(b, "submit_score", [g.id, 90], ["uuid", "bigint"]);
     await rpc(c, "submit_score", [g.id, 80], ["uuid", "bigint"]);
     const d = await t.user();
@@ -255,8 +255,8 @@ describe("high scores", () => {
     const g = await t.game(dev);
     await t.admin("update games set score_order = 'low' where id = $1", [g.id]);
     await rpc(a, "submit_score", [g.id, 5000], ["uuid", "bigint"]);
-    expect(await rpc(a, "submit_score", [g.id, 4000], ["uuid", "bigint"])).toEqual({ best: 4000, new: true });
-    expect(await rpc(a, "submit_score", [g.id, 4500], ["uuid", "bigint"])).toEqual({ best: 4000, new: false });
+    expect(await rpc(a, "submit_score", [g.id, 4000], ["uuid", "bigint"])).toMatchObject({ best: 4000, new: true });
+    expect(await rpc(a, "submit_score", [g.id, 4500], ["uuid", "bigint"])).toMatchObject({ best: 4000, new: false });
   });
 
   it("can't be written directly, only removed by the game's developer", async () => {
