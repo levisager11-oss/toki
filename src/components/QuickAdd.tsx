@@ -107,7 +107,7 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
       const { data, error } = await supabase
         .from("games")
         .insert({
-          slug, title: p.title, description: p.description, description_de: p.description_de || null, controls: p.controls, category: p.category,
+          slug, title: p.title, description: p.description, description_de: p.description_de || null, controls: p.controls, controls_de: p.controls_de || null, category: p.category,
           engine: p.engine || null, cover: coverFor(slug, null), play_url: siteUrl(siteFor(slug), hosting.domain), needs_isolation: p.isolation,
           score_order: p.score_order, score_format: p.score_format, multiplayer: p.multiplayer, screenshots: [], created_by: profile.id,
         })
@@ -262,6 +262,8 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
             <summary>{t("quick.more")}</summary>
             <label htmlFor="q-desc-de">{t("form.descriptionDe")}</label>
             <textarea id="q-desc-de" rows={3} maxLength={1000} value={p.description_de} onChange={(e) => field("description_de")(e.target.value)} />
+            <label htmlFor="q-controls-de">{t("form.controlsDe")}</label>
+            <input id="q-controls-de" maxLength={500} value={p.controls_de} onChange={(e) => field("controls_de")(e.target.value)} />
             <div className="pair">
               <div>
                 <label htmlFor="q-engine">{t("form.engine")}</label>

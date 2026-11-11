@@ -121,6 +121,7 @@ export interface TokiJson {
   description?: string;
   description_de?: string;
   controls?: string;
+  controls_de?: string;
   category?: Category;
   engine?: string;
   /** The page that starts the game, when it isn't index.html */
@@ -173,6 +174,8 @@ export function readTokiJson(raw: unknown): TokiJson {
   if (de) out.description_de = de;
   const controls = text(o.controls, 500);
   if (controls) out.controls = controls;
+  const controlsDe = text(o.controls_de, 500);
+  if (controlsDe) out.controls_de = controlsDe;
   const category = text(o.category, 20)?.toLowerCase();
   if (category && (CATEGORIES as readonly string[]).includes(category)) out.category = category as Category;
   const engine = text(o.engine, 30);

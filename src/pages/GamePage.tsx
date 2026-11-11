@@ -184,6 +184,7 @@ export function GamePage() {
     else setPseudoFull(true);
   };
   const desc = (lang === "de" && game.description_de) || game.description;
+  const controls = (lang === "de" && game.controls_de) || game.controls;
   const canEdit = profile && (profile.role === "admin" || profile.id === game.created_by);
   // Same category first, then the most played.
   const more = games
@@ -282,7 +283,7 @@ export function GamePage() {
         </section>
       )}
 
-      {(desc || game.controls) && (
+      {(desc || controls) && (
         <section className="about">
           {desc && (
             <div>
@@ -290,10 +291,10 @@ export function GamePage() {
               <AboutText gameId={game.id} text={desc} translatable={desc === game.description} />
             </div>
           )}
-          {game.controls && (
+          {controls && (
             <div>
               <h2>{t("game.controls")}</h2>
-              <p>{game.controls}</p>
+              <p>{controls}</p>
             </div>
           )}
         </section>

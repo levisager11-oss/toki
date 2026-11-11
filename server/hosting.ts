@@ -117,6 +117,7 @@ async function findOrCreateGame(db: Db, user: HostUser, b: { game_id?: unknown; 
       description: toki.description ?? "",
       description_de: toki.description_de ?? null,
       controls: toki.controls ?? "",
+      controls_de: toki.controls_de ?? null,
       engine: toki.engine ?? null,
     },
   );
@@ -253,6 +254,7 @@ export async function finishUpload(deps: Deps, user: HostUser, b: Record<string,
   if (toki.description) patch.description = toki.description;
   if (toki.description_de) patch.description_de = toki.description_de;
   if (toki.controls) patch.controls = toki.controls;
+  if (toki.controls_de) patch.controls_de = toki.controls_de;
   if (toki.category) patch.category = toki.category;
   if (toki.engine) patch.engine = toki.engine;
   if (toki.score_order) patch.score_order = toki.score_order;

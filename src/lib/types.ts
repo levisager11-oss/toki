@@ -18,6 +18,7 @@ export interface Game {
   title: string;
   description: string;
   description_de: string | null;
+  controls_de: string | null;
   controls: string;
   category: Category;
   engine: string | null;

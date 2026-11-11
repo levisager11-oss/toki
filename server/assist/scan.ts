@@ -19,6 +19,7 @@ export interface Proposal {
   category: Category;
   engine: string;
   controls: string;
+  controls_de: string;
   score_order: "high" | "low";
   score_format: "points" | "time";
   /** The game has a score or a time worth a leaderboard */
@@ -60,6 +61,7 @@ export function basics(files: ScanFile[], name: string): Proposal {
     category: "other",
     engine: guessEngine(page + all.slice(0, 200_000)) ?? "",
     controls: "",
+    controls_de: "",
     score_order: timeGame ? "low" : "high",
     score_format: timeGame ? "time" : "points",
     leaderboard: /\b(score|points|highscore|high_score|best ?time|timer)\b/i.test(all),
@@ -96,6 +98,7 @@ export function withToki(p: Proposal, t: TokiJson): Proposal {
     category: t.category ?? p.category,
     engine: t.engine ?? p.engine,
     controls: t.controls ?? p.controls,
+    controls_de: t.controls_de ?? p.controls_de,
     score_order: t.score_order ?? p.score_order,
     score_format: t.score_format ?? p.score_format,
     isolation: t.isolation ?? p.isolation,
@@ -114,6 +117,7 @@ export function scanPrompt(files: ScanFile[], paths: string[], base: Proposal, n
 - category: one of ${CATEGORIES.join(", ")}.
 - engine: what it's made with (e.g. Godot, Unity, Phaser, Three.js, plain JavaScript), short.
 - controls: the keys or touch controls, short (e.g. "Arrow keys to move, Space to jump"). Empty if you can't tell.
+- controls_de: the same controls in German (informal, short, e.g. "Pfeiltasten zum Laufen, Leertaste zum Springen"). Empty if controls is empty.
 - leaderboard: true if the game has a score, points, a level count or a time that players could compete on.
 - score_order: "high" if a higher score is better, "low" if lower is better (e.g. a time). score_format: "time" for a time, else "points".
 - multiplayer: true only if players on different devices can play together in a room they join with a code or a link (online multiplayer). False for single-player games and for two players on one keyboard.
@@ -122,7 +126,7 @@ export function scanPrompt(files: ScanFile[], paths: string[], base: Proposal, n
 - ${GERMAN_STYLE}
 
 Answer with exactly one JSON object and nothing else:
-{"title":"...","description":"...","description_de":"...","category":"...","engine":"...","controls":"...","leaderboard":true,"score_order":"high","score_format":"points","multiplayer":false,"saves_elsewhere":false}`,
+{"title":"...","description":"...","description_de":"...","category":"...","engine":"...","controls":"...","controls_de":"...","leaderboard":true,"score_order":"high","score_format":"points","multiplayer":false,"saves_elsewhere":false}`,
     },
     {
       role: "user",
@@ -148,6 +152,7 @@ export function readScan(answer: string, base: Proposal): Proposal {
     category: (CATEGORIES as readonly string[]).includes(category) ? (category as Category) : base.category,
     engine: text(a.engine, 30) || base.engine,
     controls: text(a.controls, 500) || base.controls,
+    controls_de: text(a.controls_de, 500) || base.controls_de,
     leaderboard: typeof a.leaderboard === "boolean" ? a.leaderboard : base.leaderboard,
     score_order: a.score_order === "low" ? "low" : a.score_order === "high" ? "high" : base.score_order,
     score_format: a.score_format === "time" ? "time" : a.score_format === "points" ? "points" : base.score_format,
