@@ -423,6 +423,47 @@ describe("Toki Connect run", () => {
     expect(r.messages.at(-1)).toMatchObject({ kind: "done", files: [], text: expect.stringContaining("index.html") });
   });
 
+  it("adds the game's achievements by their ids", async () => {
+    const f = fixture([JSON.stringify({ action: "already", summary: "toki.achievement steht schon in game.js.", achievements: [{ id: "x", name: "X" }] })]);
+    const job = newJob({ features: ["achievements"], game: { title: "Run", score_order: "high", score_format: "points", achievements: [{ id: "first-win", name: "First win", description: "Win a round." }] } });
+    const r = await step(job, f.deps);
+    expect(f.prompts[0]).toContain("- first-win: First win, Win a round.");
+    expect(f.prompts[0]).toContain("step 6 of the guide");
+    expect(f.prompts[0]).not.toContain('"achievements":[...]');
+    // The game has achievements: nothing the AI proposes is added.
+    expect(r.achievements).toBeUndefined();
+  });
+
+  it("proposes achievements for a game that has none, and hands them to Toki", async () => {
+    const f = fixture([JSON.stringify({
+      action: "change", title: "Erfolge", summary: "Drei Erfolge eingebaut.",
+      edits: [{ path: "game.js", search: "  showScreen('over');", replace: "  window.toki?.achievement('first-run');\n  showScreen('over');" }],
+      achievements: [{ id: "first-run", name: "First run", name_de: "Erster Lauf", icon: "🏃" }, { id: "bad id", name: "Bad" }],
+    })]);
+    const r = await step(newJob({ features: ["achievements"] }), f.deps);
+    expect(f.prompts[0]).toContain("no achievements on Toki yet");
+    expect(f.prompts[0]).toContain('"achievements":[...]');
+    expect(r).toMatchObject({ status: "done", achievements: [{ id: "first-run", name: "First run", name_de: "Erster Lauf", description: "", description_de: null, icon: "🏃" }] });
+    // Runs for other features don't propose any.
+    const g = fixture([JSON.stringify({ action: "already", summary: "ok", achievements: [{ id: "a", name: "A" }] })]);
+    expect((await step(newJob(), g.deps)).achievements).toBeUndefined();
+  });
+
+  it("proposes high-score lists for a game that has none, and hands them to Toki", async () => {
+    const f = fixture([JSON.stringify({
+      action: "change", title: "Listen", summary: "Eine Liste pro Modus.",
+      edits: [{ path: "game.js", search: "  showScreen('over');", replace: "  window.toki?.score(points, 'hard');\n  showScreen('over');" }],
+      boards: [{ id: "hard", name: "Hard mode", score_order: "high" }, { id: "bad id", name: "Bad" }],
+      achievements: [{ id: "a", name: "A" }],
+    })]);
+    const r = await step(newJob({ features: ["boards"] }), f.deps);
+    expect(f.prompts[0]).toContain("no other high-score lists on Toki yet");
+    expect(f.prompts[0]).toContain('"boards":[...]');
+    expect(f.prompts[0]).not.toContain('"achievements":[...]');
+    expect(r).toMatchObject({ status: "done", boards: [{ id: "hard", name: "Hard mode", name_de: null, score_order: "high" }] });
+    expect(r.achievements).toBeUndefined();
+  });
+
   it("stops with the reason when the budget is used up", async () => {
     const f = fixture([]);
     f.deps.ai = async () => {

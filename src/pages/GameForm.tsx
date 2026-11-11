@@ -13,6 +13,8 @@ import { LinkCheck } from "../components/LinkCheck";
 import { MultiplayerSetup, SaveSupport } from "../components/SaveSupport";
 import { AiBox } from "../components/AiBits";
 import { HelperSetup } from "../components/HelperSetup";
+import { AchievementsSetup } from "../components/AchievementsSetup";
+import { BoardsSetup } from "../components/BoardsSetup";
 import { assistError, describeGame, useFreeAi } from "../lib/assist";
 import { useTitle } from "../lib/useTitle";
 import { extFor, removeGameImages, shrinkGameImage } from "../lib/gameImages";
@@ -64,6 +66,7 @@ export function GameForm() {
   const [description, setDescription] = useState("");
   const [descriptionDe, setDescriptionDe] = useState("");
   const [controls, setControls] = useState("");
+  const [controlsDe, setControlsDe] = useState("");
   const [category, setCategory] = useState<Category>("action");
   const [engine, setEngine] = useState("");
   const [cover, setCover] = useState<string>("");
@@ -134,6 +137,7 @@ export function GameForm() {
       setDescription(g.description);
       setDescriptionDe(g.description_de ?? "");
       setControls(g.controls);
+      setControlsDe(g.controls_de ?? "");
       setCategory(g.category);
       setEngine(g.engine ?? "");
       setCover(coverFor(g.slug, g.cover));
@@ -172,6 +176,7 @@ export function GameForm() {
       setDescription(p.description);
       setDescriptionDe(p.description_de);
       setControls(p.controls);
+      setControlsDe(p.controls_de);
       setCategory(p.category);
       setEngine(p.engine);
       setScoreOrder(p.score_order);
@@ -279,6 +284,7 @@ export function GameForm() {
       description: description.trim(),
       description_de: descriptionDe.trim() || null,
       controls: controls.trim(),
+      controls_de: controlsDe.trim() || null,
       category,
       engine: engine.trim() || null,
       cover: previewCover,
@@ -356,6 +362,7 @@ export function GameForm() {
     if (d.description && !description.trim()) setDescription(d.description);
     if (d.toki?.description_de && !descriptionDe.trim()) setDescriptionDe(d.toki.description_de);
     if (d.controls && !controls.trim()) setControls(d.controls);
+    if (d.toki?.controls_de && !controlsDe.trim()) setControlsDe(d.toki.controls_de);
     if (d.category && !orig) setCategory(d.category);
     if (d.engine && !engine.trim()) setEngine(d.engine);
     if (d.isolation !== null) setIsolation(d.isolation);
@@ -521,6 +528,8 @@ export function GameForm() {
           />
           <label htmlFor="controls">{t("form.controls")}</label>
           <input id="controls" maxLength={500} placeholder={t("form.controlsHelp")} value={controls} onChange={(e) => setControls(e.target.value)} />
+          <label htmlFor="controls-de">{t("form.controlsDe")}</label>
+          <input id="controls-de" maxLength={500} placeholder={t("form.controlsDeHelp")} value={controlsDe} onChange={(e) => setControlsDe(e.target.value)} />
 
           {profile?.role === "admin" && (
             <label className="check">
@@ -590,6 +599,8 @@ export function GameForm() {
         </div>
 
         {orig && <HelperSetup gameId={orig.id} />}
+        {orig && <AchievementsSetup gameId={orig.id} />}
+        {orig && <BoardsSetup gameId={orig.id} mainName={orig.board_name} mainNameDe={orig.board_name_de} />}
 
         <div className="form-foot">
           {err && <p className="error" role="alert">{err}</p>}

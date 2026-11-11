@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { basics, gameFolder, readScan, withToki } from "../server/assist/scan";
+import { basics, gameFolder, readScan, shortText, withToki } from "../server/assist/scan";
 import { prompt } from "../server/connect/agent";
 
 const page = `<html><head><title>Moon Hop</title></head><body><canvas></canvas><script src="game.js"></script></body></html>`;
@@ -65,4 +65,13 @@ describe("Toki Connect on an uploaded game", () => {
     expect(user.content).toContain("The game's files on Toki");
     expect(user.content).not.toContain("toki/moon-hop");
   });
+});
+
+describe("shortText", () => {
+  it("keeps short texts", () => expect(shortText("Three.js", 30)).toBe("Three.js"));
+  it("cuts long ones at a whole word, without an open bracket", () => {
+    expect(shortText("HTML/JavaScript (Canvas, Web Audio API)", 30)).toBe("HTML/JavaScript");
+    expect(shortText("Godot 4 with a lot of custom shaders and things", 30)).toBe("Godot 4 with a lot of custom");
+  });
+  it("still cuts one very long word", () => expect(shortText("x".repeat(40), 30)).toBe("x".repeat(30)));
 });

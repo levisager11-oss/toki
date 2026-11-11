@@ -151,7 +151,23 @@ export function FeedbackInbox() {
           </label>
 
           {shown.length === 0 ? (
-            <p className="msg">{t("fb.inbox.noMatch")}</p>
+            <div className="msg">
+              <p>{t("fb.inbox.noMatch")}</p>
+              {(kind || game || status !== "all" || onlyNeedsReply) && (
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => {
+                    setKind(undefined);
+                    setGame("");
+                    setStatus("all");
+                    setOnlyNeedsReply(false);
+                  }}
+                >
+                  {t("fb.inbox.showAll")}
+                </button>
+              )}
+            </div>
           ) : (
             <ul className="fb-list">
               {shown.map((p) => (

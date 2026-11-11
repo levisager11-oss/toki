@@ -1,4 +1,5 @@
-import { lazy, Suspense, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useState, type ComponentType, type ReactNode } from "react";
+import { loadTexts, useI18n, type TextGroup } from "./lib/i18n";
 import { Route, Routes } from "react-router-dom";
 import { Analytics } from "@vercel/analytics/react";
 import { Layout } from "./components/Layout";
@@ -9,37 +10,63 @@ import { GamePage } from "./pages/GamePage";
 import { NotFound } from "./pages/NotFound";
 import { loadPage } from "./lib/reload";
 
-// Pages most visitors don't open load on demand, so players download less.
-const Login = lazy(loadPage(() => import("./pages/Login").then((m) => ({ default: m.Login }))));
-const Signup = lazy(loadPage(() => import("./pages/Signup").then((m) => ({ default: m.Signup }))));
-const GameStats = lazy(loadPage(() => import("./pages/GameStats").then((m) => ({ default: m.GameStats }))));
-const MyGames = lazy(loadPage(() => import("./pages/MyGames").then((m) => ({ default: m.MyGames }))));
-const GameForm = lazy(loadPage(() => import("./pages/GameForm").then((m) => ({ default: m.GameForm }))));
-const Account = lazy(loadPage(() => import("./pages/Account").then((m) => ({ default: m.Account }))));
-const FeedbackBoard = lazy(loadPage(() => import("./pages/FeedbackBoard").then((m) => ({ default: m.FeedbackBoard }))));
-const FeedbackPost = lazy(loadPage(() => import("./pages/FeedbackPost").then((m) => ({ default: m.FeedbackPost }))));
-const FeedbackInbox = lazy(loadPage(() => import("./pages/FeedbackInbox").then((m) => ({ default: m.FeedbackInbox }))));
-const Releases = lazy(loadPage(() => import("./pages/Releases").then((m) => ({ default: m.Releases }))));
-const Profile = lazy(loadPage(() => import("./pages/Profile").then((m) => ({ default: m.Profile }))));
-const Friends = lazy(loadPage(() => import("./pages/Friends").then((m) => ({ default: m.Friends }))));
-const Chat = lazy(loadPage(() => import("./pages/Chat").then((m) => ({ default: m.Chat }))));
-const Notifications = lazy(loadPage(() => import("./pages/Notifications").then((m) => ({ default: m.Notifications }))));
-const Reports = lazy(loadPage(() => import("./pages/Reports").then((m) => ({ default: m.Reports }))));
-const Apply = lazy(loadPage(() => import("./pages/Apply").then((m) => ({ default: m.Apply }))));
-const Applications = lazy(loadPage(() => import("./pages/Applications").then((m) => ({ default: m.Applications }))));
-const Admin = lazy(loadPage(() => import("./pages/Admin").then((m) => ({ default: m.Admin }))));
-const AiAdmin = lazy(loadPage(() => import("./pages/AiAdmin").then((m) => ({ default: m.AiAdmin }))));
-const HostingAdmin = lazy(loadPage(() => import("./pages/HostingAdmin").then((m) => ({ default: m.HostingAdmin }))));
-const Connect = lazy(loadPage(() => import("./pages/Connect").then((m) => ({ default: m.Connect }))));
-const ConnectJob = lazy(loadPage(() => import("./pages/ConnectJob").then((m) => ({ default: m.ConnectJob }))));
-const ConnectGitHub = lazy(loadPage(() => import("./pages/ConnectGitHub").then((m) => ({ default: m.ConnectGitHub }))));
-const ResetPassword = lazy(loadPage(() => import("./pages/ResetPassword").then((m) => ({ default: m.ResetPassword }))));
-const Ideas = lazy(loadPage(() => import("./pages/Ideas").then((m) => ({ default: m.Ideas }))));
-const Idea = lazy(loadPage(() => import("./pages/Idea").then((m) => ({ default: m.Idea }))));
-const Invites = lazy(loadPage(() => import("./pages/Invites").then((m) => ({ default: m.Invites }))));
-const Legal = lazy(loadPage(() => import("./pages/Legal").then((m) => ({ default: m.Legal }))));
+/**
+ * A page that loads on demand, together with the groups of texts it uses (src/lib/texts/), at
+ * the same time. tests/texts.test.ts says if a page needs a group it doesn't name.
+ */
+function page<P extends { default: ComponentType<any> }>(load: () => Promise<P>, ...texts: TextGroup[]) {
+  return lazy(loadPage(() => Promise.all([load(), loadTexts(texts)]).then(([m]) => m)));
+}
 
-const Later = ({ children }: { children: ReactNode }) => <Suspense fallback={null}>{children}</Suspense>;
+// Pages most visitors don't open load on demand, so players download less.
+const Login = page(() => import("./pages/Login").then((m) => ({ default: m.Login })), "player");
+const Signup = page(() => import("./pages/Signup").then((m) => ({ default: m.Signup })), "player");
+const GameStats = page(() => import("./pages/GameStats").then((m) => ({ default: m.GameStats })), "player", "dev");
+const MyGames = page(() => import("./pages/MyGames").then((m) => ({ default: m.MyGames })), "player", "dev");
+const GameForm = page(() => import("./pages/GameForm").then((m) => ({ default: m.GameForm })), "player", "dev");
+const Account = page(() => import("./pages/Account").then((m) => ({ default: m.Account })), "player");
+const FeedbackBoard = page(() => import("./pages/FeedbackBoard").then((m) => ({ default: m.FeedbackBoard })), "player");
+const FeedbackPost = page(() => import("./pages/FeedbackPost").then((m) => ({ default: m.FeedbackPost })), "player");
+const FeedbackInbox = page(() => import("./pages/FeedbackInbox").then((m) => ({ default: m.FeedbackInbox })), "player", "dev");
+const Releases = page(() => import("./pages/Releases").then((m) => ({ default: m.Releases })), "player");
+const Profile = page(() => import("./pages/Profile").then((m) => ({ default: m.Profile })), "player");
+const Friends = page(() => import("./pages/Friends").then((m) => ({ default: m.Friends })), "player");
+const Chat = page(() => import("./pages/Chat").then((m) => ({ default: m.Chat })), "player");
+const Notifications = page(() => import("./pages/Notifications").then((m) => ({ default: m.Notifications })), "player");
+const Reports = page(() => import("./pages/Reports").then((m) => ({ default: m.Reports })), "player", "dev");
+const Apply = page(() => import("./pages/Apply").then((m) => ({ default: m.Apply })), "player");
+const Applications = page(() => import("./pages/Applications").then((m) => ({ default: m.Applications })), "player", "dev");
+const Admin = page(() => import("./pages/Admin").then((m) => ({ default: m.Admin })), "player", "dev");
+const AiAdmin = page(() => import("./pages/AiAdmin").then((m) => ({ default: m.AiAdmin })), "player", "dev");
+const HostingAdmin = page(() => import("./pages/HostingAdmin").then((m) => ({ default: m.HostingAdmin })), "player", "dev");
+const Connect = page(() => import("./pages/Connect").then((m) => ({ default: m.Connect })), "player", "dev");
+const ConnectJob = page(() => import("./pages/ConnectJob").then((m) => ({ default: m.ConnectJob })), "player", "dev");
+const ConnectGitHub = page(() => import("./pages/ConnectGitHub").then((m) => ({ default: m.ConnectGitHub })), "player", "dev");
+const ResetPassword = page(() => import("./pages/ResetPassword").then((m) => ({ default: m.ResetPassword })), "player");
+const Ideas = page(() => import("./pages/Ideas").then((m) => ({ default: m.Ideas })), "player");
+const Idea = page(() => import("./pages/Idea").then((m) => ({ default: m.Idea })), "player");
+const Invites = page(() => import("./pages/Invites").then((m) => ({ default: m.Invites })), "player", "dev");
+const Legal = page(() => import("./pages/Legal").then((m) => ({ default: m.Legal })), "legal");
+
+/** Shown while a page's code is still downloading (slow connections); after a short wait, so fast loads don't flash. */
+function PageLoading() {
+  const { t } = useI18n();
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const id = setTimeout(() => setShow(true), 250);
+    return () => clearTimeout(id);
+  }, []);
+  if (!show) return null;
+  return (
+    <section className="panel narrow skel" style={{ minHeight: "60vh" }} aria-busy="true" aria-label={t("loading")}>
+      <span className="bar big" />
+      <span className="bar" style={{ width: "80%" }} />
+      <span className="bar" style={{ width: "55%" }} />
+    </section>
+  );
+}
+
+const Later = ({ children }: { children: ReactNode }) => <Suspense fallback={<PageLoading />}>{children}</Suspense>;
 
 export function App() {
   return (

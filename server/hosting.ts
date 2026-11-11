@@ -117,6 +117,7 @@ async function findOrCreateGame(db: Db, user: HostUser, b: { game_id?: unknown; 
       description: toki.description ?? "",
       description_de: toki.description_de ?? null,
       controls: toki.controls ?? "",
+      controls_de: toki.controls_de ?? null,
       engine: toki.engine ?? null,
     },
   );
@@ -253,6 +254,7 @@ export async function finishUpload(deps: Deps, user: HostUser, b: Record<string,
   if (toki.description) patch.description = toki.description;
   if (toki.description_de) patch.description_de = toki.description_de;
   if (toki.controls) patch.controls = toki.controls;
+  if (toki.controls_de) patch.controls_de = toki.controls_de;
   if (toki.category) patch.category = toki.category;
   if (toki.engine) patch.engine = toki.engine;
   if (toki.score_order) patch.score_order = toki.score_order;
@@ -265,6 +267,15 @@ export async function finishUpload(deps: Deps, user: HostUser, b: Record<string,
   const shots = toki.screenshots?.map((s) => picture(s, base)).filter((s): s is string => !!s);
   if (shots?.length) patch.screenshots = shots;
   await db.update("games", `id=eq.${game.id}`, patch);
+  // Achievements in toki.json: new ones are added and listed ones updated; none are deleted, so
+  // an upload never takes badges away from players.
+  if (toki.achievements?.length) {
+    await db.rpc("set_achievements", { p_game: game.id, p_list: toki.achievements, p_mode: "merge" }).catch(() => {});
+  }
+  // High-score lists in toki.json: the same, an upload never deletes a list (or its scores).
+  if (toki.boards?.length) {
+    await db.rpc("set_boards", { p_game: game.id, p_list: toki.boards, p_mode: "merge" }).catch(() => {});
+  }
 
   let release: { version: string; posted: boolean } | null = null;
   if (toki.version) {

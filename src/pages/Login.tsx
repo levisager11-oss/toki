@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase";
 import { useI18n } from "../lib/i18n";
 import { useTitle } from "../lib/useTitle";
 import { useAuth } from "../lib/auth";
+import { isCaptchaError, useCaptcha } from "../lib/captcha";
 
 export function Login() {
   const { t } = useI18n();
@@ -18,6 +19,7 @@ export function Login() {
   // "Forgot your password?": the same page asks for the email and sends a reset link.
   const [forgot, setForgot] = useState(params.get("forgot") === "1");
   const [sent, setSent] = useState(false);
+  const captcha = useCaptcha(forgot ? "reset" : "login");
   useTitle(forgot ? t("login.resetTitle") : t("login.title"));
   // Already logged in: nothing to do here.
   if (ready && session && !busy) return <Navigate to={safeNext(params.get("next"))} replace />;
@@ -26,9 +28,11 @@ export function Login() {
     e.preventDefault();
     setBusy(true);
     setErr("");
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    const captchaToken = await captcha.getToken();
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password, options: { captchaToken } });
     setBusy(false);
-    if (error) setErr(error.message.toLowerCase().includes("confirm") ? t("login.notConfirmed") : t("login.failed"));
+    if (isCaptchaError(error)) setErr(t("captcha.failed"));
+    else if (error) setErr(error.message.toLowerCase().includes("confirm") ? t("login.notConfirmed") : t("login.failed"));
     else navigate(safeNext(params.get("next")));
   };
 
@@ -36,8 +40,10 @@ export function Login() {
     e.preventDefault();
     setBusy(true);
     setErr("");
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${location.origin}/reset-password` });
+    const captchaToken = await captcha.getToken();
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${location.origin}/reset-password`, captchaToken });
     setBusy(false);
+    if (isCaptchaError(error)) return setErr(t("captcha.failed"));
     // Same answer whether or not the email has an account, so nobody can find out who plays here.
     if (error && error.status === 429) return setErr(t("login.resetWait"));
     setSent(true);
@@ -55,6 +61,7 @@ export function Login() {
             <form className="form" onSubmit={sendReset}>
               <label htmlFor="email">{t("login.email")}</label>
               <input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+              {captcha.element}
               {err && <p className="error" role="alert">{err}</p>}
               <button className="btn primary" disabled={busy}>{busy ? t("loading") : t("login.resetSend")}</button>
             </form>
@@ -75,6 +82,7 @@ export function Login() {
         <input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
         <label htmlFor="password">{t("login.password")}</label>
         <input id="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+        {captcha.element}
         {err && <p className="error" role="alert">{err}</p>}
         <button className="btn primary" disabled={busy}>{busy ? t("loading") : t("login.submit")}</button>
       </form>

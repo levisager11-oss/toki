@@ -7,6 +7,7 @@ import { useTitle } from "../lib/useTitle";
 import { useAuth } from "../lib/auth";
 import { inlineLinks } from "../lib/inlineLinks";
 import { passwordError } from "../components/PasswordForm";
+import { isCaptchaError, useCaptcha } from "../lib/captcha";
 
 export function Signup() {
   const { t } = useI18n();
@@ -21,6 +22,7 @@ export function Signup() {
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
   const { session, ready } = useAuth();
+  const captcha = useCaptcha();
   // Already logged in: nothing to do here.
   if (ready && session && !busy && !done) return <Navigate to={safeNext(params.get("next"))} replace />;
 
@@ -40,8 +42,9 @@ export function Signup() {
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
-        options: { data: { invite: code, username: name }, emailRedirectTo: `${window.location.origin}/login` },
+        options: { data: { invite: code, username: name }, emailRedirectTo: `${window.location.origin}/login`, captchaToken: await captcha.getToken() },
       });
+      if (isCaptchaError(error)) return setErr(t("captcha.failed"));
       if (error) {
         if (/already (registered|exists)/i.test(error.message)) return setErr(t("signup.emailTaken"));
         if (!error.message.includes("Database error")) {
@@ -55,7 +58,7 @@ export function Signup() {
       const next = code ? "/my-games" : safeNext(params.get("next"));
       if (data.session) return navigate(next);
       // Accounts are confirmed on creation, so log straight in.
-      const { error: loginError } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      const { error: loginError } = await supabase.auth.signInWithPassword({ email: email.trim(), password, options: { captchaToken: await captcha.getToken() } });
       if (loginError) setDone(true);
       else navigate(next);
     } finally {
@@ -88,6 +91,7 @@ export function Signup() {
         <label htmlFor="invite">{t("signup.invite")}</label>
         <input id="invite" value={invite} onChange={(e) => setInvite(e.target.value)} autoComplete="off" spellCheck={false} aria-describedby="invite-help" />
         <small id="invite-help">{t("signup.inviteHelp")}</small>
+        {captcha.element}
         {err && (
           <p className="error" role="alert">
             {err}

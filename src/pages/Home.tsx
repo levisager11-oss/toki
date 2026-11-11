@@ -14,6 +14,7 @@ import { useLatestUpdates } from "../lib/releases";
 import { Avatar } from "../components/Avatar";
 import { isOnline, myFriends, type FriendRow } from "../lib/social";
 import { IdeaBanner } from "../components/IdeaBits";
+import { DailyCard, DailySkeleton } from "../components/DailyCard";
 import type { Category, Game } from "../lib/types";
 
 const ROTATE_MS = 8000;
@@ -91,6 +92,7 @@ export function Home() {
   if (!games)
     return (
       <>
+        {!q && <DailySkeleton />}
         <section className="feature skel" aria-busy="true" aria-label={t("loading")}>
           <div className="cover" />
           <div className="txt"><span className="bar" style={{ width: "30%" }} /><span className="bar big" /><span className="bar" style={{ width: "80%" }} /></div>
@@ -108,6 +110,9 @@ export function Home() {
 
   return (
     <>
+      {/* One game a day for everyone, with today's high scores and the player's streak. */}
+      {!q && <DailyCard games={games} />}
+
       {!q && slides.length > 0 && <Featured slides={slides} />}
 
       {/* Right under the featured game. While searching it comes after the results instead. */}

@@ -64,6 +64,42 @@ describe("hosting a game", () => {
     expect(tables.game_releases).toMatchObject([{ game_id: "11111111-1111-4111-8111-111111111111", version: "1.1", notes: "- Faster", small: false }]);
   });
 
+  it("adds the achievements in toki.json, without deleting any", async () => {
+    const calls: unknown[] = [];
+    deps.db.rpc = async <T,>(fn: string, args: Record<string, unknown>) => {
+      calls.push({ fn, args });
+      return 2 as T;
+    };
+    const s = await startUpload(deps, DEV, { game_id: "11111111-1111-4111-8111-111111111111", files: FILES });
+    uploadAll(s);
+    await finishUpload(deps, DEV, { build_id: s.build_id, toki: { achievements: [{ id: "first-win", name: "First win", icon: "🥇" }, { id: "bad id", name: "X" }] } });
+    expect(calls).toEqual([{
+      fn: "set_achievements",
+      args: { p_game: "11111111-1111-4111-8111-111111111111", p_mode: "merge", p_list: [{ id: "first-win", name: "First win", name_de: null, description: "", description_de: null, icon: "🥇" }] },
+    }]);
+    // Without achievements in toki.json, nothing is asked.
+    calls.length = 0;
+    const s2 = await startUpload(deps, DEV, { game_id: "11111111-1111-4111-8111-111111111111", files: FILES });
+    uploadAll(s2);
+    await finishUpload(deps, DEV, { build_id: s2.build_id, toki: { title: "Snake" } });
+    expect(calls).toEqual([]);
+  });
+
+  it("adds the high-score lists in toki.json, without deleting any", async () => {
+    const calls: unknown[] = [];
+    deps.db.rpc = async <T,>(fn: string, args: Record<string, unknown>) => {
+      calls.push({ fn, args });
+      return 1 as T;
+    };
+    const s = await startUpload(deps, DEV, { game_id: "11111111-1111-4111-8111-111111111111", files: FILES });
+    uploadAll(s);
+    await finishUpload(deps, DEV, { build_id: s.build_id, toki: { boards: [{ id: "", name: "Normal" }, { id: "hard", name: "Hard", score_order: "low" }, { id: "bad id", name: "X" }] } });
+    expect(calls).toEqual([{
+      fn: "set_boards",
+      args: { p_game: "11111111-1111-4111-8111-111111111111", p_mode: "merge", p_list: [{ id: "", name: "Normal", name_de: null }, { id: "hard", name: "Hard", name_de: null, score_order: "low" }] },
+    }]);
+  });
+
   it("doesn't go live when files are missing or other people's", async () => {
     const s = await startUpload(deps, DEV, { game_id: "11111111-1111-4111-8111-111111111111", files: FILES });
     await expect(finishUpload(deps, DEV, { build_id: s.build_id })).rejects.toThrow("missing_files");

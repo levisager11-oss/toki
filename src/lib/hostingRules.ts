@@ -1,6 +1,8 @@
 // Rules for games hosted on Toki, shared by the website and the server: which files may be
 // uploaded, how big a game may be, the game's address, and what a toki.json may say.
 import { CATEGORIES, type Category } from "./types.js";
+import { readAchievements, type Achievement } from "./achievementRules.js";
+import { readBoards, type BoardInput } from "./boardRules.js";
 
 export const MAX_GAME_BYTES = 100 * 1024 * 1024;
 export const MAX_GAME_FILES = 3000;
@@ -121,6 +123,7 @@ export interface TokiJson {
   description?: string;
   description_de?: string;
   controls?: string;
+  controls_de?: string;
   category?: Category;
   engine?: string;
   /** The page that starts the game, when it isn't index.html */
@@ -144,6 +147,13 @@ export interface TokiJson {
   notes?: string;
   /** Only for the upload script: the folder with the game, when it isn't the one with toki.json */
   folder?: string;
+  /** The game's achievements (at most 30): new ones are added and listed ones updated; none are deleted */
+  achievements?: Achievement[];
+  /**
+   * The game's other high-score lists (at most 10; an entry with id "" names the main one): new
+   * ones are added and listed ones updated; none are deleted
+   */
+  boards?: BoardInput[];
 }
 
 /** The name of the room code in a game's invite links (<game>?room=ABCD): short and plain. */
@@ -173,6 +183,8 @@ export function readTokiJson(raw: unknown): TokiJson {
   if (de) out.description_de = de;
   const controls = text(o.controls, 500);
   if (controls) out.controls = controls;
+  const controlsDe = text(o.controls_de, 500);
+  if (controlsDe) out.controls_de = controlsDe;
   const category = text(o.category, 20)?.toLowerCase();
   if (category && (CATEGORIES as readonly string[]).includes(category)) out.category = category as Category;
   const engine = text(o.engine, 30);
@@ -202,6 +214,10 @@ export function readTokiJson(raw: unknown): TokiJson {
   if (notes) out.notes = notes.slice(0, 5000);
   const folder = text(o.folder, 200);
   if (folder) out.folder = folder;
+  const achievements = readAchievements(o.achievements);
+  if (achievements.length) out.achievements = achievements;
+  const boards = readBoards(o.boards);
+  if (boards.length) out.boards = boards;
   return out;
 }
 

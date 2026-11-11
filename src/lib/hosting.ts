@@ -285,6 +285,7 @@ export interface Proposal {
   category: Category;
   engine: string;
   controls: string;
+  controls_de: string;
   score_order: "high" | "low";
   score_format: "points" | "time";
   leaderboard: boolean;

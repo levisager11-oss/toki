@@ -2,7 +2,7 @@
 // this device, if they turned it on here. Only invites are pushed. The service worker
 // (public/sw.js) shows them; the server (api/push.ts) sends them.
 // Rules: supabase/migrations/20261122100000_push.sql.
-import { api } from "./ai";
+import { api } from "./api";
 import { supabase } from "./supabase";
 
 /**

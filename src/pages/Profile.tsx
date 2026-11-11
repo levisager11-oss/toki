@@ -5,7 +5,7 @@ import { useI18n } from "../lib/i18n";
 import { useGames } from "../lib/useGames";
 import { ago } from "../lib/feedback";
 import {
-  answerFriendRequest, blockUser, formatScore, getProfile, isOnline, openDm, playerScores, removeFriend,
+  answerFriendRequest, blockUser, formatScore, getProfile, isOnline, openDm, playerScores, removeFriend, type PlayerScore,
   sendFriendRequest, SocialError, unblockUser, type ProfilePage,
 } from "../lib/social";
 import { Avatar } from "../components/Avatar";
@@ -16,6 +16,10 @@ import { NotFound } from "./NotFound";
 import { useTitle } from "../lib/useTitle";
 import { ShareButton } from "../components/ShareButton";
 import { formatDuration } from "../lib/analytics";
+import { currentStreak, playerStreak, utcDay, type Streak } from "../lib/daily";
+import { playerAchievements, type Badge } from "../lib/achievements";
+import { BadgeRow } from "../components/Achievements";
+import { boardLabel } from "../lib/boardRules";
 
 /** A player's page: /u/:username */
 export function Profile() {
@@ -26,7 +30,9 @@ export function Profile() {
   const navigate = useNavigate();
   const location = useLocation();
   const [p, setP] = useState<ProfilePage | null | undefined>(undefined);
-  const [scores, setScores] = useState<{ game_id: string; score: number; rank: number; players: number }[]>([]);
+  const [scores, setScores] = useState<PlayerScore[]>([]);
+  const [streak, setStreak] = useState<Streak | null>(null);
+  const [badges, setBadges] = useState<{ badges: Badge[]; total: number }>({ badges: [], total: 0 });
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [reload, setReload] = useState(0);
@@ -38,6 +44,8 @@ export function Profile() {
   useEffect(() => {
     setP(undefined);
     setScores([]);
+    setStreak(null);
+    setBadges({ badges: [], total: 0 });
     setErr("");
     setConfirmBlock(false);
   }, [username]);
@@ -50,6 +58,8 @@ export function Profile() {
         if (!alive) return;
         setP(r);
         if (r) playerScores(r.id).then((s) => alive && setScores(s), () => {});
+        if (r) playerStreak(r.id).then((s) => alive && setStreak(s), () => {});
+        if (r) playerAchievements(r.id).then((b) => alive && setBadges(b), () => {});
       })
       .catch(() => alive && setP(null));
     return () => {
@@ -158,8 +168,16 @@ export function Profile() {
           <div><dt>{t("score.best")}</dt><dd>{p.stats.scores}</dd></div>
           <div><dt>{t("nav.favorites")}</dt><dd>{p.stats.likes}</dd></div>
           {made.length > 0 && <div><dt>{t("prof.gamesMade")}</dt><dd>{made.length}</dd></div>}
+          {streak && (
+            <div>
+              <dt>{t("daily.profileStreak")}</dt>
+              <dd>{t("daily.streak", { n: currentStreak(streak, utcDay(new Date())) })} <small>{t("daily.bestStreak", { n: streak.best_streak })}</small></dd>
+            </div>
+          )}
         </dl>
       )}
+
+      <BadgeRow badges={badges.badges} total={badges.total} games={byId} />
 
       {most.length > 0 && (
         <section>
@@ -204,13 +222,16 @@ export function Profile() {
               const g = byId.get(s.game_id);
               if (!g) return null;
               return (
-                <li key={s.game_id}>
+                <li key={`${s.game_id}:${s.board}`}>
                   <Cover slug={g.slug} cover={g.cover} image={g.thumbnail_url} />
                   <div className="info">
-                    <Link to={`/game/${g.slug}`} className="title">{g.title}</Link>
-                    <span className="sub">{t("score.place", { rank: s.rank, n: s.players })}</span>
+                    <Link to={`/game/${g.slug}#scores`} className="title">{g.title}</Link>
+                    <span className="sub">
+                      {s.has_boards && <><span className="board-of">{boardLabel({ id: s.board, name: s.board_name, name_de: s.board_name_de }, lang, t("boards.main"))}</span> · </>}
+                      {t("score.place", { rank: s.rank, n: s.players })}
+                    </span>
                   </div>
-                  <b className="score">{formatScore(s.score, g.score_format, lang)}</b>
+                  <b className="score">{formatScore(s.score, s.score_format ?? g.score_format, lang)}</b>
                 </li>
               );
             })}

@@ -7,7 +7,7 @@ import { isNew } from "../src/components/GameCard";
 import { isUnseen } from "../src/lib/whatsNew";
 
 const game = (over: Partial<Game> = {}): Game => ({
-  id: "1", slug: "deep-sub", title: "Deep Sub", description: "", description_de: null, controls: "",
+  id: "1", slug: "deep-sub", title: "Deep Sub", description: "", description_de: null, controls: "", controls_de: null,
   category: "action", engine: "Godot", play_url: "https://x.dev", thumbnail_url: null, cover: null,
   featured: false, created_by: null, created_at: "", updated_at: "", screenshots: [],
   author: { username: "levi_22" }, stats: null, ...over,

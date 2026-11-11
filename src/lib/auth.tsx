@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "./supabase";
 import { stopAccountSaves } from "./saves";
 import { syncAccountLikes } from "./local";
+import { claimGuestAchievements } from "./achievements";
 import { forgetPush } from "./push";
 import { useBadgeUpdates } from "./useBadges";
 import type { Profile } from "./types";
@@ -51,6 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const userId = session?.user.id;
   useEffect(() => {
     if (ready) syncAccountLikes(userId ?? null);
+    if (ready) claimGuestAchievements(userId ?? null);
   }, [ready, userId]);
   useBadgeUpdates(userId);
 

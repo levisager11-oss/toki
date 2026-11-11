@@ -6,6 +6,7 @@ import { useAuth } from "../lib/auth";
 import { useMediaQuery } from "../lib/useMediaQuery";
 import { markPlayed, visitorId } from "../lib/local";
 import { findGame, plays, recordPlay } from "../lib/games";
+import { dailyChanged } from "../lib/daily";
 import { usePlaytime } from "../lib/analytics";
 import { useGames } from "../lib/useGames";
 import { browserStorage, useSaveBridge } from "../lib/saves";
@@ -17,6 +18,9 @@ import { GameFeedback } from "../components/GameFeedback";
 import { GameUpdates } from "../components/GameUpdates";
 import { GameChat } from "../components/GameChat";
 import { Leaderboard, useScoreBridge } from "../components/Leaderboard";
+import { useBoards } from "../lib/boards";
+import { AchievementList, AchievementToast } from "../components/Achievements";
+import { useAchievements } from "../lib/achievements";
 import { setPlaying } from "../lib/useBadges";
 import { TranslateToggle, useTranslate } from "../components/AiBits";
 import { GameHelper } from "../components/GameHelper";
@@ -59,7 +63,9 @@ export function GamePage() {
   const [pickup, setPickup] = useState<{ id: string; pending: boolean } | null>(null);
   if (game && authReady && pickup?.id !== game.id) setPickup({ id: game.id, pending: needsPickup(game, userId, browserStorage, recentAtOpen) });
   const pickingUp = !!game && pickup?.id === game.id && pickup.pending;
-  const scores = useScoreBridge(gameFrame, game, userId);
+  const boards = useBoards(game?.id);
+  const scores = useScoreBridge(gameFrame, game, userId, boards);
+  const achievements = useAchievements(gameFrame, game, userId);
   // Loads the game again, e.g. to continue from newer progress made on another device.
   const [frameRun, setFrameRun] = useState(0);
   const isolated = game?.needs_isolation === true;
@@ -101,7 +107,8 @@ export function GamePage() {
 
   useEffect(() => {
     if (!gameId) return;
-    const id = setTimeout(() => recordPlay(gameId, visitorId()).catch(() => {}), PLAY_AFTER_MS);
+    // A play of Today's game counts for the streak: the home page's card asks again.
+    const id = setTimeout(() => recordPlay(gameId, visitorId()).then(() => dailyChanged(gameId), () => {}), PLAY_AFTER_MS);
     return () => clearTimeout(id);
   }, [gameId]);
 
@@ -184,6 +191,7 @@ export function GamePage() {
     else setPseudoFull(true);
   };
   const desc = (lang === "de" && game.description_de) || game.description;
+  const controls = (lang === "de" && game.controls_de) || game.controls;
   const canEdit = profile && (profile.role === "admin" || profile.id === game.created_by);
   // Same category first, then the most played.
   const more = games
@@ -229,6 +237,7 @@ export function GamePage() {
               if (matchMedia("(pointer: fine)").matches && (!active || active === document.body)) e.currentTarget.focus({ preventScroll: true });
             }}
           />}
+          <AchievementToast toast={achievements.toast} guest={!userId} onDone={achievements.next} />
         </div>
         <PartyChat />
         <div className="player-bar">
@@ -282,7 +291,7 @@ export function GamePage() {
         </section>
       )}
 
-      {(desc || game.controls) && (
+      {(desc || controls) && (
         <section className="about">
           {desc && (
             <div>
@@ -290,16 +299,17 @@ export function GamePage() {
               <AboutText gameId={game.id} text={desc} translatable={desc === game.description} />
             </div>
           )}
-          {game.controls && (
+          {controls && (
             <div>
               <h2>{t("game.controls")}</h2>
-              <p>{game.controls}</p>
+              <p>{controls}</p>
             </div>
           )}
         </section>
       )}
 
-      <Leaderboard game={game} version={scores.version} last={scores.last} />
+      <Leaderboard game={game} version={scores.version} last={scores.last} boards={boards} />
+      <AchievementList rows={achievements.rows} viewer={!!userId || !!achievements.rows?.some((a) => a.mine)} />
       <GameUpdates game={game} />
       <GameChat game={game} />
       <GameFeedback game={game} />

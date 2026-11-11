@@ -1,7 +1,7 @@
 // The free AI's small helpers for the pages (the AI itself runs on the server, api/assist.ts).
 import { useEffect, useState } from "react";
 import { supabase } from "./supabase";
-import { api } from "./ai";
+import { api } from "./api";
 
 export type Lang = "en" | "de";
 
