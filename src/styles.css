@@ -968,6 +968,12 @@ main.content:focus { outline: none; }
 .quick-scan { padding: 24px 0; }
 .quick-manual { margin: 4px 0 0; font-size: 14px; }
 .quick-form { display: flex; flex-direction: column; }
+/* "Publish game" and "Back": one row, the same height (the form's rules only reach the main button). */
+.quick-form > .actions { margin-top: 16px; }
+.quick-form > .actions .btn.primary { margin-top: 0; }
+@media (max-width: 860px) {
+  .quick-form > .actions .btn { padding-block: 12px; flex: 1 1 auto; }
+}
 .quick-more { margin-top: 10px; }
 .quick-more summary { cursor: pointer; font-weight: 600; font-size: 14px; }
 .quick-features { list-style: none; padding: 0; margin: 14px 0 4px; display: flex; flex-direction: column; gap: 6px; }
