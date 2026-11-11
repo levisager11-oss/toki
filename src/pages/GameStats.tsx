@@ -4,6 +4,7 @@ import { useI18n, type Key } from "../lib/i18n";
 import { useGames } from "../lib/useGames";
 import { compact, findGame } from "../lib/games";
 import { formatDuration, gameAnalytics, type Day, type GameAnalytics } from "../lib/analytics";
+import { boardLabel } from "../lib/boardRules";
 import { useTitle } from "../lib/useTitle";
 import { NotFound } from "./NotFound";
 
@@ -123,6 +124,13 @@ export function GameStats() {
                 <dd><Link to={`/game/${game.slug}/feedback`}>{data.open_feedback}</Link>{data.open_bugs > 0 && <small> · {t("an.bugs", { n: data.open_bugs })}</small>}</dd>
               </div>
             </dl>
+            {!!data.boards?.length && (
+              <p className="note board-counts">
+                {t("boards.statsLead")}{" "}
+                {[{ id: "", name: game.board_name ?? "", name_de: game.board_name_de ?? null, scores: data.scores }, ...data.boards]
+                  .map((b) => `${boardLabel(b, lang, t("boards.main"))}: ${compact(b.scores)}`).join(" · ")}
+              </p>
+            )}
             <p className="note">{t("an.note")}</p>
           </section>
         </>

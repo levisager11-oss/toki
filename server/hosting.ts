@@ -272,6 +272,10 @@ export async function finishUpload(deps: Deps, user: HostUser, b: Record<string,
   if (toki.achievements?.length) {
     await db.rpc("set_achievements", { p_game: game.id, p_list: toki.achievements, p_mode: "merge" }).catch(() => {});
   }
+  // High-score lists in toki.json: the same, an upload never deletes a list (or its scores).
+  if (toki.boards?.length) {
+    await db.rpc("set_boards", { p_game: game.id, p_list: toki.boards, p_mode: "merge" }).catch(() => {});
+  }
 
   let release: { version: string; posted: boolean } | null = null;
   if (toki.version) {

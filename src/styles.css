@@ -1263,3 +1263,23 @@ main.content:focus { outline: none; }
   .ach-list li { gap: 10px; }
   .ach-edit-foot .linkish { padding: 6px 0; }
 }
+
+/* Boards: a game's high-score lists besides its main one */
+.board-pick { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: -4px 0 12px; padding-bottom: 2px; max-width: 100%; }
+.board-pick::-webkit-scrollbar { display: none; }
+.board-pick button { flex: none; white-space: nowrap; }
+.leaderboard .check .board-of { font-weight: 700; }
+.scores .sub .board-of { color: var(--fg); }
+.board-counts { margin-top: 6px; }
+.boards-setup { grid-column: 1 / -1; }
+.board-edit { list-style: none; margin: 4px 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.board-edit li { display: flex; flex-direction: column; gap: 6px; padding: 10px; background: var(--surface); border: 1px solid var(--line); }
+.form .board-edit .pair { gap: 6px; }
+.board-edit-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.form .board-edit-foot label { margin: 0; font-weight: 400; }
+.form .board-edit .board-edit-foot input.board-id-input { width: auto; flex: 1 1 140px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; padding: 6px 8px; }
+.board-edit-foot .linkish { font-size: 14px; }
+@media (max-width: 480px) {
+  .board-pick button { padding: 7px 12px; }
+  .board-edit-foot .linkish { padding: 6px 0; }
+}

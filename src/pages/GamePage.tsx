@@ -18,6 +18,7 @@ import { GameFeedback } from "../components/GameFeedback";
 import { GameUpdates } from "../components/GameUpdates";
 import { GameChat } from "../components/GameChat";
 import { Leaderboard, useScoreBridge } from "../components/Leaderboard";
+import { useBoards } from "../lib/boards";
 import { AchievementList, AchievementToast } from "../components/Achievements";
 import { useAchievements } from "../lib/achievements";
 import { setPlaying } from "../lib/useBadges";
@@ -62,7 +63,8 @@ export function GamePage() {
   const [pickup, setPickup] = useState<{ id: string; pending: boolean } | null>(null);
   if (game && authReady && pickup?.id !== game.id) setPickup({ id: game.id, pending: needsPickup(game, userId, browserStorage, recentAtOpen) });
   const pickingUp = !!game && pickup?.id === game.id && pickup.pending;
-  const scores = useScoreBridge(gameFrame, game, userId);
+  const boards = useBoards(game?.id);
+  const scores = useScoreBridge(gameFrame, game, userId, boards);
   const achievements = useAchievements(gameFrame, game, userId);
   // Loads the game again, e.g. to continue from newer progress made on another device.
   const [frameRun, setFrameRun] = useState(0);
@@ -306,7 +308,7 @@ export function GamePage() {
         </section>
       )}
 
-      <Leaderboard game={game} version={scores.version} last={scores.last} />
+      <Leaderboard game={game} version={scores.version} last={scores.last} boards={boards} />
       <AchievementList rows={achievements.rows} viewer={!!userId || !!achievements.rows?.some((a) => a.mine)} />
       <GameUpdates game={game} />
       <GameChat game={game} />

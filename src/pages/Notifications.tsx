@@ -73,7 +73,12 @@ export function Notifications() {
         return { line: t("notif.groupAdd", { who, title: d.title ?? "" }), to: `/chat/${d.chat}` };
       case "score_beaten": {
         const g = games?.find((x) => x.id === d.game);
-        return { line: t("notif.scoreBeaten", { who, title: d.title ?? "" }), to: g ? `/game/${g.slug}#scores` : "/" };
+        // On one of the game's other boards: its name too.
+        const board = d.board ? (lang === "de" && d.board_name_de) || d.board_name || d.board : "";
+        return {
+          line: board ? t("boards.notif", { who, title: d.title ?? "", board }) : t("notif.scoreBeaten", { who, title: d.title ?? "" }),
+          to: g ? `/game/${g.slug}#scores` : "/",
+        };
       }
       case "game_invite": {
         const g = games?.find((x) => x.id === d.game);

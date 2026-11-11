@@ -1,8 +1,9 @@
-/* Toki save support v7. Put this in the game's HTML <head>, before the game's own scripts.
+/* Toki save support v8. Put this in the game's HTML <head>, before the game's own scripts.
    Inside Toki, it keeps a copy of everything the game stores in localStorage, so progress
    survives closing the app (iPhone deletes storage of games shown inside other sites) and
    follows logged-in players to other devices. Outside Toki it does nothing.
    High scores: call toki.score(points) when a round ends (for times: milliseconds).
+   toki.score(points, "id") sends it to another of the game's lists instead (ids as set on Toki).
    Achievements: call toki.achievement("id") when the player earns one (ids as set on Toki).
    Multiplayer: call toki.room(code) when the player is in a room others can join with that
    code (toki.room(null) when they leave it), so they can invite their Toki friends.
@@ -20,8 +21,11 @@
   var origin = (location.ancestorOrigins && location.ancestorOrigins[0]) ||
     (document.referrer ? new URL(document.referrer).origin : "*");
   window.toki = window.toki || {};
-  window.toki.score = function (n) {
-    if (inToki && typeof n === "number" && isFinite(n)) top.postMessage({ toki: 1, type: "score", data: n }, origin);
+  window.toki.score = function (n, board) {
+    if (!inToki || typeof n !== "number" || !isFinite(n)) return;
+    var m = { toki: 1, type: "score", data: n };
+    if ((typeof board === "string" || typeof board === "number") && String(board)) m.board = String(board).slice(0, 32);
+    top.postMessage(m, origin);
   };
   window.toki.achievement = function (id) {
     if (inToki && (typeof id === "string" || typeof id === "number") && String(id)) top.postMessage({ toki: 1, type: "achievement", data: String(id).slice(0, 32) }, origin);

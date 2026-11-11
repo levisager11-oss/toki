@@ -325,7 +325,7 @@ export function githubManage(installUrl: string, onBack: () => void): () => void
   return stop;
 }
 
-export type Feature = "saves" | "scores" | "multiplayer" | "achievements" | "fix";
+export type Feature = "saves" | "scores" | "multiplayer" | "achievements" | "boards" | "fix";
 export type JobStatus = "working" | "question" | "done" | "failed";
 
 export interface Question {

@@ -12,7 +12,10 @@ export interface GameAnalytics {
   /** Accounts that ever played the game, and those that played in the chosen period. */
   players: number;
   active_players: number;
+  /** Players with a score on the main board. */
   scores: number;
+  /** The game's other boards, and how many players have a score on each (missing on older servers). */
+  boards?: { id: string; name: string; name_de: string | null; scores: number }[];
   saves: number;
   open_feedback: number;
   open_bugs: number;

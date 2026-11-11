@@ -5,7 +5,7 @@ import { useI18n } from "../lib/i18n";
 import { useGames } from "../lib/useGames";
 import { ago } from "../lib/feedback";
 import {
-  answerFriendRequest, blockUser, formatScore, getProfile, isOnline, openDm, playerScores, removeFriend,
+  answerFriendRequest, blockUser, formatScore, getProfile, isOnline, openDm, playerScores, removeFriend, type PlayerScore,
   sendFriendRequest, SocialError, unblockUser, type ProfilePage,
 } from "../lib/social";
 import { Avatar } from "../components/Avatar";
@@ -19,6 +19,7 @@ import { formatDuration } from "../lib/analytics";
 import { currentStreak, playerStreak, utcDay, type Streak } from "../lib/daily";
 import { playerAchievements, type Badge } from "../lib/achievements";
 import { BadgeRow } from "../components/Achievements";
+import { boardLabel } from "../lib/boardRules";
 
 /** A player's page: /u/:username */
 export function Profile() {
@@ -29,7 +30,7 @@ export function Profile() {
   const navigate = useNavigate();
   const location = useLocation();
   const [p, setP] = useState<ProfilePage | null | undefined>(undefined);
-  const [scores, setScores] = useState<{ game_id: string; score: number; rank: number; players: number }[]>([]);
+  const [scores, setScores] = useState<PlayerScore[]>([]);
   const [streak, setStreak] = useState<Streak | null>(null);
   const [badges, setBadges] = useState<{ badges: Badge[]; total: number }>({ badges: [], total: 0 });
   const [err, setErr] = useState("");
@@ -221,13 +222,16 @@ export function Profile() {
               const g = byId.get(s.game_id);
               if (!g) return null;
               return (
-                <li key={s.game_id}>
+                <li key={`${s.game_id}:${s.board}`}>
                   <Cover slug={g.slug} cover={g.cover} image={g.thumbnail_url} />
                   <div className="info">
-                    <Link to={`/game/${g.slug}`} className="title">{g.title}</Link>
-                    <span className="sub">{t("score.place", { rank: s.rank, n: s.players })}</span>
+                    <Link to={`/game/${g.slug}#scores`} className="title">{g.title}</Link>
+                    <span className="sub">
+                      {s.has_boards && <><span className="board-of">{boardLabel({ id: s.board, name: s.board_name, name_de: s.board_name_de }, lang, t("boards.main"))}</span> · </>}
+                      {t("score.place", { rank: s.rank, n: s.players })}
+                    </span>
                   </div>
-                  <b className="score">{formatScore(s.score, g.score_format, lang)}</b>
+                  <b className="score">{formatScore(s.score, s.score_format ?? g.score_format, lang)}</b>
                 </li>
               );
             })}

@@ -277,6 +277,10 @@ export interface Notification {
     party?: string;
     /** dev_news: what is new, e.g. "multiplayer" */
     topic?: string;
+    /** score_beaten on one of a game's other boards: its id and name */
+    board?: string;
+    board_name?: string;
+    board_name_de?: string | null;
     /** game_idea: the idea, and what happened to it */
     idea?: string;
     event?: "new" | "reply" | "claimed" | "released" | "done";
@@ -322,14 +326,34 @@ export interface ScoreRow extends Person {
   achieved_at: string;
 }
 
-export async function leaderboard(gameId: string, limit = 10): Promise<ScoreRow[]> {
-  const rows = await rpc<ScoreRow[]>("leaderboard", { p_game: gameId, p_limit: limit });
+/** The top of a game's list: its main board (""), or another of its boards. */
+export async function leaderboard(gameId: string, limit = 10, board = ""): Promise<ScoreRow[]> {
+  const rows = await rpc<ScoreRow[]>("leaderboard", board ? { p_game: gameId, p_limit: limit, p_board: board } : { p_game: gameId, p_limit: limit });
   return rows.map((r) => ({ ...r, id: r.user_id, rank: Number(r.rank), score: Number(r.score) }));
 }
 
-export async function playerScores(userId: string): Promise<{ game_id: string; score: number; rank: number; players: number }[]> {
-  const rows = await rpc<{ game_id: string; score: number; rank: number; players: number }[]>("player_scores", { p_user: userId });
-  return rows.map((r) => ({ game_id: r.game_id, score: Number(r.score), rank: Number(r.rank), players: Number(r.players) }));
+export interface PlayerScore {
+  game_id: string;
+  score: number;
+  rank: number;
+  players: number;
+  /** "" for the game's main board (servers before 20261129090000_boards.sql have only that one) */
+  board: string;
+  /** the board's name (for the main board: the name its developer gave it, if any) */
+  board_name: string | null;
+  board_name_de: string | null;
+  /** how the board shows its scores (missing on older servers: the game's own) */
+  score_format?: ScoreFormat;
+  /** the game has more than its main board */
+  has_boards: boolean;
+}
+
+export async function playerScores(userId: string): Promise<PlayerScore[]> {
+  const rows = await rpc<Partial<PlayerScore>[]>("player_scores", { p_user: userId });
+  return rows.map((r) => ({
+    game_id: r.game_id!, score: Number(r.score), rank: Number(r.rank), players: Number(r.players),
+    board: r.board ?? "", board_name: r.board_name ?? null, board_name_de: r.board_name_de ?? null, score_format: r.score_format, has_boards: !!r.has_boards,
+  }));
 }
 
 /**
@@ -348,11 +372,18 @@ export interface ScoreResult {
   bar?: number;
 }
 
-export const submitScore = (gameId: string, score: number) =>
-  rpc<ScoreResult>("submit_score", { p_game: gameId, p_score: Math.round(score) });
+/**
+ * Sends a score to the game's main board (""), or to another of its boards. null: the game has
+ * no such board (the score is ignored).
+ */
+export const submitScore = (gameId: string, score: number, board = ""): Promise<ScoreResult | null> =>
+  board
+    ? rpc<ScoreResult | null>("submit_score", { p_game: gameId, p_score: Math.round(score), p_board: board })
+    : rpc<ScoreResult>("submit_score", { p_game: gameId, p_score: Math.round(score) });
 
-export async function removeScore(gameId: string, userId: string) {
-  const { error } = await supabase.from("game_scores").delete().eq("game_id", gameId).eq("user_id", userId);
+/** Removes a player's score from one board of a game (the main one: ""). */
+export async function removeScore(gameId: string, userId: string, board = "") {
+  const { error } = await supabase.from("game_scores").delete().eq("game_id", gameId).eq("user_id", userId).eq("board", board);
   if (error) throw fail(error);
 }
 
