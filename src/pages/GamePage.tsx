@@ -17,6 +17,8 @@ import { GameFeedback } from "../components/GameFeedback";
 import { GameUpdates } from "../components/GameUpdates";
 import { GameChat } from "../components/GameChat";
 import { Leaderboard, useScoreBridge } from "../components/Leaderboard";
+import { AchievementList, AchievementToast } from "../components/Achievements";
+import { useAchievements } from "../lib/achievements";
 import { setPlaying } from "../lib/useBadges";
 import { TranslateToggle, useTranslate } from "../components/AiBits";
 import { GameHelper } from "../components/GameHelper";
@@ -60,6 +62,7 @@ export function GamePage() {
   if (game && authReady && pickup?.id !== game.id) setPickup({ id: game.id, pending: needsPickup(game, userId, browserStorage, recentAtOpen) });
   const pickingUp = !!game && pickup?.id === game.id && pickup.pending;
   const scores = useScoreBridge(gameFrame, game, userId);
+  const achievements = useAchievements(gameFrame, game, userId);
   // Loads the game again, e.g. to continue from newer progress made on another device.
   const [frameRun, setFrameRun] = useState(0);
   const isolated = game?.needs_isolation === true;
@@ -229,6 +232,7 @@ export function GamePage() {
               if (matchMedia("(pointer: fine)").matches && (!active || active === document.body)) e.currentTarget.focus({ preventScroll: true });
             }}
           />}
+          <AchievementToast toast={achievements.toast} guest={!userId} onDone={achievements.next} />
         </div>
         <PartyChat />
         <div className="player-bar">
@@ -300,6 +304,7 @@ export function GamePage() {
       )}
 
       <Leaderboard game={game} version={scores.version} last={scores.last} />
+      <AchievementList rows={achievements.rows} viewer={!!userId || !!achievements.rows?.some((a) => a.mine)} />
       <GameUpdates game={game} />
       <GameChat game={game} />
       <GameFeedback game={game} />

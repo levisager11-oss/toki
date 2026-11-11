@@ -2,7 +2,7 @@
 // Every action checks that the run (and the GitHub installation) belongs to the logged-in account.
 import { budgetedCompletion } from "../server/ai/budget.js";
 import { freeCompletion, freeSettings } from "../server/ai/free.js";
-import { errorCode, errorDetail, step, uploadFeatures, type Bug, type Feature, type Job, type Message, type StepResult } from "../server/connect/agent.js";
+import { addable, errorCode, errorDetail, step, uploadFeatures, type Bug, type Feature, type Job, type Message, type StepResult } from "../server/connect/agent.js";
 import { agentStep } from "../server/connect/managed.js";
 import {
   AGENT_SETTINGS, agentClient, changesFile, ensureAgent, interrupt, replyTool, sendMessage, sessionEvents, sessionStatus, startSession, type AgentSettings,
@@ -115,7 +115,7 @@ async function start(ctx: Ctx, b: Record<string, unknown>) {
   const feedbackId = isUuid(b.feedback_id) ? b.feedback_id : null;
   const features: Feature[] = feedbackId
     ? ["fix"]
-    : Array.isArray(b.features) ? [...new Set(b.features.filter((f): f is Feature => f === "saves" || f === "scores" || f === "multiplayer"))] : [];
+    : addable(b.features);
   const notes = typeof b.notes === "string" ? b.notes.trim().slice(0, 1000) : "";
   let gameId = isUuid(b.game_id) ? b.game_id : null;
   if (feedbackId) {
@@ -176,6 +176,11 @@ async function run(ctx: Ctx, b: Record<string, unknown>, origin: string) {
   let game: Job["game"] = null;
   if (job.game_id) {
     [game] = await ctx.db.select<NonNullable<Job["game"]>>("games", `id=eq.${job.game_id}&select=title,score_order,score_format,join_param`);
+    if (game && job.features.includes("achievements")) {
+      game.achievements = await ctx.db.select<{ id: string; name: string; description: string }>(
+        "game_achievements", `game_id=eq.${job.game_id}&select=id,name,description&order=position,id`,
+      );
+    }
   }
   let bug: Bug | null = null;
   if (job.feedback_id) {
@@ -253,6 +258,11 @@ async function saveStep(ctx: Ctx, job: Row, result: StepResult): Promise<boolean
   // Friend invites were added: the game's page offers "Invite friends" from now on.
   if (rows.length && result.status === "done" && job.features.includes("multiplayer") && job.game_id) {
     await ctx.db.update("games", `id=eq.${job.game_id}`, { multiplayer: true }).catch(() => {});
+  }
+  // Achievements the AI proposed for a game that had none: the game has them on Toki now (only
+  // ones it doesn't have yet are added, so nothing the developer set is changed).
+  if (rows.length && result.status === "done" && result.achievements?.length && job.game_id) {
+    await ctx.db.rpc("set_achievements", { p_game: job.game_id, p_list: result.achievements, p_mode: "add" }).catch(() => {});
   }
   return rows.length > 0;
 }

@@ -30,6 +30,14 @@ export interface GameUpdate {
 /** Newest first. */
 export const GAME_UPDATES: GameUpdate[] = [
   {
+    topic: "achievements",
+    feature: "achievements",
+    since: "2026-11-11T15:53:00Z",
+    // Every game can have achievements.
+    applies: () => true,
+    only: 'This time, add only step 6 ("Achievements"): call `toki.achievement` with the ids of the game\'s achievements on Toki, in the places where the player earns them. If the game has none on Toki yet, propose some as step 6 says. Leave everything else as it is in the game. The script from step 1 must be the current one: replace an older copy that has no toki.achievement.',
+  },
+  {
     topic: "name",
     feature: "multiplayer",
     since: "2026-11-11T04:47:00Z",

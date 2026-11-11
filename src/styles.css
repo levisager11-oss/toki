@@ -1185,3 +1185,46 @@ main.content:focus { outline: none; }
 .legal p, .legal ul { margin: 0 0 10px; }
 .legal ul { padding-left: 22px; }
 .legal li + li { margin-top: 4px; }
+
+/* Achievements: the toast over the game, the list on the game page, badges on profiles, the developer's list. */
+.ach-icon { flex: none; width: 36px; height: 36px; display: grid; place-items: center; font-size: 22px; line-height: 1; background: var(--bg); border: 1px solid var(--line); }
+.ach-toast-spot { position: absolute; z-index: 5; top: 10px; left: 50%; transform: translateX(-50%); width: max-content; max-width: calc(100% - 20px); pointer-events: none; }
+.ach-toast { pointer-events: auto; display: flex; align-items: center; gap: 10px; padding: 8px 14px 8px 8px; max-width: 100%; text-align: left; font: inherit; color: var(--fg); background: var(--surface); border: 1px solid var(--fg); box-shadow: 3px 3px 0 var(--fg); cursor: pointer; animation: ach-in .25s steps(4); }
+.ach-toast .ach-icon { background: var(--accent); border-color: var(--accent-ink); }
+.ach-toast-text { display: flex; flex-direction: column; min-width: 0; }
+.ach-toast-text small { font-size: 12px; color: var(--muted); }
+.ach-toast-text small:first-child { font-family: var(--f-px); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--fg); }
+.ach-toast-text b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@keyframes ach-in { from { transform: translateY(-10px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .ach-toast { animation: none; } }
+.achievements { scroll-margin-top: 90px; }
+.ach-list { list-style: none; margin: 0 0 8px; padding: 0; border-top: 1px solid var(--line); max-width: 720px; }
+.ach-list li { display: flex; align-items: center; gap: 12px; padding: 8px 4px; border-bottom: 1px solid var(--line); }
+.ach-list li:not(.mine) .ach-icon { filter: grayscale(1); opacity: .55; }
+.ach-list li.mine { box-shadow: inset 3px 0 0 var(--accent); }
+.ach-list .info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ach-list .info b { overflow-wrap: anywhere; }
+.ach-got { color: var(--fg); }
+.ach-count { flex: none; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+.badge-row { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
+.badge-row a { display: flex; align-items: center; gap: 10px; padding: 8px; min-width: 0; height: 100%; color: var(--fg); text-decoration: none; background: var(--surface); border: 1px solid var(--line); }
+.badge-row a:hover, .badge-row a:focus-visible { border-color: var(--fg); }
+.badge-row .info { display: flex; flex-direction: column; min-width: 0; }
+.badge-row .info b, .badge-row .info .sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ach-setup { grid-column: 1 / -1; }
+.ach-edit { list-style: none; margin: 4px 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.ach-edit li { display: flex; flex-direction: column; gap: 6px; padding: 10px; background: var(--surface); border: 1px solid var(--line); }
+.ach-edit-head { display: flex; gap: 6px; }
+.ach-edit-head > input:last-child { flex: 1 1 auto; }
+.form .ach-edit .ach-edit-head input.ach-icon-input { flex: none; width: 52px; text-align: center; font-size: 20px; padding: 4px; }
+.ach-edit-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.form .ach-edit-foot label { margin: 0; font-weight: 400; }
+.form .ach-edit .ach-edit-foot input.ach-id-input { width: auto; flex: 1 1 140px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; padding: 6px 8px; }
+.ach-edit-foot .linkish { font-size: 14px; }
+@media (max-width: 480px) {
+  .badge-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .badge-row a { padding: 6px; gap: 8px; }
+  .badge-row .ach-icon { width: 30px; height: 30px; font-size: 18px; }
+  .ach-list li { gap: 10px; }
+  .ach-edit-foot .linkish { padding: 6px 0; }
+}
