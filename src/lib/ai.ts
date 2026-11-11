@@ -368,6 +368,8 @@ export interface ConnectJob {
   status: JobStatus;
   messages: JobMessage[];
   pr_url: string | null;
+  /** What became of the pull request: null until Toki asked GitHub (checkPrs) */
+  pr_state?: "open" | "merged" | "closed" | null;
   error: string | null;
   /** What the AI service or GitHub answered */
   error_detail: string | null;
@@ -378,7 +380,7 @@ export interface ConnectJob {
   updated_at: string;
 }
 
-const JOB = "id, repo, features, notes, status, messages, pr_url, error, error_detail, game_id, feedback_id, engine, source, created_at, updated_at";
+const JOB = "id, repo, features, notes, status, messages, pr_url, pr_state, error, error_detail, game_id, feedback_id, engine, source, created_at, updated_at";
 
 export async function myJobs(): Promise<ConnectJob[]> {
   const { data, error } = await supabase.from("connect_jobs").select(JOB).order("created_at", { ascending: false }).limit(20);
@@ -416,6 +418,8 @@ export const startJob = (j: StartJob) => connect({ action: "start", ...j });
 export const runJob = (id: string) => connect({ action: "run", id });
 export const answerJob = (id: string, answers: { id: string; answer: string }[]) => connect({ action: "answer", id, answers });
 export const cancelJob = (id: string) => connect({ action: "cancel", id });
+/** Asks GitHub which of the account's Toki Connect pull requests were merged. `changed`: how many were merged or closed now. */
+export const checkPrs = () => api<{ checked: number; changed?: number }>("/api/connect", { method: "POST", body: JSON.stringify({ action: "prs" }) });
 
 const KNOWN_ERRORS = [
   "ai_disabled", "not_allowed", "cap_reached", "quota_reached", "ai_not_configured", "ai_provider_error", "ai_timeout", "ai_refused", "ai_empty_answer",

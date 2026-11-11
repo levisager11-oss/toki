@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { GAME_UPDATES, gameUpdate, ownConnection, updateConnectPath, updateInstructions, updateKeys, updateState, type GameUpdate } from "../src/lib/gameUpdates";
+import { GAME_UPDATES, gameUpdate, isDone, ownConnection, updateConnectPath, updateInstructions, updateKeys, updateState, type GameUpdate } from "../src/lib/gameUpdates";
 import type { ConnectJob } from "../src/lib/ai";
 import { uploadFeatures } from "../server/connect/agent";
 
@@ -56,6 +56,20 @@ describe("where a game stands with an update", () => {
     expect(state([job({ status: "failed" })])).toBe("failed");
     // Newest first: a run that worked after one that failed.
     expect(state([job({ pr_url: "https://github.com/dev/game/pull/4" }), job({ status: "failed" })])).toBe("pr");
+  });
+
+  it("knows when the pull request was merged or closed", () => {
+    const pr = "https://github.com/dev/game/pull/3";
+    expect(state([job({ pr_url: pr, pr_state: "open" })])).toBe("pr");
+    expect(state([job({ pr_url: pr, pr_state: "merged" })])).toBe("merged");
+    expect(state([job({ pr_url: pr, pr_state: "closed" })])).toBe("closed");
+    const done = (jobs: ConnectJob[]) => isDone(updateState(host, { id: "g1" }, jobs));
+    expect(done([job({ pr_url: pr, pr_state: "merged" })])).toBe(true);
+    expect(done([job({ source: "upload" })])).toBe(true);
+    expect(done([job({})])).toBe(true);
+    expect(done([job({ pr_url: pr })])).toBe(false);
+    expect(done([job({ pr_url: pr, pr_state: "closed" })])).toBe(false);
+    expect(done([])).toBe(false);
   });
 
   it("doesn't count other games, other features, or runs from before the update", () => {

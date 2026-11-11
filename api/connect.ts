@@ -16,7 +16,7 @@ import { buildRepo } from "../server/connect/buildRepo.js";
 import { hostingDeps, r2Config } from "../server/hosting.js";
 import { SITE_URL } from "../src/lib/site.js";
 
-const PUBLIC = "id,repo,features,notes,status,messages,pr_url,error,error_detail,game_id,feedback_id,engine,source,ai,created_at,updated_at";
+const PUBLIC = "id,repo,features,notes,status,messages,pr_url,pr_state,error,error_detail,game_id,feedback_id,engine,source,ai,created_at,updated_at";
 // A step holds the run this long at most; a crashed step frees it again after that.
 const LEASE_MS = 290_000;
 
@@ -44,6 +44,8 @@ export async function POST(request: Request) {
         return await answer(ctx, b);
       case "cancel":
         return await cancel(ctx, b);
+      case "prs":
+        return await prs(ctx);
       default:
         return json({ error: "bad_request" }, 400);
     }
@@ -377,4 +379,32 @@ async function cancel(ctx: Ctx, b: Record<string, unknown>) {
   // An agent run: stop the agent, and count what it cost so far instead of the whole cap.
   if (job?.engine === "agent" && job.state?.session) await stopAgent(ctx, job.state.session, job.state.reservation);
   return view(ctx, b.id);
+}
+
+/**
+ * Asks GitHub about the account's open Toki Connect pull requests (the newest few) and notes
+ * which were merged or closed, so "Updates for your games" knows a game is done.
+ */
+async function prs(ctx: Ctx) {
+  if (!githubConfigured(ctx.env.github)) return json({ checked: 0 });
+  const rows = await ctx.db.select<{ id: string; repo: string; pr_url: string; installation_id: number | null }>(
+    "connect_jobs",
+    `user_id=eq.${ctx.user.id}&status=eq.done&pr_url=not.is.null&or=(pr_state.is.null,pr_state.eq.open)&select=id,repo,pr_url,installation_id&order=created_at.desc&limit=10`,
+  );
+  const gh = github(ctx.env.github);
+  let changed = 0;
+  await Promise.all(
+    rows.map(async (r) => {
+      const n = Number(/\/pull\/(\d+)$/.exec(r.pr_url)?.[1]);
+      if (!r.installation_id || !n) return;
+      try {
+        const state = await (await gh.repo(r.installation_id, r.repo)).pullState(n);
+        await ctx.db.update("connect_jobs", `id=eq.${r.id}`, { pr_state: state });
+        if (state !== "open") changed++;
+      } catch {
+        /* GitHub didn't answer, or the app lost access: ask again next time */
+      }
+    }),
+  );
+  return json({ checked: rows.length, changed });
 }
