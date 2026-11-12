@@ -35,6 +35,24 @@ const game = () => tables.games[0];
 const FILES = [{ path: "Snake/index.html", size: 100 }, { path: "Snake/game.js", size: 200 }];
 
 describe("hosting a game", () => {
+  it("follows the limits an admin set for the account, and the usual ones if they can't be read", async () => {
+    now = new Date(); // the stand-in database stamps new rows with the real time
+    const asked: unknown[] = [];
+    const limits: Record<string, number | null> = { uploads_hour: 1, storage_mb: 1 };
+    deps.db.rpc = async <T,>(fn: string, args: Record<string, unknown>) => {
+      asked.push({ fn, args });
+      return limits[String(args.p_key)] as T;
+    };
+    await startUpload(deps, DEV, { game_id: "11111111-1111-4111-8111-111111111111", files: FILES });
+    expect(asked).toContainEqual({ fn: "limit_of", args: { p_user: "dev", p_key: "uploads_hour" } });
+    await expect(startUpload(deps, DEV, { game_id: "11111111-1111-4111-8111-111111111111", files: FILES })).rejects.toMatchObject({ code: "rate_limited" });
+    limits.uploads_hour = null; // no limit
+    const big = [{ path: "Snake/index.html", size: 2 * 1024 ** 2 }];
+    await expect(startUpload(deps, DEV, { game_id: "11111111-1111-4111-8111-111111111111", files: big })).rejects.toMatchObject({ code: "account_full" });
+    limits.storage_mb = 3;
+    await startUpload(deps, DEV, { game_id: "11111111-1111-4111-8111-111111111111", files: big });
+  });
+
   it("remembers the link a game ran at before, so players' progress comes along", async () => {
     game().play_url = "https://lu.itch.io/snake";
     const s = await startUpload(deps, DEV, { game_id: "11111111-1111-4111-8111-111111111111", files: FILES });
@@ -67,6 +85,7 @@ describe("hosting a game", () => {
   it("adds the achievements in toki.json, without deleting any", async () => {
     const calls: unknown[] = [];
     deps.db.rpc = async <T,>(fn: string, args: Record<string, unknown>) => {
+      if (fn === "limit_of") throw new Error("not here"); // the usual limits
       calls.push({ fn, args });
       return 2 as T;
     };
@@ -88,6 +107,7 @@ describe("hosting a game", () => {
   it("adds the high-score lists in toki.json, without deleting any", async () => {
     const calls: unknown[] = [];
     deps.db.rpc = async <T,>(fn: string, args: Record<string, unknown>) => {
+      if (fn === "limit_of") throw new Error("not here"); // the usual limits
       calls.push({ fn, args });
       return 1 as T;
     };

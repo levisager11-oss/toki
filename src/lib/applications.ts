@@ -1,6 +1,7 @@
 // Developer accounts by application: players apply, admins approve (the account becomes a
 // creator) or decline. Rules: supabase/migrations/20261109200000_developer_applications.sql
 import { supabase } from "./supabase";
+import { limitErrorKey } from "./limitValues";
 
 export type ApplicationStatus = "pending" | "approved" | "rejected";
 
@@ -22,7 +23,7 @@ export const APPLY_LIMITS = { aboutMin: 20, about: 2000, links: 1000 } as const;
 export function applyErrorKey(error: { message?: string; code?: string } | null | undefined) {
   const m = error?.message ?? "";
   if (error?.code === "23505") return "apply.err.open" as const;
-  if (m.includes("rate_limited")) return "apply.err.limit" as const;
+  if (m.includes("rate_limited")) return limitErrorKey(m) ?? ("apply.err.limit" as const);
   if (m.includes("already_developer")) return "apply.err.developer" as const;
   if (error?.code === "23514") return "apply.err.short" as const;
   return "error" as const;

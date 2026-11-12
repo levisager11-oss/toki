@@ -209,7 +209,7 @@ export const playerEn = {
   "notif.empty": "Nothing new.",
   "notif.clear": "Clear all",
   "notif.clearSure": "Really clear all?",
-  "notif.kept": "Notifications are kept for 30 days.",
+  "notif.kept": "Notifications are kept for {keep.notifications|# day|# days}.",
   "score.best": "Best scores",
   "score.place": "Place {rank} of {n}",
   "daily.profileStreak": "Daily streak",

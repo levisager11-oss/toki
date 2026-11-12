@@ -14,10 +14,20 @@ import {
 
 /** All games together stay below Cloudflare's free 10 GB. */
 export const BUCKET_BYTES = 9.5 * 1024 ** 3;
-/** One developer's games together (admins have no limit). */
+/** One developer's games together, unless an admin set another limit (admins have none). */
 export const ACCOUNT_BYTES = 1024 ** 3;
-/** Uploads started per account and hour. */
+/** Uploads started per account and hour, unless an admin set another limit. */
 export const STARTS_PER_HOUR = 30;
+
+/** An account's limit as admins set it on /admin/limits (null: none). The default if it can't be read. */
+async function limitOf(db: Deps["db"], userId: string, key: "uploads_hour" | "storage_mb", fallback: number): Promise<number | null> {
+  try {
+    const v = await db.rpc<number | null>("limit_of", { p_user: userId, p_key: key });
+    return typeof v === "number" || v === null ? v : fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 export type Role = "admin" | "creator" | "player";
 export interface HostUser {
@@ -162,16 +172,20 @@ export async function startUpload(deps: Deps, user: HostUser, b: Record<string, 
   const plan = planFiles(files, toki.entry);
   if ("error" in plan) throw new HostingError(plan.error, PLAN_STATUS[plan.error]);
 
-  const hourAgo = new Date(now.getTime() - 3600_000).toISOString();
-  const recent = await db.select<{ id: string }>("game_builds", `created_by=eq.${user.id}&created_at=gt.${hourAgo}&select=id&limit=${STARTS_PER_HOUR}`);
-  if (recent.length >= STARTS_PER_HOUR) throw new HostingError("rate_limited", 429);
+  const perHour = user.role === "admin" ? null : await limitOf(db, user.id, "uploads_hour", STARTS_PER_HOUR);
+  if (perHour !== null) {
+    const hourAgo = new Date(now.getTime() - 3600_000).toISOString();
+    const recent = await db.select<{ id: string }>("game_builds", `created_by=eq.${user.id}&created_at=gt.${hourAgo}&select=id&limit=${perHour + 1}`);
+    if (recent.length >= perHour) throw new HostingError("rate_limited", 429);
+  }
 
   const kept = await db.select<{ bytes: number; created_by: string | null }>("game_builds", "status=in.(uploading,live,previous)&select=bytes,created_by");
   const total = kept.reduce((n, r) => n + Number(r.bytes), 0);
   if (total + plan.bytes > BUCKET_BYTES) throw new HostingError("storage_full", 507);
-  if (user.role !== "admin") {
+  const mb = user.role === "admin" ? null : await limitOf(db, user.id, "storage_mb", ACCOUNT_BYTES / 1024 ** 2);
+  if (mb !== null) {
     const mine = kept.filter((r) => r.created_by === user.id).reduce((n, r) => n + Number(r.bytes), 0);
-    if (mine + plan.bytes > ACCOUNT_BYTES) throw new HostingError("account_full", 507);
+    if (mine + plan.bytes > mb * 1024 ** 2) throw new HostingError("account_full", 507);
   }
 
   const { game, created } = await findOrCreateGame(db, user, b, toki, config.domain);

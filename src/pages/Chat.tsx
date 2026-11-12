@@ -14,6 +14,7 @@ import { Avatar } from "../components/Avatar";
 import { ChatView } from "../components/ChatView";
 import { useBadges } from "../lib/useBadges";
 import { useTitle } from "../lib/useTitle";
+import { limitShown } from "../lib/limitValues";
 
 /** /chat: the list of chats. /chat/toki: the public room. /chat/:id: one chat. /chat/new: a new group. */
 export function Chat() {
@@ -216,7 +217,7 @@ function NewGroup({ onDone }: { onDone: (chatId: string) => void }) {
   const toggle = (id: string) => setPicked((s) => {
     const n = new Set(s);
     if (n.has(id)) n.delete(id);
-    else if (n.size < 19) n.add(id);
+    else if (n.size < (limitShown("group_size") ?? 20) - 1) n.add(id); // the group's size counts you too
     return n;
   });
   const submit = async (e: FormEvent) => {

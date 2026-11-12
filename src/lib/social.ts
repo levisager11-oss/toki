@@ -2,11 +2,12 @@
 // live in the database: supabase/migrations/20261110100000_profiles.sql and the ones after it.
 import { supabase } from "./supabase";
 import type { Role } from "./types";
+import { limitErrorKey, type LimitErrorKey } from "./limitValues";
 
 /** An i18n key for what went wrong, from the server's error. */
 export type SocialErrorKey =
   | "soc.err.banned" | "soc.err.blocked" | "soc.err.notFriends" | "soc.err.rateLimited"
-  | "soc.err.groupFull" | "soc.err.login" | "soc.err.badCode" | "soc.err.partyFull" | "error";
+  | "soc.err.groupFull" | "soc.err.login" | "soc.err.badCode" | "soc.err.partyFull" | LimitErrorKey | "error";
 
 export class SocialError extends Error {
   constructor(readonly key: SocialErrorKey) {
@@ -19,7 +20,7 @@ export function socialErrorKey(error: { message?: string } | null | undefined): 
   if (m.includes("banned")) return "soc.err.banned";
   if (m.includes("blocked")) return "soc.err.blocked";
   if (m.includes("not_friends") || m.includes("not_member")) return "soc.err.notFriends";
-  if (m.includes("rate_limited")) return "soc.err.rateLimited";
+  if (m.includes("rate_limited")) return limitErrorKey(m) ?? "soc.err.rateLimited";
   if (m.includes("group_full")) return "soc.err.groupFull";
   if (m.includes("party_full")) return "soc.err.partyFull";
   if (m.includes("login_required")) return "soc.err.login";

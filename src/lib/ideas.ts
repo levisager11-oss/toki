@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./supabase";
 import type { Role } from "./types";
+import { limitErrorKey } from "./limitValues";
 
 export type IdeaStatus = "open" | "claimed" | "done";
 export const IDEA_STATUSES = ["open", "claimed", "done"] as const;
@@ -47,7 +48,7 @@ type Err = { message?: string; code?: string } | null | undefined;
 /** An i18n key for what went wrong. */
 export function ideaErrorKey(error: Err) {
   const m = error?.message ?? "";
-  if (m.includes("rate_limited")) return "idea.err.limit" as const;
+  if (m.includes("rate_limited")) return limitErrorKey(m) ?? ("idea.err.limit" as const);
   if (m.includes("taken")) return "idea.err.taken" as const;
   if (m.includes("bad_game")) return "idea.err.game" as const;
   if (m.includes("banned")) return "idea.err.banned" as const;
