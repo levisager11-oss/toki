@@ -211,7 +211,7 @@ export const playerDe: Record<GroupKey["player"], string> = {
   "notif.empty": "Nichts Neues.",
   "notif.clear": "Alle löschen",
   "notif.clearSure": "Wirklich alle löschen?",
-  "notif.kept": "Mitteilungen werden 30 Tage aufbewahrt.",
+  "notif.kept": "Mitteilungen werden {keep.notifications|# Tag|# Tage} aufbewahrt.",
   "score.best": "Beste Punktzahlen",
   "score.place": "Platz {rank} von {n}",
   "daily.profileStreak": "Tagesserie",

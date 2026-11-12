@@ -3,6 +3,7 @@
 // supabase/migrations/20261109120000_feedback.sql
 import { supabase } from "./supabase";
 import type { Role } from "./types";
+import { limitErrorKey, type LimitErrorKey } from "./limitValues";
 
 export const KINDS = ["bug", "idea", "other"] as const;
 export type FeedbackKind = (typeof KINDS)[number];
@@ -59,9 +60,9 @@ const POST = "*, author:profiles!feedback_posts_author_id_fkey(username, role), 
 const REPLY = "*, author:profiles!feedback_replies_author_id_fkey(username, role)";
 
 /** An i18n key for what went wrong. */
-export function errorKey(error: { message?: string; code?: string } | null | undefined): "fb.err.rateLimited" | "fb.err.tooShort" | "error" {
+export function errorKey(error: { message?: string; code?: string } | null | undefined): LimitErrorKey | "fb.err.rateLimited" | "fb.err.tooShort" | "error" {
   const m = error?.message ?? "";
-  if (m.includes("rate_limited")) return "fb.err.rateLimited";
+  if (m.includes("rate_limited")) return limitErrorKey(m) ?? "fb.err.rateLimited";
   if (error?.code === "23514") return "fb.err.tooShort";
   return "error";
 }

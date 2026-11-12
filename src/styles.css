@@ -792,6 +792,15 @@ a.author:hover { text-decoration: underline; color: var(--fg); }
 .quota-input input { width: 130px; background: var(--surface); border: 1px solid var(--line); padding: 6px 8px; }
 .quota-input input:focus { border-color: var(--fg); outline: none; }
 .quota-input .ok { color: #2f9e5b; font-weight: 700; }
+.limit-table td.what { white-space: normal; min-width: 180px; }
+.limit-table .limit-group th { padding-top: 16px; color: var(--fg); }
+.limit-input input { width: 90px; }
+.limit-own-form { margin-top: 6px; }
+@media (max-width: 560px) {
+  .limit-table td, .limit-table th { padding-left: 4px; padding-right: 4px; }
+  .limit-table td.what { min-width: 110px; }
+  .limit-input input { width: 62px; padding: 6px; }
+}
 .ai-log { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
 .ai-log li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 4px 14px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
 .connect-budget p { font-weight: 600; }

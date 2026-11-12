@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { fillLimits, limitsVersion, subscribeLimits } from "./limitValues";
 import type { devEn } from "./texts/devEn";
 import type { legalEn } from "./texts/legalEn";
 import type { playerEn } from "./texts/playerEn";
@@ -167,7 +168,20 @@ const en = {
   "soc.err.blocked": "This isn't possible: one of you blocked the other.",
   "soc.err.notFriends": "Only friends can message each other.",
   "soc.err.rateLimited": "Slow down a little and try again in a moment.",
-  "soc.err.groupFull": "This group is full (20 people).",
+  "soc.err.groupFull": "This group is full ({limit.group_size} people).",
+  "limit.err.ideas_day": "You can propose {limit.ideas_day|# game|# games} a day. Try again tomorrow.",
+  "limit.err.ideas_month": "You can propose {limit.ideas_month|# game|# games} in 30 days. Try again later.",
+  "limit.err.idea_replies_hour": "You can write {limit.idea_replies_hour|# reply|# replies} an hour. Try again later.",
+  "limit.err.feedback_posts_hour": "You can write {limit.feedback_posts_hour|# post|# posts} an hour. Try again later.",
+  "limit.err.feedback_posts_day": "You can write {limit.feedback_posts_day|# post|# posts} a day. Try again tomorrow.",
+  "limit.err.feedback_replies_hour": "You can write {limit.feedback_replies_hour|# reply|# replies} an hour. Try again later.",
+  "limit.err.messages_20s": "You can send {limit.messages_20s|# message|# messages} in 20 seconds. Slow down a little.",
+  "limit.err.messages_hour": "You can send {limit.messages_hour|# message|# messages} an hour. Try again later.",
+  "limit.err.groups_day": "You can start {limit.groups_day|# group|# groups} a day. Try again tomorrow.",
+  "limit.err.reports_day": "You can send {limit.reports_day|# report|# reports} a day. Try again tomorrow.",
+  "limit.err.friend_requests_day": "You can send {limit.friend_requests_day|# friend request|# friend requests} a day. Try again tomorrow.",
+  "limit.err.game_invites_10min": "You can send {limit.game_invites_10min|# invite|# invites} in 10 minutes. Try again in a moment.",
+  "limit.err.applications_month": "You can apply {limit.applications_month|once|# times} in 30 days. Try again later.",
   "soc.err.login": "Log in first.",
   "chat.toki": "Toki chat",
   "chat.tokiHelp": "Everyone on Toki",
@@ -194,7 +208,7 @@ const en = {
   "chat.reported": "Reported",
   "chat.reportWhy": "What's wrong? (optional)",
   "chat.sendReport": "Report",
-  "chat.roomRules": "Be kind. Don't share where you live, your phone number or passwords. Report messages that break this. Messages here are deleted after 7 days.",
+  "chat.roomRules": "Be kind. Don't share where you live, your phone number or passwords. Report messages that break this. Messages here are deleted after {keep.chat_public|# day|# days}.",
   "chat.settings": "Group",
   "chat.groupName": "Group name",
   "chat.rename": "Rename",
@@ -251,7 +265,7 @@ const en = {
   "role.player": "Player",
   "apply.title": "Become a developer",
   "apply.err.open": "You already have an application waiting.",
-  "apply.err.limit": "You can apply 3 times in 30 days. Try again later.",
+  "apply.err.limit": "You can apply {limit.applications_month|once|# times} in 30 days. Try again later.",
   "apply.err.developer": "You're already a developer.",
   "apply.err.short": "Write at least 20 characters about what you make.",
   "auth.notDeveloper": "Only developers can add games. Want to put your own games on Toki?",
@@ -393,7 +407,7 @@ const en = {
   "party.stay": "Stay here",
   "party.chat": "Party chat",
   "party.inYours": "In your party",
-  "soc.err.partyFull": "This party is full (8 players).",
+  "soc.err.partyFull": "This party is full ({limit.party_size} players).",
   "push.title": "Invites on this device",
   "push.off": "Get a notification when a friend invites you to play, even while Toki is closed.",
   "push.on": "On. This device shows a notification when a friend invites you to play.",
@@ -666,7 +680,20 @@ const de: Record<FirstKey, string> = {
   "soc.err.blocked": "Das geht nicht: Einer von euch hat den anderen blockiert.",
   "soc.err.notFriends": "Nur Freunde können sich Nachrichten schreiben.",
   "soc.err.rateLimited": "Etwas langsamer, bitte. Versuche es gleich nochmal.",
-  "soc.err.groupFull": "Diese Gruppe ist voll (20 Personen).",
+  "soc.err.groupFull": "Diese Gruppe ist voll ({limit.group_size} Personen).",
+  "limit.err.ideas_day": "Du kannst {limit.ideas_day|# Spiel|# Spiele} pro Tag vorschlagen. Versuch es morgen nochmal.",
+  "limit.err.ideas_month": "Du kannst {limit.ideas_month|# Spiel|# Spiele} in 30 Tagen vorschlagen. Versuch es später nochmal.",
+  "limit.err.idea_replies_hour": "Du kannst {limit.idea_replies_hour|# Antwort|# Antworten} pro Stunde schreiben. Versuch es später nochmal.",
+  "limit.err.feedback_posts_hour": "Du kannst {limit.feedback_posts_hour|# Beitrag|# Beiträge} pro Stunde schreiben. Versuch es später nochmal.",
+  "limit.err.feedback_posts_day": "Du kannst {limit.feedback_posts_day|# Beitrag|# Beiträge} pro Tag schreiben. Versuch es morgen nochmal.",
+  "limit.err.feedback_replies_hour": "Du kannst {limit.feedback_replies_hour|# Antwort|# Antworten} pro Stunde schreiben. Versuch es später nochmal.",
+  "limit.err.messages_20s": "Du kannst {limit.messages_20s|# Nachricht|# Nachrichten} in 20 Sekunden senden. Etwas langsamer, bitte.",
+  "limit.err.messages_hour": "Du kannst {limit.messages_hour|# Nachricht|# Nachrichten} pro Stunde senden. Versuch es später nochmal.",
+  "limit.err.groups_day": "Du kannst {limit.groups_day|# Gruppe|# Gruppen} pro Tag erstellen. Versuch es morgen nochmal.",
+  "limit.err.reports_day": "Du kannst {limit.reports_day|# Meldung|# Meldungen} pro Tag senden. Versuch es morgen nochmal.",
+  "limit.err.friend_requests_day": "Du kannst {limit.friend_requests_day|# Freundschaftsanfrage|# Freundschaftsanfragen} pro Tag senden. Versuch es morgen nochmal.",
+  "limit.err.game_invites_10min": "Du kannst {limit.game_invites_10min|# Einladung|# Einladungen} in 10 Minuten senden. Versuch es gleich nochmal.",
+  "limit.err.applications_month": "Du kannst dich {limit.applications_month|einmal|#-mal} in 30 Tagen bewerben. Versuch es später nochmal.",
   "soc.err.login": "Melde dich zuerst an.",
   "chat.toki": "Toki-Chat",
   "chat.tokiHelp": "Alle auf Toki",
@@ -693,7 +720,7 @@ const de: Record<FirstKey, string> = {
   "chat.reported": "Gemeldet",
   "chat.reportWhy": "Was ist falsch? (freiwillig)",
   "chat.sendReport": "Melden",
-  "chat.roomRules": "Sei nett. Teile nicht, wo du wohnst, deine Telefonnummer oder Passwörter. Melde Nachrichten, die dagegen verstossen. Nachrichten hier werden nach 7 Tagen gelöscht.",
+  "chat.roomRules": "Sei nett. Teile nicht, wo du wohnst, deine Telefonnummer oder Passwörter. Melde Nachrichten, die dagegen verstossen. Nachrichten hier werden nach {keep.chat_public|# Tag|# Tagen} gelöscht.",
   "chat.settings": "Gruppe",
   "chat.groupName": "Gruppenname",
   "chat.rename": "Umbenennen",
@@ -750,7 +777,7 @@ const de: Record<FirstKey, string> = {
   "role.player": "Spieler",
   "apply.title": "Entwickler werden",
   "apply.err.open": "Du hast schon eine Bewerbung, die wartet.",
-  "apply.err.limit": "Du kannst dich 3-mal in 30 Tagen bewerben. Versuch es später nochmal.",
+  "apply.err.limit": "Du kannst dich {limit.applications_month|einmal|#-mal} in 30 Tagen bewerben. Versuch es später nochmal.",
   "apply.err.developer": "Du bist schon Entwickler.",
   "apply.err.short": "Schreib mindestens 20 Zeichen darüber, was du machst.",
   "auth.notDeveloper": "Nur Entwickler können Spiele hinzufügen. Möchtest du eigene Spiele auf Toki stellen?",
@@ -892,7 +919,7 @@ const de: Record<FirstKey, string> = {
   "party.stay": "Hier bleiben",
   "party.chat": "Party-Chat",
   "party.inYours": "In deiner Party",
-  "soc.err.partyFull": "Diese Party ist voll (8 Spieler).",
+  "soc.err.partyFull": "Diese Party ist voll ({limit.party_size} Spieler).",
   "push.title": "Einladungen auf diesem Gerät",
   "push.off": "Bekomm eine Mitteilung, wenn dich ein Freund zum Spielen einlädt, auch wenn Toki zu ist.",
   "push.on": "An. Dieses Gerät zeigt eine Mitteilung, wenn dich ein Freund zum Spielen einlädt.",
@@ -1067,7 +1094,8 @@ export function listOf(parts: string[], lang: "en" | "de"): string {
 }
 
 export function format(text: string, vars?: Record<string, string | number>): string {
-  let s = text;
+  // The limits and deletion times an admin set ({limit.ideas_day}, {keep.chat_public|# day|# days}).
+  let s = fillLimits(text);
   if (s.includes("|") && typeof vars?.n === "number") s = s.split("|")[vars.n === 1 ? 0 : 1];
   if (vars) for (const [k, v] of Object.entries(vars)) s = s.split(`{${k}}`).join(String(v));
   return s;
@@ -1075,6 +1103,8 @@ export function format(text: string, vars?: Record<string, string | number>): st
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(() => (shown = chosen = initialLang()));
+  // Texts show the limits an admin set: once they're loaded, everything shows them.
+  useSyncExternalStore(subscribeLimits, limitsVersion);
   useEffect(() => {
     document.documentElement.lang = lang;
   }, [lang]);

@@ -39,6 +39,7 @@ const Applications = page(() => import("./pages/Applications").then((m) => ({ de
 const Admin = page(() => import("./pages/Admin").then((m) => ({ default: m.Admin })), "player", "dev");
 const AiAdmin = page(() => import("./pages/AiAdmin").then((m) => ({ default: m.AiAdmin })), "player", "dev");
 const HostingAdmin = page(() => import("./pages/HostingAdmin").then((m) => ({ default: m.HostingAdmin })), "player", "dev");
+const LimitsAdmin = page(() => import("./pages/LimitsAdmin").then((m) => ({ default: m.LimitsAdmin })), "player", "dev");
 const Connect = page(() => import("./pages/Connect").then((m) => ({ default: m.Connect })), "player", "dev");
 const ConnectJob = page(() => import("./pages/ConnectJob").then((m) => ({ default: m.ConnectJob })), "player", "dev");
 const ConnectGitHub = page(() => import("./pages/ConnectGitHub").then((m) => ({ default: m.ConnectGitHub })), "player", "dev");
@@ -105,6 +106,7 @@ export function App() {
           <Route path="admin" element={<RequireMember admin><Later><Admin /></Later></RequireMember>} />
           <Route path="admin/ai" element={<RequireMember admin><Later><AiAdmin /></Later></RequireMember>} />
           <Route path="admin/hosting" element={<RequireMember admin><Later><HostingAdmin /></Later></RequireMember>} />
+          <Route path="admin/limits" element={<RequireMember admin><Later><LimitsAdmin /></Later></RequireMember>} />
           <Route path="connect" element={<RequireMember><Later><Connect /></Later></RequireMember>} />
           <Route path="connect/github" element={<RequireMember><Later><ConnectGitHub /></Later></RequireMember>} />
           <Route path="connect/:id" element={<RequireMember><Later><ConnectJob /></Later></RequireMember>} />

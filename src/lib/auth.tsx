@@ -7,6 +7,7 @@ import { syncAccountLikes } from "./local";
 import { claimGuestAchievements } from "./achievements";
 import { forgetPush } from "./push";
 import { useBadgeUpdates } from "./useBadges";
+import { loadLimits } from "./limits";
 import type { Profile } from "./types";
 
 interface AuthState {
@@ -55,6 +56,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (ready) claimGuestAchievements(userId ?? null);
   }, [ready, userId]);
   useBadgeUpdates(userId);
+  // This account's limits (ideas a day, ...), which the texts show; again after a role change.
+  const role = profile?.role;
+  useEffect(() => {
+    if (ready && (!userId || role)) void loadLimits();
+  }, [ready, userId, role]);
 
   useEffect(() => {
     if (!userId) {

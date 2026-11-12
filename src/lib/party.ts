@@ -23,8 +23,6 @@ export interface Party {
   members: PartyMember[];
 }
 
-export const PARTY_MAX = 8;
-
 export function readParty(v: unknown): Party | null {
   const p = v as Partial<Party> | null;
   if (!p || typeof p.id !== "string" || typeof p.leader !== "string" || !Array.isArray(p.members)) return null;
