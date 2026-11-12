@@ -128,6 +128,6 @@ describe("Toki Connect and boards", () => {
     const text = updateInstructions(u, "/* script */");
     expect(text).toContain('window.toki?.score(points, "id")');
     expect(text).toContain('"boards": [');
-    expect(u.only).toContain("More lists");
+    expect(u.add).toContain("More lists");
   });
 });

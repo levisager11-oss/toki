@@ -1,10 +1,11 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { GAME_UPDATES, gameUpdate, isDone, ownConnection, updateConnectPath, updateInstructions, updateKeys, updateState, type GameUpdate } from "../src/lib/gameUpdates";
+import { GAME_UPDATES, gameUpdate, isDone, ownConnection, scriptVersion, updateConnectPath, updateFeatures, updateInstructions, updateKeys, updateNotes, updateState, updatesFrom, type GameUpdate } from "../src/lib/gameUpdates";
 import type { ConnectJob } from "../src/lib/ai";
 import { uploadFeatures } from "../server/connect/agent";
 
 const i18n = readFileSync(new URL("../src/lib/i18n.tsx", import.meta.url), "utf8");
+const script = readFileSync(new URL("../public/toki-save.js", import.meta.url), "utf8");
 const host = gameUpdate("host")!;
 const job = (over: Partial<ConnectJob>): ConnectJob => ({
   id: "j", repo: "dev/game", features: ["multiplayer"], notes: "", status: "done", messages: [], pr_url: null, error: null, error_detail: null,
@@ -20,7 +21,7 @@ describe("updates for developers' games", () => {
       // A moment, not a day: runs from earlier that day didn't know about the update.
       expect(u.since).toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\d(:\d\d)?Z$/);
       expect(Number.isNaN(new Date(u.since).getTime())).toBe(false);
-      expect(u.only.length).toBeGreaterThan(20);
+      expect(u.add.length).toBeGreaterThan(20);
       // Once in English and once in German.
       for (const key of Object.values(updateKeys(u.topic))) expect(i18n.split(`"${key}":`).length - 1).toBe(2);
     }
@@ -38,8 +39,51 @@ describe("updates for developers' games", () => {
     const text = updateInstructions(host, "/* script */");
     expect(text).toContain("window.toki?.onHost(fn)"); // the guide explains it
     expect(text).toContain("/* script */"); // and brings the current script
-    expect(text.trimEnd().endsWith(host.only)).toBe(true);
-    expect(host.only).toContain("toki.onHost");
+    expect(text).toContain(host.add);
+    expect(text.trimEnd().endsWith(updateNotes([host], "/* script */"))).toBe(true);
+    expect(host.add).toContain("toki.onHost");
+  });
+});
+
+describe("all the updates a game is missing, at once", () => {
+  it("go into one run, each feature once", () => {
+    expect(updateFeatures(GAME_UPDATES).sort()).toEqual(["achievements", "boards", "multiplayer"]);
+    expect(updateFeatures([host, gameUpdate("name")!])).toEqual(["multiplayer"]);
+  });
+
+  it("say what to add for each, and fit in a run's notes", () => {
+    const notes = updateNotes(GAME_UPDATES, script);
+    for (const u of GAME_UPDATES) expect(notes).toContain(`- ${u.add}`);
+    // Toki Connect keeps at most 1000 characters of notes (connect_jobs.notes): shorten the
+    // updates' "add", or let the notes be longer, when this fails.
+    expect(notes.length).toBeLessThanOrEqual(1000);
+    expect(updateNotes([host], script)).toMatch(/^This time, add only `toki\.onHost`/);
+  });
+
+  it("ask for the current script, by the version on its first line", () => {
+    expect(scriptVersion(script)).toMatch(/^v\d+$/);
+    expect(scriptVersion("/* Toki save support v12. Put this in the game's HTML */")).toBe("v12");
+    expect(updateNotes([host], script)).toContain(`its first line says ${scriptVersion(script)}`);
+    expect(updateNotes([host], "/* no version */")).not.toContain("first line says");
+  });
+
+  it("come with one set of instructions that has all of them", () => {
+    const text = updateInstructions(GAME_UPDATES, "/* script */");
+    for (const u of GAME_UPDATES) expect(text).toContain(u.add);
+  });
+
+  it("are named in the Connect page's link, and read back from it", () => {
+    const ach = gameUpdate("achievements")!;
+    expect(updateConnectPath([host, ach], "g1")).toBe("/connect?update=host,achievements&game=g1");
+    // In the order of GAME_UPDATES, unknown ones left out.
+    expect(updatesFrom("host,nope,achievements").map((u) => u.topic)).toEqual(["achievements", "host"]);
+    expect(updatesFrom("host")).toEqual([host]);
+    expect(updatesFrom(null)).toEqual([]);
+  });
+
+  it("all count as added by that one run", () => {
+    const run = [job({ features: ["multiplayer", "achievements", "boards"], pr_url: "https://github.com/dev/game/pull/9", pr_state: "merged" })];
+    for (const u of GAME_UPDATES) expect(isDone(updateState(u, { id: "g1" }, run))).toBe(true);
   });
 });
 
@@ -128,6 +172,6 @@ describe("the achievements update", () => {
     const text = updateInstructions(ach, "/* script */");
     expect(text).toContain('window.toki?.achievement("id")');
     expect(text).toContain('"achievements": [');
-    expect(ach.only).toContain("step 6");
+    expect(ach.add).toContain("step 6");
   });
 });

@@ -1060,13 +1060,15 @@ main.content:focus { outline: none; }
 }
 @media (prefers-reduced-motion: reduce) { .invite-pop { animation: none; } }
 .dev-updates { margin-top: 28px; }
-.dev-update > b { font-size: 16px; }
+.dev-update-news { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 10px; }
+.dev-update-news b { font-size: 15px; }
+.dev-update-news p { margin: 2px 0 0; }
 .dev-update-games { list-style: none; margin: 0 0 12px; padding: 0; border-top: 1px solid var(--line); }
 .dev-update-games li { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .dev-update-games .info { display: flex; flex-direction: column; gap: 2px; flex: 1 1 220px; min-width: 0; }
 .dev-update .sub { font-size: 13px; color: var(--muted); }
 .dev-update-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
-.dev-update .actions { margin-bottom: 0; }
+.dev-update > .sub { margin: 0; }
 .guest-note { margin: 0; padding: 10px 12px; font-size: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
 .guest-note p { margin: 0; flex: 1 1 320px; }
 .guest-note .actions { gap: 8px; }

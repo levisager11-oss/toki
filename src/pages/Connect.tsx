@@ -10,7 +10,7 @@ import {
   type Budget, type ConnectJob, type Feature, type GitHubInfo,
 } from "../lib/ai";
 import { useTitle } from "../lib/useTitle";
-import { gameUpdate } from "../lib/gameUpdates";
+import { updateFeatures, updateNotes, updatesFrom } from "../lib/gameUpdates";
 
 /** Toki Connect for developers: connect GitHub, start a run, see earlier runs (/connect). */
 export function Connect() {
@@ -213,14 +213,15 @@ function NewRun({ repos, games, initialGame, fix, lang, onStarted }: {
   useEffect(() => {
     if (known) setGame((g) => g || initialGame);
   }, [known, initialGame]);
-  // Coming from an update for developers' games (?update=<topic>): its feature is ticked and
-  // the notes say what to add. ?add=<feature> ticks just that one.
-  const [update] = useState(() => gameUpdate(new URLSearchParams(location.search).get("update")));
+  // Coming from updates for developers' games (?update=<topic>,<topic>): their features are
+  // ticked and the notes say what to add. ?add=<feature> ticks just that one.
+  const [updates] = useState(() => updatesFrom(new URLSearchParams(location.search).get("update")));
   const [features, setFeatures] = useState<Feature[]>(() => {
-    const add = update?.feature ?? new URLSearchParams(location.search).get("add");
+    if (updates.length) return updateFeatures(updates);
+    const add = new URLSearchParams(location.search).get("add");
     return add === "multiplayer" || add === "scores" || add === "saves" || add === "achievements" || add === "boards" ? [add] : ["saves", "scores"];
   });
-  const [notes, setNotes] = useState(() => update?.only ?? "");
+  const [notes, setNotes] = useState(() => (updates.length ? updateNotes(updates) : ""));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
