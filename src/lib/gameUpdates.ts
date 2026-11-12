@@ -1,14 +1,16 @@
 // Updates for developers' games: things Toki can do that need a small change in the game.
 //
 // One entry per update, and everything follows from it: the notification developers get
-// (select public.notify_developers('<topic>') once the app that knows the topic is live), the
-// card on "My games" with a one-click "Update with Toki Connect" for each game it is for, and
-// "Copy instructions" for an AI agent working in the game's code.
-// Each entry needs its texts in src/lib/i18n.tsx: devup.<topic>.title, devup.<topic>.text and
-// devup.<topic>.notif, in both languages.
+// (select public.notify_developers('<topic>') once the app that knows the topic is live), and
+// the card on "My games": for each game, one "Update with Toki Connect" that adds every update
+// the game is missing in one run, and "Copy instructions" with all of them for an AI agent
+// working in the game's code.
+// Each entry needs its texts in src/lib/i18n.tsx: devup.<topic>.title, devup.<topic>.short,
+// devup.<topic>.text and devup.<topic>.notif, in both languages.
 import { supabase } from "./supabase";
 import { api, githubRepos, type ConnectJob, type Feature } from "./ai";
 import { integrationGuide } from "./integration";
+import snippet from "../../public/toki-save.js?raw";
 import type { Game } from "./types";
 
 export interface GameUpdate {
@@ -23,8 +25,12 @@ export interface GameUpdate {
   since: string;
   /** The games it is for. */
   applies: (game: Pick<Game, "multiplayer">) => boolean;
-  /** For the AI (Toki Connect's notes, and after the copied instructions): exactly what to add this time. */
-  only: string;
+  /**
+   * For the AI (Toki Connect's notes, and after the copied instructions): exactly what to add
+   * for this update, as the end of "This time, add only …". Keep it short: the notes of a run
+   * that adds every update at once must fit in 1000 characters (see updateNotes).
+   */
+  add: string;
 }
 
 /** Newest first. */
@@ -35,7 +41,7 @@ export const GAME_UPDATES: GameUpdate[] = [
     since: "2026-11-11T17:00:00Z",
     // Any game with a score can have more lists (one per level, mode or difficulty).
     applies: () => true,
-    only: 'This time, add only "More lists" from step 4: send scores to the game\'s other high-score lists on Toki with `toki.score(points, "id")`, where the code knows which list a score belongs to, and keep sending the main score with `toki.score(points)` as before. If the game has no other lists on Toki yet, propose some as that part says. Leave everything else as it is in the game. The script from step 1 must be the current one: replace an older copy (its first line says v7 or lower), since it sends every score to the main list.',
+    add: '"More lists" from step 4: send scores to the game\'s other high-score lists on Toki with `toki.score(points, "id")` where the code knows which list a score belongs to, and keep sending the main score with `toki.score(points)`. If the game has no other lists on Toki yet, propose some as that part says.',
   },
   {
     topic: "achievements",
@@ -43,21 +49,21 @@ export const GAME_UPDATES: GameUpdate[] = [
     since: "2026-11-11T15:53:00Z",
     // Every game can have achievements.
     applies: () => true,
-    only: 'This time, add only step 6 ("Achievements"): call `toki.achievement` with the ids of the game\'s achievements on Toki, in the places where the player earns them. If the game has none on Toki yet, propose some as step 6 says. Leave everything else as it is in the game. The script from step 1 must be the current one: replace an older copy that has no toki.achievement.',
+    add: 'step 6 ("Achievements"): call `toki.achievement` with the ids of the game\'s achievements on Toki where the player earns them. If the game has none on Toki yet, propose some as step 6 says.',
   },
   {
     topic: "name",
     feature: "multiplayer",
     since: "2026-11-11T04:47:00Z",
     applies: (g) => g.multiplayer === true,
-    only: 'This time, add only `toki.onName` from step 5 ("Use the name from Toki"): use the name Toki gives as the player\'s name in rooms instead of asking for it. Leave the rest of step 5 as it is in the game. The script from step 1 must be the current one: replace an older copy that has no toki.onName.',
+    add: '`toki.onName` from step 5 ("Use the name from Toki"): use the name Toki gives as the player\'s name in rooms instead of asking for it.',
   },
   {
     topic: "host",
     feature: "multiplayer",
     since: "2026-11-10T22:01:00Z",
     applies: (g) => g.multiplayer === true,
-    only: 'This time, add only `toki.onHost` from step 5 ("Let Toki open a room"), so the game opens a room by itself when Toki asks. The rest of step 5 is in the game already: keep it as it is. The script from step 1 must be the current one: replace an older copy that has no toki.onHost.',
+    add: '`toki.onHost` from step 5 ("Let Toki open a room"), so the game opens a room by itself when Toki asks.',
   },
 ];
 
@@ -65,11 +71,34 @@ export const gameUpdate = (topic: string | null | undefined) => GAME_UPDATES.fin
 
 /** The texts of an update, as i18n keys. */
 export const updateKeys = (topic: string) => ({
-  title: `devup.${topic}.title`, text: `devup.${topic}.text`, notif: `devup.${topic}.notif`,
+  title: `devup.${topic}.title`, short: `devup.${topic}.short`, text: `devup.${topic}.text`, notif: `devup.${topic}.notif`,
 });
 
-/** Instructions to paste into an AI coding agent working in the game's code. */
-export const updateInstructions = (update: GameUpdate, script: string) => `${integrationGuide(script)}\n${update.only}\n`;
+/** The version of the script games use ("v9"), from its first line. */
+export const scriptVersion = (script: string) => /\bv(\d+)\b/.exec(script.split("\n", 1)[0])?.[0] ?? "";
+
+/**
+ * For the AI: what to add this time, for one update or several at once (all a game is missing).
+ * Toki Connect takes it as the run's notes, which hold at most 1000 characters.
+ */
+export function updateNotes(updates: GameUpdate[], script: string = snippet): string {
+  const what = updates.length === 1 ? updates[0].add : `these:\n${updates.map((u) => `- ${u.add}`).join("\n")}`;
+  const version = scriptVersion(script);
+  return `This time, add only ${what}\nLeave everything else as it is in the game. The script from step 1 must be the current one${version ? ` (its first line says ${version})` : ""}: replace an older copy.`;
+}
+
+/** Features Toki Connect adds for these updates, each once. */
+export const updateFeatures = (updates: GameUpdate[]) => [...new Set(updates.map((u) => u.feature))];
+
+/** Instructions to paste into an AI coding agent working in the game's code: every update it is missing. */
+export const updateInstructions = (updates: GameUpdate | GameUpdate[], script: string) =>
+  `${integrationGuide(script)}\n${updateNotes(Array.isArray(updates) ? updates : [updates], script)}\n`;
+
+/** The updates named in a link (?update=host,name), in the order of GAME_UPDATES. */
+export const updatesFrom = (topics: string | null | undefined) => {
+  const want = new Set((topics ?? "").split(","));
+  return GAME_UPDATES.filter((u) => want.has(u.topic));
+};
 
 /**
  * Where a game stands with an update, from the developer's Toki Connect runs (newest first):
@@ -143,16 +172,17 @@ export function ownConnection(repos: { installation_id: number; repo: string }[]
   return r ? r.installation_id : null;
 }
 
-/** Where the Connect page starts this update for a game, when it can't be started in one click. */
-export const updateConnectPath = (update: GameUpdate, gameId: string) => `/connect?update=${update.topic}&game=${gameId}`;
+/** Where the Connect page starts these updates for a game, when they can't be started in one click. */
+export const updateConnectPath = (updates: GameUpdate | GameUpdate[], gameId: string) =>
+  `/connect?update=${(Array.isArray(updates) ? updates : [updates]).map((u) => u.topic).join(",")}&game=${gameId}`;
 
 /**
- * Starts Toki Connect adding an update to a game, with what Toki knows about the game's code:
- * the GitHub repository and branch it follows (the change comes as a pull request), or its
- * files uploaded to Toki (the change goes live as the next version).
+ * Starts Toki Connect adding updates to a game (all it is missing, in one run), with what Toki
+ * knows about the game's code: the GitHub repository and branch it follows (the change comes as
+ * a pull request), or its files uploaded to Toki (the change goes live as the next version).
  */
-export async function startUpdate(update: GameUpdate, game: Pick<Game, "id" | "hosted_site">, git: { repo: string; branch: string } | undefined, lang: "en" | "de"): Promise<ConnectJob> {
-  const run = { action: "start", features: [update.feature], notes: update.only, game_id: game.id, lang };
+export async function startUpdate(updates: GameUpdate[], game: Pick<Game, "id" | "hosted_site">, git: { repo: string; branch: string } | undefined, lang: "en" | "de"): Promise<ConnectJob> {
+  const run = { action: "start", features: updateFeatures(updates), notes: updateNotes(updates), game_id: game.id, lang };
   let source: Record<string, unknown>;
   if (git) {
     const installation = ownConnection((await githubRepos().catch(() => null))?.repos, git.repo);
