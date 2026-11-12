@@ -21,6 +21,8 @@ export interface BuildSetup {
   manual: string | null;
   /** The repository has the build file already */
   ready: boolean;
+  /** Toki started the first build itself (the build file was there, and the app may start runs) */
+  started: boolean;
 }
 
 /** GitHub's "new file" page with the build file filled in: one click on "Commit changes". */
@@ -61,8 +63,18 @@ export async function setUpBuild(db: Db, gh: GitHubClient, row: BuildRow, origin
   const repo = await gh.repo(row.installation_id, row.repo);
   const tree = await repo.tree(row.branch).catch(() => []);
   const has = tree.some((e) => e.path === BUILD_WORKFLOW_PATH);
-  let out: BuildSetup = { pr: null, manual: null, ready: has };
-  if (!has) {
+  let out: BuildSetup = { pr: null, manual: null, ready: has, started: false };
+  if (has) {
+    // Nothing would happen until the next push: start the first build now. Apps made before
+    // Toki asked for "Actions: write" may not; the developer then gets a link to do it.
+    out.started = await repo
+      .runWorkflow(BUILD_WORKFLOW_PATH.split("/").pop()!, row.branch)
+      .then(() => true)
+      .catch((e) => {
+        if (!(e instanceof GitHubError)) throw e;
+        return false;
+      });
+  } else {
     try {
       const pr = await repo.openPullRequest({
         base: row.branch,
@@ -79,11 +91,11 @@ export async function setUpBuild(db: Db, gh: GitHubClient, row: BuildRow, origin
           "Merge it, and the next push (or this merge) puts the game live.",
         ].join("\n"),
       });
-      out = { pr, manual: null, ready: false };
+      out = { pr, manual: null, ready: false, started: false };
     } catch (e) {
       // Usually: the app may not change workflow files. GitHub's own page does it with one click.
       if (!(e instanceof GitHubError)) throw e;
-      out = { pr: null, manual: manualBuildLink(row.repo, row.branch, origin), ready: false };
+      out = { pr: null, manual: manualBuildLink(row.repo, row.branch, origin), ready: false, started: false };
     }
   }
   await db.update("game_git", `game_id=eq.${row.game_id}`, {

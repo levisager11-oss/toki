@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../lib/i18n";
 import { githubConnectLink, githubManage, githubRepos, type GitHubInfo } from "../lib/ai";
+import { BUILD_WORKFLOW_PATH } from "../lib/hostingRules";
 import { gitBranches, gitBuild, gitDeploy, gitDisconnect, hostError, type GitChoice, type GitResult, type GitRow } from "../lib/hosting";
 
 /** The error code of a failed update, also for GitHub's own answers saved before Toki knew them. */
@@ -22,7 +23,7 @@ export function gitFailed(t: ReturnType<typeof useI18n>["t"], error: string | un
  * GitHub Actions builds this game on every push: where its build file is (a pull request to
  * merge, or GitHub's page to add it with one click), and "Run it once" on GitHub.
  */
-export function BuildInfo({ repo, branch, link, ready }: { repo: string; branch: string; link: string | null | undefined; ready?: boolean }) {
+export function BuildInfo({ repo, branch, link, ready, waiting }: { repo: string; branch: string; link: string | null | undefined; ready?: boolean; waiting?: boolean }) {
   const { t } = useI18n();
   const isPr = !!link && /\/pull\/\d+/.test(link);
   return (
@@ -32,6 +33,12 @@ export function BuildInfo({ repo, branch, link, ready }: { repo: string; branch:
         <p>
           <b>{isPr ? t("git.buildMergePr") : t("git.buildAddFile")}</b>{" "}
           <a className="btn" href={link} target="_blank" rel="noreferrer">{isPr ? t("git.buildOpenPr") : t("git.buildOpenNew")}</a>
+        </p>
+      )}
+      {waiting && !link && (
+        <p>
+          {t("git.buildFirst")}{" "}
+          <a className="btn" href={`https://github.com/${repo}/actions/workflows/${BUILD_WORKFLOW_PATH.split("/").pop()}`} target="_blank" rel="noreferrer">{t("git.buildRunNow")}</a>
         </p>
       )}
       <small>
@@ -146,7 +153,7 @@ export function GitHubFollow({ gameId, row, choice, onChoice, onChanged }: {
               <button type="button" className="btn primary" onClick={() => moreRepos(() => run("deploy"))} disabled={busy}>{t("git.giveAccess")}</button>
             </p>
           )}
-          {row.build === "action" && <BuildInfo repo={row.repo} branch={row.branch} link={row.build_pr} ready={row.status === "live" || !!row.last_sha} />}
+          {row.build === "action" && <BuildInfo repo={row.repo} branch={row.branch} link={row.build_pr} ready={row.status === "live" || !!row.last_sha} waiting={row.status === "waiting"} />}
           {row.build !== "action" && row.error === "needs_build" && (
             <p className="sub">
               {t("git.buildOffer")}{" "}

@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
-import { deployCommit, filesIn, gamesForPush, openRepo, readTar, validSignature } from "../server/gitDeploy";
+import { deployCommit, filesIn, gamesForPush, isSource, openRepo, readTar, validSignature } from "../server/gitDeploy";
 import type { Db } from "../server/db";
 import { GitHubError, type GitHubClient } from "../server/github";
 import type { Deps } from "../server/hosting";
@@ -96,6 +96,31 @@ describe("deploying a commit", () => {
     expect([...objects.keys()].sort()).toEqual(["b/22222222-2222-4222-8222-222222222222/game.js", "b/22222222-2222-4222-8222-222222222222/index.html"]);
     expect(updates[0]).toMatchObject({ status: "deploying", last_sha: "c".repeat(40), last_message: "Faster" });
     expect(updates.at(-1)).toMatchObject({ status: "live", error: null });
+  });
+});
+
+describe("a repository that holds the game's source", () => {
+  const db = {
+    select: async (table: string) => (table === "games" ? [{ id: "g", created_by: "dev" }] : table === "profiles" ? [{ id: "dev", role: "creator" }] : []),
+    update: async () => [],
+  } as unknown as Db;
+  const deploy = (files: Record<string, string>, folder = "") => {
+    const tarball = gzipSync(tar(files));
+    const gh = { repo: async () => ({ name: async () => "lu/moon-hop", tarball: async () => tarball, head: async () => ({ sha: "b".repeat(40), message: "x" }) }) } as unknown as GitHubClient;
+    return deployCommit({ db } as Deps, gh, { game_id: "g", installation_id: 7, repo: "lu/moon-hop", branch: "main", folder, created_by: "dev" });
+  };
+  const source = { "package.json": '{"scripts":{"build":"vite build"}}', "index.html": '<script type="module" src="/src/main.ts"></script>', "src/main.ts": "x" };
+
+  it("has to be built first when its folder is the one the build makes", async () => {
+    // toki.json names "dist", which only exists after the build.
+    expect(await deploy({ ...source, "toki.json": JSON.stringify({ folder: "dist" }) })).toEqual({ ok: false, error: "needs_build" });
+    expect(await deploy(source, "dist")).toEqual({ ok: false, error: "needs_build" });
+    expect(await deploy({ "project.godot": "", "toki.json": JSON.stringify({ folder: "export" }) })).toEqual({ ok: false, error: "needs_build" });
+  });
+
+  it("isn't offered when nothing in the repository could build the folder", async () => {
+    expect(await deploy({ "README.md": "#" }, "dist")).toEqual({ ok: false, error: "no_files" });
+    expect(isSource(filesIn(readTar(tar({ "package.json": '{"scripts":{"test":"x"}}' })), ""))).toBe(false);
   });
 });
 

@@ -651,7 +651,7 @@ export async function moveGame(deps: Deps, user: HostUser, gameId: string, o: Mo
         "resolution=merge-duplicates,return=minimal",
       );
       const setup = await setUpBuild(db, o.git.gh, r, o.origin ?? "https://www.playtoki.app").catch(() => null);
-      build = setup ? { ...setup, repo: r.repo, branch: r.branch } : { pr: null, manual: manualBuildLink(r.repo, r.branch, o.origin ?? "https://www.playtoki.app"), ready: false, repo: r.repo, branch: r.branch };
+      build = setup ? { ...setup, repo: r.repo, branch: r.branch } : { pr: null, manual: manualBuildLink(r.repo, r.branch, o.origin ?? "https://www.playtoki.app"), ready: false, started: false, repo: r.repo, branch: r.branch };
     }
   }
   return {

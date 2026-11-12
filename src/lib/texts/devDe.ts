@@ -266,6 +266,8 @@ export const devDe: Record<GroupKey["dev"], string> = {
   "git.buildAddFile": "Noch ein Schritt: Füg die Build-Datei auf GitHub hinzu (sie ist ausgefüllt, drück einfach „Commit changes“).",
   "git.buildOpenPr": "Pull Request öffnen",
   "git.buildOpenNew": "Auf GitHub hinzufügen",
+  "git.buildFirst": "Der erste Build startet mit dem nächsten Push auf den Branch. Um ihn sofort zu starten, drücke auf GitHub „Run workflow“.",
+  "git.buildRunNow": "Auf GitHub öffnen",
   "git.buildHow": "Jeder Build dauert ein bis zwei Minuten. Wie sie gelaufen sind:",
   "git.buildRuns": "Actions auf GitHub",
   "git.buildOffer": "In diesem Repository liegt der Quellcode des Spiels, der zuerst gebaut werden muss. Das kann GitHub Actions bei jedem Push machen.",

@@ -73,6 +73,13 @@ export function filesIn(files: TarFile[], folder: string): TarFile[] {
   return out;
 }
 
+/** Whether these files (the top of a repository) are a project that a build turns into the game. */
+export function isSource(root: TarFile[]): boolean {
+  if (root.some((f) => f.path === "project.godot")) return true;
+  const pkg = root.find((f) => f.path === "package.json");
+  return !!pkg && new TextDecoder().decode(pkg.data).includes('"build"');
+}
+
 export interface GitRow {
   game_id: string;
   installation_id: number;
@@ -160,6 +167,9 @@ export async function deployCommit(deps: Deps, gh: GitHubClient, row: GitRow, co
     const rootToki = filesIn(all, "").find((f) => f.path === "toki.json");
     if (!folder && rootToki) folder = readTokiJson(new TextDecoder().decode(rootToki.data)).folder ?? "";
     const files = filesIn(all, folder);
+    // The folder isn't in the repository, but the game's source is: the folder is where the
+    // build puts the game ("dist", "build"). It has to be built first, like below.
+    if (!files.length && folder && isSource(filesIn(all, ""))) throw new HostingError("needs_build");
     const total = files.reduce((n, f) => n + f.data.length, 0);
     if (total > MAX_GAME_BYTES) throw new HostingError("too_big");
     const tokiFile = files.find((f) => f.path === "toki.json") ?? rootToki;

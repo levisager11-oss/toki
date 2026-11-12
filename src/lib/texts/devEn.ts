@@ -264,6 +264,8 @@ export const devEn = {
   "git.buildAddFile": "One step left: add the build file on GitHub (it's filled in, just press “Commit changes”).",
   "git.buildOpenPr": "Open the pull request",
   "git.buildOpenNew": "Add it on GitHub",
+  "git.buildFirst": "The first build starts with the next push to the branch. To start it right away, press “Run workflow” on GitHub.",
+  "git.buildRunNow": "Open it on GitHub",
   "git.buildHow": "Each build takes a minute or two. How they went:",
   "git.buildRuns": "Actions on GitHub",
   "git.buildOffer": "This repository holds the game's source, which has to be built first. GitHub Actions can do that on every push.",
