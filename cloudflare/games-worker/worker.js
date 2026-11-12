@@ -18,8 +18,32 @@ async function pointer(env, site) {
 
 const text = (body, status) => new Response(body, { status, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
 
+// Files of a build never change once it is live (every upload is a new build id), so a copy in
+// Cloudflare's cache next to the Worker saves the R2 read. Bigger files are read from R2 each time.
+const CACHE_MAX_BYTES = 50 * 1024 * 1024;
+const CACHE_SECONDS = 24 * 60 * 60;
+
+/** Looks a file up in the edge cache; { body, size, etag } or null. */
+async function cached(cache, key) {
+  const hit = await cache.match(key);
+  if (!hit) return null;
+  return { body: hit.body, size: Number(hit.headers.get("content-length") ?? 0), etag: hit.headers.get("x-toki-etag") };
+}
+
+/** Keeps a copy of an R2 file for the next visitor (after the answer is on its way). */
+function remember(ctx, cache, key, obj, copy) {
+  ctx.waitUntil(
+    cache
+      .put(key, new Response(copy, { headers: { "content-length": String(obj.size), "cache-control": `public, max-age=${CACHE_SECONDS}`, "x-toki-etag": obj.httpEtag } }))
+      .catch(() => {}),
+  );
+}
+
+/** Does the browser's If-None-Match list (or "*") contain this etag? */
+const sameEtag = (header, etag) => !!header && !!etag && (header.trim() === "*" || header.split(",").some((t) => t.trim().replace(/^W\//, "") === etag.replace(/^W\//, "")));
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const reserved = new Set((env.RESERVED ?? "www").split(",").map((s) => s.trim()).filter(Boolean));
     const site = siteFrom(url.hostname, env.DOMAIN, reserved);
@@ -32,7 +56,25 @@ export default {
     let path = filePath(url.pathname);
     if (!path) return text("Not found", 404);
 
-    let obj = await env.BUCKET.get(`b/${live.build}/${path}`, { onlyIf: request.headers, range: request.headers });
+    // Plain GETs (no Range) can come from the edge cache; everything else asks R2.
+    const cache = request.method === "GET" && !request.headers.has("range") && ctx && typeof caches !== "undefined" ? caches.default : null;
+    const key = cache ? new Request(`${url.origin}/__build/${live.build}/${path.split("/").map(encodeURIComponent).join("/")}`) : null;
+
+    let obj = cache ? await cached(cache, key) : null;
+    if (obj && sameEtag(request.headers.get("if-none-match"), obj.etag)) {
+      obj.body?.cancel();
+      obj = { httpEtag: obj.etag, size: obj.size }; // no "body": answered with 304 below
+    } else if (obj) {
+      obj.httpEtag = obj.etag;
+    } else {
+      obj = await env.BUCKET.get(`b/${live.build}/${path}`, { onlyIf: request.headers, range: request.headers });
+      // Only a whole, unconditional answer is kept (not a 304 or a part of a file).
+      if (obj && cache && "body" in obj && !obj.range && obj.size <= CACHE_MAX_BYTES && !request.headers.has("if-none-match") && !request.headers.has("if-modified-since")) {
+        const [toBrowser, toCache] = obj.body.tee();
+        remember(ctx, cache, key, obj, toCache);
+        obj = { body: toBrowser, httpEtag: obj.httpEtag, size: obj.size, range: obj.range };
+      }
+    }
     if (!obj && !path.split("/").pop().includes(".")) {
       // A folder without its slash: send the browser to it, so the game's own links work.
       const inside = await env.BUCKET.head(`b/${live.build}/${path}/index.html`);

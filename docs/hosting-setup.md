@@ -113,3 +113,6 @@ must be built first (`npm run build`, engine exports) use the GitHub Action show
 - Per game: 100 MB, 3000 files. Per developer: 1 GB. All games: 9.5 GB.
 - Worker free plan: 100,000 requests a day. A game loads roughly 5 to 50 files, so that's about
   2,000 to 20,000 plays a day. If Toki outgrows it, the Workers paid plan is $5 a month.
+- Files up to 50 MB are also kept in Cloudflare's cache for a day (a build's files never change),
+  so a popular game costs few R2 reads. That saves R2 reads and time only: every file is still one
+  Worker request, cached or not, so it doesn't raise the 100,000 a day.
