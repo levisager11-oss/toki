@@ -257,6 +257,8 @@ export interface BuildSetup {
   manual: string | null;
   /** the repository has the build file already */
   ready: boolean;
+  /** Toki started the first build itself */
+  started: boolean;
 }
 /** Engines GitHub Actions can't build (their editor needs a license): they need an exported web build. */
 export type NoBuild = "Unity" | "GameMaker" | "Construct" | "Godot C#" | "unknown";

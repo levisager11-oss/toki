@@ -124,7 +124,7 @@ Toki: `AI_API_KEY`, `ANTHROPIC_API_KEY`, and for a GitHub App made by hand `GITH
 `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY` (the whole `.pem`).
 A GitHub App made by hand needs: callback URL `https://www.playtoki.app/connect/github`, "Request
 user authorization (OAuth) during installation" on, webhook off, repository permissions Contents,
-Pull requests and Workflows read and write, installable by any account.
+Pull requests, Workflows and Actions read and write, installable by any account.
 
 **Workflows permission (for games that must be built first).** Toki adds a build file
 (`.github/workflows/toki.yml`) to a game's repository with a pull request, and GitHub only lets an
@@ -133,6 +133,11 @@ this don't have it: add it on GitHub (Settings → Developer settings → GitHub
 Permissions & events → Repository permissions → Workflows), then each account that installed the
 app approves the new permission once. Until then, Toki gives developers GitHub's "new file" page
 with the build file filled in instead (one click on "Commit changes"), so it works either way.
+
+**Actions permission (to start the first build).** When a game's repository has the build file
+already, Toki starts the first build itself, which needs "Actions: Read and write". Apps set up
+before this don't have it (add it the same way). Until then, the first build starts with the next
+push, and Toki shows the developer a link to GitHub's "Run workflow" button.
 
 ## How the limits work
 

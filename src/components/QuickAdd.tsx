@@ -384,7 +384,7 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
         )}
       </ol>
       {err && <p className="error" role="alert">{err}</p>}
-      {building && <BuildInfo repo={building.repo} branch={building.branch} link={building.pr ?? building.manual} ready={building.ready} />}
+      {building && <BuildInfo repo={building.repo} branch={building.branch} link={building.pr ?? building.manual} ready={building.ready} waiting={building.ready && !building.started} />}
       {phase === "done" && game && (
         <div className="actions">
           {steps.files === "ok" && <button type="button" className="btn primary" onClick={() => navigate(`/game/${game.slug}`)}>{t("quick.open")}</button>}

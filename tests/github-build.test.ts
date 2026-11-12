@@ -7,7 +7,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ACTIONS_AUDIENCE, ACTIONS_ISSUER, gameForAction, looksLikeJwt, verifyActionToken } from "../server/actionsAuth";
-import { buildKind, manualBuildLink } from "../server/gitBuild";
+import { buildKind, manualBuildLink, setUpBuild } from "../server/gitBuild";
+import { GitHubError } from "../server/github";
 import { gamesForPush } from "../server/gitDeploy";
 import { buildWorkflow } from "../src/lib/hostingRules";
 import type { GitHubClient } from "../server/github";
@@ -131,5 +132,44 @@ describe("the upload script's --build", () => {
     const r = run(dir);
     expect(r.ok).toBe(false);
     expect(r.out).toMatch(/Unity project.*own editor/);
+  });
+});
+
+describe("setting up the build", () => {
+  const row = { game_id: "g1", installation_id: 7, repo: "lu/moon-hop", branch: "main" };
+  const db = () => fakeDb({ game_git: [{ game_id: "g1", repo: "lu/moon-hop", branch: "main", build: "none" }] });
+  const client = (o: { has: boolean; run?: () => Promise<void> }) => {
+    const calls: string[] = [];
+    const gh = {
+      repo: async () => ({
+        tree: async () => (o.has ? [{ path: ".github/workflows/toki.yml", type: "blob" }] : []),
+        runWorkflow: async (file: string, branch: string) => {
+          calls.push(`run ${file} on ${branch}`);
+          await o.run?.();
+        },
+        openPullRequest: async () => {
+          calls.push("pr");
+          return "https://github.com/lu/moon-hop/pull/3";
+        },
+      }),
+    } as unknown as GitHubClient;
+    return { gh, calls };
+  };
+
+  it("starts the first build when the build file is in the repository already", async () => {
+    const { gh, calls } = client({ has: true });
+    expect(await setUpBuild(db(), gh, row, "https://www.playtoki.app")).toEqual({ pr: null, manual: null, ready: true, started: true });
+    expect(calls).toEqual(["run toki.yml on main"]);
+  });
+
+  it("leaves the first build to the developer when GitHub doesn't let the app start it", async () => {
+    const { gh } = client({ has: true, run: async () => { throw new GitHubError("GitHub 403: Resource not accessible by integration", 403); } });
+    expect(await setUpBuild(db(), gh, row, "https://www.playtoki.app")).toEqual({ pr: null, manual: null, ready: true, started: false });
+  });
+
+  it("opens a pull request with the build file when it is missing, and starts nothing", async () => {
+    const { gh, calls } = client({ has: false });
+    expect(await setUpBuild(db(), gh, row, "https://www.playtoki.app")).toEqual({ pr: "https://github.com/lu/moon-hop/pull/3", manual: null, ready: false, started: false });
+    expect(calls).toEqual(["pr"]);
   });
 });

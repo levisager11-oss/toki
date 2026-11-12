@@ -13,8 +13,9 @@ export function githubManifest(origin: string, name = "Toki Connect") {
     setup_on_update: false,
     public: true,
     hook_attributes: { url: `${origin}/api/github`, active: true },
-    // workflows: to add the build file for games that must be built first (server/gitBuild.ts)
-    default_permissions: { contents: "write", pull_requests: "write", metadata: "read", workflows: "write" },
+    // workflows: to add the build file for games that must be built first (server/gitBuild.ts);
+    // actions: to start the first build when that file is in the repository already
+    default_permissions: { contents: "write", pull_requests: "write", metadata: "read", workflows: "write", actions: "write" },
     default_events: ["push"],
   };
 }

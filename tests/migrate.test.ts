@@ -169,7 +169,7 @@ describe("moving a game", () => {
   it("copies the built game from its site, and lets GitHub Actions build every push from now on", async () => {
     const out = await moveGame(deps, DEV, GAME, opts());
     expect(out).toMatchObject({ play_url: "https://moon-hop.playtoki.app/", from: ROOT, files: 15, saves: true, source: "site", repoHelped: { repo: "lu/moon-hop", files: 0 } });
-    expect(out.build).toEqual({ pr: "https://github.com/lu/moon-hop/pull/1", manual: null, ready: false, repo: "lu/moon-hop", branch: "main" });
+    expect(out.build).toEqual({ pr: "https://github.com/lu/moon-hop/pull/1", manual: null, ready: false, started: false, repo: "lu/moon-hop", branch: "main" });
     expect(puts).toHaveLength(15);
     expect(tables.games[0]).toMatchObject({ play_url: "https://moon-hop.playtoki.app/", hosted_site: "moon-hop", moved_from: ROOT, moved_at: "2026-11-19T10:00:00.000Z", controls: "Space to hop" });
     // Like a game that was on Toki from the start: it follows its repository.

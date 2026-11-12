@@ -165,6 +165,10 @@ export function github(cfg: ServerEnv["github"], fetchImpl: typeof fetch = fetch
           const r = await call<{ state: string; merged_at: string | null }>(`/repos/${repo}/pulls/${n}`, token);
           return r.merged_at ? "merged" : r.state === "open" ? "open" : "closed";
         },
+        /** Starts a workflow of the repository on a branch (it must allow "workflow_dispatch"). Needs the app's "Actions: write". */
+        async runWorkflow(file: string, branch: string): Promise<void> {
+          await call(`/repos/${repo}/actions/workflows/${enc(file)}/dispatches`, token, { method: "POST", body: JSON.stringify({ ref: branch }) });
+        },
         /** One commit with all changed files on a new branch, then a pull request. Returns its link. */
         async openPullRequest(p: { base: string; branch: string; files: Record<string, string>; title: string; body: string; message: string }): Promise<string> {
           const ref = await call<{ object: { sha: string } }>(`/repos/${repo}/git/ref/heads/${enc(p.base)}`, token);
