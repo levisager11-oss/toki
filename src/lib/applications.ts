@@ -13,8 +13,25 @@ export interface Application {
   status: ApplicationStatus;
   review_note: string | null;
   reviewed_at: string | null;
+  /** questions from admins and the applicant's answers, oldest first */
+  notes: ApplicationNote[];
   created_at: string;
   applicant?: { username: string } | null;
+}
+
+export interface ApplicationNote {
+  by: "admin" | "applicant";
+  text: string;
+  at: string;
+}
+
+export const NOTE_LIMITS = { text: 1000, count: 20 } as const;
+
+/** Adds a question (admins) or an answer (the applicant) to an open application; returns all notes. */
+export async function addNote(id: string, text: string): Promise<ApplicationNote[]> {
+  const { data, error } = await supabase.rpc("application_note", { p_id: id, p_text: text.trim() });
+  if (error) throw new Error(/closed|not_found/.test(error.message) ? "closed" : /full/.test(error.message) ? "full" : "error");
+  return (data ?? []) as ApplicationNote[];
 }
 
 export const APPLY_LIMITS = { aboutMin: 20, about: 2000, links: 1000 } as const;

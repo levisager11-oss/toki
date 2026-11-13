@@ -113,6 +113,10 @@ export function Notifications() {
           line: `${t(`mod.report.${d.what ?? "message"}`, { title: d.title ?? "" })} ${t(d.outcome === "dismissed" ? "mod.reportKept" : "mod.reportRemoved")}`,
           to: "/terms",
         };
+      case "application":
+        return d.event === "answer"
+          ? { line: t("notif.appAnswer", { who }), to: "/applications" }
+          : { line: t("notif.appQuestion"), to: "/apply" };
       default:
         // A kind this version of Toki doesn't know yet.
         return { line: t("notif.other"), to: "/updates" };

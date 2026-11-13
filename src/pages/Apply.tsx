@@ -5,6 +5,7 @@ import { useI18n } from "../lib/i18n";
 import { ago } from "../lib/feedback";
 import { apply, APPLY_LIMITS, ApplyError, myApplication, withdraw, type Application } from "../lib/applications";
 import { canCreate } from "../lib/types";
+import { ApplicationNotes } from "../components/ApplicationNotes";
 import { useTitle } from "../lib/useTitle";
 
 /** Applying for a developer account (/apply). */
@@ -89,6 +90,7 @@ export function Apply() {
             </>
           )}
         </div>
+        <ApplicationNotes app={app} as="applicant" />
         {err && <p className="error" role="alert">{err}</p>}
         <div className="actions">
           <button type="button" className="btn ghost-danger" onClick={takeBack} disabled={busy}>{t("apply.withdraw")}</button>

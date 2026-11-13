@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useI18n } from "../lib/i18n";
 import { ago } from "../lib/feedback";
 import { SummaryButton } from "../components/AiBits";
+import { ApplicationNotes } from "../components/ApplicationNotes";
 import { summarizeApplication } from "../lib/assist";
 import {
   APPLICATIONS_CHANGED, developers, linkParts, openApplications, reviewApplication, setDeveloper, type Application,
@@ -140,6 +141,7 @@ function ApplicationCard({ app, onDone }: { app: Application; onDone: (approved:
         </div>
       )}
       <SummaryButton label={t("apps.aiSummary")} load={() => summarizeApplication(app.id, lang)} />
+      <ApplicationNotes app={app} as="admin" />
       <div className="form rv-decide">
         <label htmlFor={`note-${app.id}`}>{t("apps.note")}</label>
         <textarea id={`note-${app.id}`} rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("apps.notePlaceholder")} />
