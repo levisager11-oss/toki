@@ -87,8 +87,23 @@ export const AGENT_TOOLS = [
   },
 ];
 
-/** Writes the changed and new files (not deleted ones) as one JSON file for Toki. */
-export const CHANGES_COMMAND = `cd ${REPO_PATH} && git add -A && python3 -c "import json,subprocess;p=subprocess.check_output(['git','diff','--cached','--name-only','--diff-filter=AM']).decode().split(chr(10));json.dump({f:open(f,encoding='utf-8').read() for f in p if f},open('/mnt/session/outputs/${CHANGES_FILE}','w'))"`;
+/**
+ * Writes the changed and new files (not deleted ones) as one JSON file for Toki. With python3, or
+ * node where the sandbox has no python3.
+ */
+const OUT = `/mnt/session/outputs/${CHANGES_FILE}`;
+const PY = `python3 -c "import json,subprocess;p=subprocess.check_output(['git','diff','--cached','--name-only','--diff-filter=AM']).decode().split(chr(10));json.dump({f:open(f,encoding='utf-8').read() for f in p if f},open('${OUT}','w'))"`;
+const NODE = `node -e "const c=require('child_process'),fs=require('fs');const p=c.execSync('git diff --cached --name-only --diff-filter=AM').toString().split('\\n').filter(Boolean);fs.writeFileSync('${OUT}',JSON.stringify(Object.fromEntries(p.map(f=>[f,fs.readFileSync(f,'utf8')]))))"`;
+export const CHANGES_COMMAND = `cd ${REPO_PATH} && git add -A && mkdir -p /mnt/session/outputs && if command -v python3 >/dev/null; then ${PY}; else ${NODE}; fi`;
+
+/** A session error (its type, from Anthropic) as one of the run page's error codes. */
+export function errorFor(code: string): string {
+  if (code === "billing_error") return "ai_no_credit";
+  if (code === "model_overloaded_error" || code === "model_rate_limited_error") return "ai_busy";
+  if (code === "repository_not_found_error") return "github_not_found";
+  if (/^repository_/.test(code)) return "github_error";
+  return "ai_provider_error";
+}
 
 /** The first message of a run: the task, the developer's notes and how to hand back the changes. */
 export function kickoff(job: Job, script: string, lang: "en" | "de"): string {
@@ -108,7 +123,7 @@ export function kickoff(job: Job, script: string, lang: "en" | "de"): string {
 export type AgentEvent =
   | { type: "custom_tool_use"; id: string; name: string; input: Record<string, unknown> }
   | { type: "idle"; stop: string }
-  | { type: "error"; message: string }
+  | { type: "error"; message: string; code?: string }
   | { type: "other" };
 
 export interface AgentDeps {
@@ -196,12 +211,16 @@ export async function agentStep(job: Job, deps: AgentDeps): Promise<StepResult &
   let stop: string | null = null;
   let idles = 0;
   let lastError = "";
+  let lastCode = "";
   for (const e of events) {
     if (e.type === "idle") {
       stop = e.stop;
       idles++;
     }
-    if (e.type === "error") lastError = e.message;
+    if (e.type === "error") {
+      lastError = e.message;
+      lastCode = e.code ?? "";
+    }
   }
   for (const e of events) {
     if (e.type !== "custom_tool_use" || handled.has(e.id)) continue;
@@ -221,11 +240,12 @@ export async function agentStep(job: Job, deps: AgentDeps): Promise<StepResult &
     await deps.reply(session, e.id, "Unknown tool.");
   }
 
-  if (s.status === "terminated") return fail("ai_provider_error", (lastError || "The agent's session ended without finishing.").slice(0, 500), s.cost);
+  if (s.status === "terminated") return fail(errorFor(lastCode), (lastError || "The agent's session ended without finishing.").slice(0, 500), s.cost);
   if (s.status === "idle") {
     if (stop === "budget_reached") return fail("agent_budget", null, s.cost);
-    // Any other reason it stopped (e.g. it gave up after errors): end the run instead of waiting.
-    if (stop && stop !== "end_turn" && stop !== "requires_action") return fail("ai_provider_error", (lastError || `The agent stopped (${stop}).`).slice(0, 500), s.cost);
+    if (stop === "refusal") return fail("ai_refused", lastError.slice(0, 500) || null, s.cost);
+    // Any other reason it stopped (retries_exhausted: model requests kept failing): end the run instead of waiting.
+    if (stop && stop !== "end_turn" && stop !== "requires_action") return fail(stop === "retries_exhausted" && !lastCode ? "ai_busy" : errorFor(lastCode), (lastError || `The agent stopped (${stop}).`).slice(0, 500), s.cost);
     // A new stop without finish (not one seen before, e.g. just before a reminder): remind it once.
     if (stop === "end_turn" && idles > (state.idleSeen ?? 0)) {
       state.idleSeen = idles;
