@@ -5,6 +5,7 @@ import { ago } from "../lib/feedback";
 import { handleReport, listReports, type Report } from "../lib/social";
 import { handleContentReport, listContentReports, REPORT_NOTE_MAX, type ContentReport } from "../lib/account";
 import { Avatar } from "../components/Avatar";
+import { assistError, checkReports, useAiFeature } from "../lib/assist";
 import { useTitle } from "../lib/useTitle";
 
 /** Admins: reported chat messages, and reported games, profiles, feedback posts and ideas. */
@@ -19,6 +20,26 @@ export function Reports() {
   const [days, setDays] = useState(7);
   const [err, setErr] = useState("");
   const [reload, setReload] = useState(0);
+  // The AI's first look at open reports (an admin still decides).
+  const aiOn = useAiFeature("moderate");
+  const [checking, setChecking] = useState(false);
+  const [aiMsg, setAiMsg] = useState("");
+  const unchecked = (list ?? []).some((r) => !r.ai_verdict) || (other ?? []).some((r) => !r.ai_verdict);
+  const askAi = async () => {
+    setChecking(true);
+    setAiMsg("");
+    try {
+      // A few reports per call, until every open one has a first look.
+      for (let i = 0; i < 10; i++) {
+        const r = await checkReports(lang);
+        if (!r.more || !r.checked) break;
+      }
+      setReload((n) => n + 1);
+    } catch (e) {
+      setAiMsg(t(`assist.err.${assistError(e)}`));
+    }
+    setChecking(false);
+  };
 
   useEffect(() => {
     let alive = true;
@@ -72,6 +93,13 @@ export function Reports() {
           </select>
         </label>
       )}
+      {open && aiOn && unchecked && (
+        <div className="setup-row">
+          <button type="button" className="btn" onClick={askAi} disabled={checking}>{checking ? t("rep.ai.checking") : t("rep.ai.check")}</button>
+          <small>{t("rep.ai.help")}</small>
+        </div>
+      )}
+      {aiMsg && <p className="error" role="alert">{aiMsg}</p>}
       {err && <p className="error" role="alert">{err}</p>}
       {list === null ? <p className="msg">{t("loading")}</p> : list.length === 0 ? <p className="msg">{t("rep.none")}</p> : (
         <ul className="report-list">
@@ -82,6 +110,7 @@ export function Reports() {
                 <time className="sub">{ago(r.created_at, lang)}</time>
               </div>
               <blockquote>{r.body}</blockquote>
+              <AiVerdict verdict={r.ai_verdict} reason={r.ai_reason} />
               <p className="sub">
                 {t("rep.by", { who: r.reporter ? `@${r.reporter.username}` : "?" })}
                 {r.reason && <> · {lang === "de" ? `„${r.reason}“` : `“${r.reason}”`}</>}
@@ -113,6 +142,7 @@ export function Reports() {
                 <time className="sub">{ago(r.created_at, lang)}</time>
               </div>
               {r.reason && <blockquote>{r.reason}</blockquote>}
+              <AiVerdict verdict={r.ai_verdict} reason={r.ai_reason} />
               <p className="sub">
                 {t("rep.by", { who: r.reporter ? `@${r.reporter.username}` : "?" })}
                 {r.owner && <> · {t("rep.other.owner")} <Link to={`/u/${r.owner.username}`}>@{r.owner.username}</Link></>}
@@ -140,5 +170,17 @@ export function Reports() {
         </ul>
       )}
     </section>
+  );
+}
+
+/** The AI's first look at a report, if there is one. */
+function AiVerdict({ verdict, reason }: { verdict?: "remove" | "keep" | "unsure" | null; reason?: string | null }) {
+  const { t } = useI18n();
+  if (!verdict) return null;
+  return (
+    <p className={`check ${verdict === "remove" ? "warn" : verdict === "keep" ? "good" : ""} ai-verdict`}>
+      <b>{t(`rep.ai.verdict.${verdict}`)}</b>
+      {reason && <> · {reason}</>} <small className="sub">({t("rep.ai.note")})</small>
+    </p>
   );
 }

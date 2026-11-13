@@ -12,8 +12,9 @@
 import { createHash } from "node:crypto";
 import { AiError } from "../server/ai/provider.js";
 import { AI_FEATURES, budgetedCompletion, featureOn, type AiFeature } from "../server/ai/budget.js";
+import { budgetedBatch, collectBatch } from "../server/ai/batch.js";
 import {
-  applicationPrompt, describePrompt, improvePrompt, improveText, inboxPrompt, plain, readDescribe, readImprove, readRelease, readSimilar, readSuggest,
+  applicationPrompt, describePrompt, moderatePrompt, readModerate, type ReportItem, improvePrompt, improveText, inboxPrompt, plain, readDescribe, readImprove, readRelease, readSimilar, readSuggest,
   readTranslation, releasePrompt, similarPrompt, suggestPrompt, translatePrompt, type CatalogGame, type ImprovePost, type InboxPost, type Lang,
 } from "../server/assist/prompts.js";
 import { linksIn, readPage } from "../server/assist/pages.js";
@@ -26,6 +27,7 @@ import { githubConfigured } from "../server/env.js";
 import { github, GitHubError } from "../server/github.js";
 import { body, context, isUuid, json, type Ctx } from "../server/http.js";
 import type { ChatMessage } from "../server/ai/provider.js";
+import { SCHEMAS } from "../server/assist/schemas.js";
 import { basics, gameFolder, readScan, readTokiJson, scanPrompt, withToki, type ScanFile } from "../server/assist/scan.js";
 
 // Vercel gives this function 5 minutes (vercel.json). Players and developers wait for most
@@ -59,10 +61,14 @@ export async function POST(request: Request) {
         return await improve(ctx, b, lang);
       case "application":
         return await application(ctx, b, lang);
+      case "moderate":
+        return await moderate(ctx, lang);
       case "help":
         return await help(ctx, b, lang);
       case "help_setup":
         return await helpSetup(ctx, b);
+      case "help_learning":
+        return await helpLearning(ctx, b);
       case "test":
         return await test(ctx, b);
       default:
@@ -77,7 +83,9 @@ function failed(e: unknown): Response {
   if (e instanceof DbError && /^(ai_disabled|ai_off)$/.test(e.message)) return json({ error: "free_off" }, 403);
   if (e instanceof DbError && /^(not_allowed|rate_limited|cap_reached|quota_reached)$/.test(e.message)) return json({ error: e.message }, e.message === "not_allowed" ? 403 : 429);
   if (e instanceof AiError) {
-    const code = e.code === "not_configured" ? "free_off" : e.code === "refused" ? "ai_bad_answer" : `ai_${e.code}`;
+    // A key Anthropic doesn't accept, or an account without credits: players can't do anything
+    // about it (the AI page shows admins the exact reason).
+    const code = e.code === "not_configured" ? "free_off" : e.code === "bad_key" || e.code === "no_credit" ? "ai_unavailable" : `ai_${e.code}`;
     return json({ error: code, message: errorDetail(e) ?? "" }, 502);
   }
   if (e instanceof GitHubError) return json({ error: "github_error", message: errorDetail(e) ?? "" }, 502);
@@ -97,10 +105,19 @@ const MAX_TOKENS: Record<Exclude<AiFeature, "connect" | "connect_steps" | "conne
   release: 4000,
   describe: 6000,
   summary: 6000,
+  moderate: 6000,
 };
 
-/** One call to the feature's model. */
-async function ask(ctx: Ctx, feature: keyof typeof MAX_TOKENS, messages: ChatMessage[], temperature = 0.2, timeoutMs = TIMEOUT_MS): Promise<string> {
+/**
+ * One call to the feature's model. With a schema (structured outputs) the answer is JSON of that
+ * shape; onText gets the answer piece by piece while it's written.
+ */
+async function ask(
+  ctx: Ctx,
+  feature: keyof typeof MAX_TOKENS,
+  messages: ChatMessage[],
+  opts: { schema?: Record<string, unknown>; timeoutMs?: number; onText?: (delta: string) => void } = {},
+): Promise<string> {
   const c = await budgetedCompletion({
     db: ctx.db,
     keys: { openai_compatible: "", anthropic: ctx.env.anthropicKey },
@@ -108,8 +125,9 @@ async function ask(ctx: Ctx, feature: keyof typeof MAX_TOKENS, messages: ChatMes
     feature,
     messages,
     maxTokens: MAX_TOKENS[feature],
-    temperature,
-    timeoutMs,
+    timeoutMs: opts.timeoutMs ?? TIMEOUT_MS,
+    schema: opts.schema,
+    onText: opts.onText,
   });
   return c.text;
 }
@@ -165,7 +183,7 @@ async function translate(ctx: Ctx, user: Db, b: Record<string, unknown>) {
       /* translate again */
     }
   }
-  const answer = await ask(ctx, "translate", translatePrompt(texts, to), 0.1);
+  const answer = await ask(ctx, "translate", translatePrompt(texts, to), { schema: SCHEMAS.translate });
   const out = readTranslation(answer, texts);
   if (!out) return json({ error: "ai_bad_answer" }, 502);
   const stored = JSON.stringify(out);
@@ -191,7 +209,7 @@ async function similar(ctx: Ctx, user: Db, b: Record<string, unknown>) {
     `select=id,kind,title,body,vote_count&hidden=eq.false&status=in.(open,planned,in_progress)&${gameId ? `game_id=eq.${gameId}` : "game_id=is.null"}&order=vote_count.desc&limit=150`,
   );
   if (!list.length) return json({ posts: [] });
-  const answer = await ask(ctx, "similar", similarPrompt({ kind, title, body: text }, list), 0);
+  const answer = await ask(ctx, "similar", similarPrompt({ kind, title, body: text }, list), { schema: SCHEMAS.similar });
   const posts = readSimilar(answer, list).map((id) => list.find((p) => p.id === id)!);
   return json({ posts: posts.map((p) => ({ id: p.id, kind: p.kind, title: p.title, vote_count: p.vote_count })) });
 }
@@ -232,7 +250,7 @@ async function suggest(ctx: Ctx, b: Record<string, unknown>, lang: Lang) {
       return json({ games: saved.games.filter((g) => byId.has(g.id) && !seen.has(g.id)), cached: true });
     }
   }
-  const answer = await ask(ctx, "suggest", suggestPrompt(liked.slice(0, 10), played.slice(0, 10), candidates, lang), 0.4);
+  const answer = await ask(ctx, "suggest", suggestPrompt(liked.slice(0, 10), played.slice(0, 10), candidates, lang), { schema: SCHEMAS.suggest });
   const games = readSuggest(answer, candidates);
   await ctx.db
     .insert("ai_suggestions", { user_id: ctx.user.id, lang, basis, games, created_at: new Date().toISOString() }, "resolution=merge-duplicates,return=minimal")
@@ -272,7 +290,7 @@ async function release(ctx: Ctx, b: Record<string, unknown>, lang: Lang) {
   }
   const notes = str(b.notes, 1500);
   if (!notes && !fixes.length && !commits.length) return json({ error: "nothing_to_write", commitsError }, 400);
-  const answer = await ask(ctx, "release", releasePrompt({ game: game?.title ?? null, lang, notes, fixes, commits, lastVersion: last?.version ?? null }), 0.3);
+  const answer = await ask(ctx, "release", releasePrompt({ game: game?.title ?? null, lang, notes, fixes, commits, lastVersion: last?.version ?? null }), { schema: SCHEMAS.release });
   const draft = readRelease(answer);
   if (!draft) return json({ error: "ai_bad_answer" }, 502);
   return json({ ...draft, commits: commits.length, commitsError });
@@ -298,7 +316,7 @@ async function describe(ctx: Ctx, b: Record<string, unknown>) {
       de: str(b.description_de, 1000),
       page: page?.ok ? { title: page.title, text: page.text } : null,
     }),
-    0.5,
+    { schema: SCHEMAS.describe },
   );
   const out = readDescribe(answer);
   return out ? json(out) : json({ error: "ai_bad_answer" }, 502);
@@ -368,7 +386,7 @@ async function scan(ctx: Ctx, b: Record<string, unknown>) {
   let ai = false;
   if (await featureOn(ctx.db, "describe")) {
     try {
-      proposal = readScan(await ask(ctx, "describe", scanPrompt(files, paths, proposal, name), 0.3), proposal);
+      proposal = readScan(await ask(ctx, "describe", scanPrompt(files, paths, proposal, name), { schema: SCHEMAS.scan }), proposal);
       ai = true;
     } catch {
       /* the AI is a help here, not a must: the simple checks stay */
@@ -409,7 +427,7 @@ async function summary(ctx: Ctx, b: Record<string, unknown>, lang: Lang) {
     answered: r.answered,
     status: r.status,
   }));
-  const answer = await ask(ctx, "summary", inboxPrompt(posts, lang), 0.2);
+  const answer = await ask(ctx, "summary", inboxPrompt(posts, lang));
   return json({ text: plain(answer, 4000) });
 }
 
@@ -449,7 +467,7 @@ async function improve(ctx: Ctx, b: Record<string, unknown>, lang: Lang) {
     device: r.device,
     reply: r.feedback_replies?.[0]?.body ?? "",
   }));
-  const out = readImprove(await ask(ctx, "summary", improvePrompt(game?.title ?? null, posts, lang), 0.2), posts);
+  const out = readImprove(await ask(ctx, "summary", improvePrompt(game?.title ?? null, posts, lang), { schema: SCHEMAS.improve }), posts);
   if (!out) return json({ error: "ai_bad_answer" }, 502);
   return json({ prompt: improveText(game, out.tasks, lang), total: posts.length, used: out.used, skipped: out.skipped });
 }
@@ -459,8 +477,60 @@ async function application(ctx: Ctx, b: Record<string, unknown>, lang: Lang) {
   const [app] = await ctx.db.select<{ about: string; links: string }>("developer_applications", `id=eq.${b.id}&select=about,links`);
   if (!app) return json({ error: "not_found" }, 404);
   const pages = await Promise.all(linksIn(`${app.links}\n${app.about}`).map((u) => readPage(u)));
-  const answer = await ask(ctx, "summary", applicationPrompt(app, pages, lang), 0.2);
+  const answer = await ask(ctx, "summary", applicationPrompt(app, pages, lang));
   return json({ text: plain(answer, 2000) });
+}
+
+// ---------- a first look at reports (admins) ----------
+
+/** Open reports the AI hasn't looked at yet: at most this many of each kind per call. */
+const MODERATE_BATCH = 10;
+
+/**
+ * Admins: the AI's first look at open reports it hasn't seen yet (remove / keep / unsure, with a
+ * reason), kept on each report. An admin always decides; nothing is removed here.
+ */
+async function moderate(ctx: Ctx, lang: Lang) {
+  if (ctx.user.role !== "admin") return json({ error: "not_allowed" }, 403);
+  const [messages, content] = await Promise.all([
+    ctx.db.select<{ id: number; body: string; reason: string }>("message_reports", `handled_at=is.null&ai_checked_at=is.null&select=id,body,reason&order=created_at&limit=${MODERATE_BATCH}`),
+    ctx.db.select<{ id: number; kind: ReportItem["kind"]; target: string; category: string; reason: string; title: string }>(
+      "content_reports",
+      `handled_at=is.null&ai_checked_at=is.null&select=id,kind,target,category,reason,title&order=created_at&limit=${MODERATE_BATCH}`,
+    ),
+  ]);
+  type Entry = { table: "message_reports" | "content_reports"; id: number; item: ReportItem };
+  const entries: Entry[] = messages.map((m) => ({ table: "message_reports", id: m.id, item: { kind: "message", category: "", reason: m.reason, text: m.body } }));
+  // The reported thing as it is now (what the report saved, if it's gone).
+  const one = async <T,>(table: string, id: string, cols: string) => (isUuid(id) ? (await ctx.db.select<T>(table, `id=eq.${id}&select=${cols}`))[0] : undefined);
+  for (const r of content) {
+    let text = r.title;
+    if (r.kind === "feedback") {
+      const p = await one<{ title: string; body: string }>("feedback_posts", r.target, "title,body");
+      if (p) text = `${p.title}\n${p.body}`;
+    } else if (r.kind === "idea") {
+      const p = await one<{ title: string; body: string }>("game_ideas", r.target, "title,body");
+      if (p) text = `${p.title}\n${p.body}`;
+    } else if (r.kind === "game") {
+      const g = await one<{ title: string; description: string; controls: string }>("games", r.target, "title,description,controls");
+      if (g) text = `Game "${g.title}"\n${g.description}\n${g.controls}`;
+    } else if (r.kind === "profile") {
+      const p = await one<{ username: string; bio: string }>("profiles", r.target, "username,bio");
+      if (p) text = `Username: ${p.username}\nBio: ${p.bio}`;
+    }
+    entries.push({ table: "content_reports", id: r.id, item: { kind: r.kind, category: r.category, reason: r.reason, text } });
+  }
+  const todo = entries;
+  if (!todo.length) return json({ checked: 0, more: false });
+  const verdicts = readModerate(await ask(ctx, "moderate", moderatePrompt(todo.map((e) => e.item), lang), { schema: SCHEMAS.moderate }), todo.length);
+  if (!verdicts.size) return json({ error: "ai_bad_answer" }, 502);
+  const now = new Date().toISOString();
+  await Promise.all(
+    [...verdicts].map(([i, v]) =>
+      ctx.db.update(todo[i].table, `id=eq.${todo[i].id}&handled_at=is.null`, { ai_verdict: v.verdict, ai_reason: v.reason, ai_checked_at: now }).catch(() => {}),
+    ),
+  );
+  return json({ checked: verdicts.size, more: messages.length === MODERATE_BATCH || content.length === MODERATE_BATCH });
 }
 
 // ---------- the game helper ("Ask AI") ----------
@@ -479,10 +549,15 @@ async function help(ctx: Ctx, b: Record<string, unknown>, lang: Lang) {
     const mine = `game_id=eq.${b.game_id}&user_id=eq.${ctx.user.id}`;
     // Where the player is: their save as the game page has it, and their best score and playtime.
     const [[h], [best], [time]] = await Promise.all([
-      ctx.db.select<{ notes: string; guide: string }>("game_help", `game_id=eq.${b.game_id}&select=notes,guide`),
+      ctx.db.select<{ notes: string; guide: string } & Learning>("game_help", `game_id=eq.${b.game_id}&select=notes,guide,learn_batch,learn_usage,learn_started_at`),
       ctx.db.select<{ score: number }>("game_scores", `${mine}&board=eq.&select=score`).catch(() => []),
       ctx.db.select<{ seconds: number }>("playtime", `${mine}&select=seconds`).catch(() => []),
     ]);
+    // A guide that was being learned may be ready by now.
+    if (h?.learn_batch) {
+      const r = await collectGuide(ctx, b.game_id, h).catch(() => null);
+      if (r?.guide) h.guide = r.guide;
+    }
     const save = str(b.save, MAX_SAVE_SUMMARY);
     const ago = typeof b.saved_at === "number" ? Math.round((Date.now() - b.saved_at) / 1000) : NaN;
     player = {
@@ -503,9 +578,32 @@ async function help(ctx: Ctx, b: Record<string, unknown>, lang: Lang) {
       guide: h?.guide ?? "",
     };
   }
-  const answer = await ask(ctx, "help", helpPrompt(game, turns, lang, player), 0.3);
-  const text = plain(answer, 3000);
+  const messages = helpPrompt(game, turns, lang, player);
+  if (b.stream === true) return streamed((onText) => ask(ctx, "help", messages, { onText }));
+  const text = plain(await ask(ctx, "help", messages), 3000);
   return text ? json({ text }) : json({ error: "ai_empty_answer" }, 502);
+}
+
+/**
+ * An answer that shows word by word: one JSON object per line ({"d": piece} while it's written,
+ * then {"done": true, "text": the whole answer}, or {"error": code}).
+ */
+function streamed(run: (onText: (delta: string) => void) => Promise<string>): Response {
+  const enc = new TextEncoder();
+  const body = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (o: Record<string, unknown>) => controller.enqueue(enc.encode(`${JSON.stringify(o)}\n`));
+      try {
+        const text = plain(await run((d) => d && send({ d })), 3000);
+        send(text ? { done: true, text } : { error: "ai_empty_answer" });
+      } catch (e) {
+        const out = (await failed(e).json()) as { error: string; message?: string };
+        send({ error: out.error, message: out.message ?? "" });
+      }
+      controller.close();
+    },
+  });
+  return new Response(body, { headers: { "content-type": "application/x-ndjson; charset=utf-8", "cache-control": "no-store", "x-accel-buffering": "no" } });
 }
 
 /** The developer saves tips for the helper, and lets it learn the game from a repository (once, now). */
@@ -520,7 +618,7 @@ async function helpSetup(ctx: Ctx, b: Record<string, unknown>) {
     // Only new tips: what it learned stays.
   } else if (!repo) {
     // No repository (any more): only the developer's tips.
-    Object.assign(row, { installation_id: null, repo: null, guide: "", learned_at: null });
+    Object.assign(row, { installation_id: null, repo: null, guide: "", learned_at: null, learn_batch: null, learn_usage: null, learn_started_at: null, learn_error: null });
   } else {
     if (!Number.isSafeInteger(installation) || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo)) return json({ error: "bad_request" }, 400);
     if (!githubConfigured(ctx.env.github)) return json({ error: "github_error" }, 503);
@@ -540,13 +638,67 @@ async function helpSetup(ctx: Ctx, b: Record<string, unknown>) {
       files[p] = c;
       total += c.length;
     }
-    const answer = await ask(ctx, "learn", learnPrompt(g, files), 0.2, LEARN_TIMEOUT_MS);
-    const guide = plain(answer, 8000);
+    const messages = learnPrompt(g, files);
+    // Nobody has to wait for the guide: it's learned as a Message Batch, at half the price, and
+    // collected when the developer or a player comes back (help_learning, "Ask AI"). Where
+    // batches can't be used (another address for Anthropic's API), it's learned right away.
+    let started: { usageId: number; batchId: string } | null = null;
+    try {
+      started = await budgetedBatch({ db: ctx.db, keys: { openai_compatible: "", anthropic: ctx.env.anthropicKey }, userId: ctx.user.id, feature: "learn", messages, maxTokens: MAX_TOKENS.learn });
+    } catch (e) {
+      if (!(e instanceof AiError) || (e.code !== "provider_error" && e.status !== 404)) throw e;
+    }
+    if (started) {
+      Object.assign(row, { installation_id: installation, repo, learn_batch: started.batchId, learn_usage: started.usageId, learn_started_at: new Date().toISOString(), learn_error: null });
+      await ctx.db.insert("game_help", row, "resolution=merge-duplicates,return=minimal");
+      return json({ ok: true, learning: true, learned_at: null, guide: null });
+    }
+    const guide = plain(await ask(ctx, "learn", messages, { timeoutMs: LEARN_TIMEOUT_MS }), 8000);
     if (!guide) return json({ error: "ai_empty_answer" }, 502);
-    Object.assign(row, { installation_id: installation, repo, guide, learned_at: new Date().toISOString() });
+    Object.assign(row, { installation_id: installation, repo, guide, learned_at: new Date().toISOString(), learn_batch: null, learn_usage: null, learn_error: null });
   }
   await ctx.db.insert("game_help", row, "resolution=merge-duplicates,return=minimal");
-  return json({ ok: true, learned_at: row.learned_at ?? null, guide: row.guide ?? null });
+  return json({ ok: true, learning: false, learned_at: row.learned_at ?? null, guide: row.guide ?? null });
+}
+
+interface Learning {
+  learn_batch: string | null;
+  learn_usage: number | null;
+  learn_started_at: string | null;
+}
+
+/**
+ * Collects a guide that is being learned as a batch, once it's ready. Returns whether it is still
+ * learning, or the guide, or why it didn't work out.
+ */
+async function collectGuide(ctx: Ctx, gameId: string, h: Learning): Promise<{ learning: boolean; guide?: string; learned_at?: string; error?: string }> {
+  if (!h.learn_batch || !h.learn_usage) return { learning: false };
+  const r = await collectBatch(ctx.db, ctx.env.anthropicKey, { batchId: h.learn_batch, usageId: Number(h.learn_usage), startedAt: h.learn_started_at ?? Date.now() });
+  if (r.state === "waiting") return { learning: true };
+  // Only the batch that's still the current one (a newer "Learn again" wins).
+  const where = `game_id=eq.${gameId}&learn_batch=eq.${encodeURIComponent(h.learn_batch)}`;
+  const guide = r.state === "done" ? plain(r.text, 8000) : "";
+  if (guide) {
+    const learned_at = new Date().toISOString();
+    await ctx.db.update("game_help", where, { guide, learned_at, learn_batch: null, learn_usage: null, learn_started_at: null, learn_error: null });
+    return { learning: false, guide, learned_at };
+  }
+  const error = r.state === "failed" ? r.error : "ai_empty_answer";
+  await ctx.db.update("game_help", where, { learn_batch: null, learn_usage: null, learn_started_at: null, learn_error: error });
+  return { learning: false, error };
+}
+
+/** For the game's form: is the guide still being learned? (Collects it when it's ready.) */
+async function helpLearning(ctx: Ctx, b: Record<string, unknown>) {
+  if (!isUuid(b.game_id)) return json({ error: "bad_request" }, 400);
+  if ((await manages(ctx, b.game_id)) === false) return json({ error: "not_allowed" }, 403);
+  const [h] = await ctx.db.select<Learning & { guide: string; learned_at: string | null; learn_error: string | null }>(
+    "game_help",
+    `game_id=eq.${b.game_id}&select=guide,learned_at,learn_batch,learn_usage,learn_started_at,learn_error`,
+  );
+  if (!h) return json({ learning: false, guide: "", learned_at: null, error: null });
+  const r = await collectGuide(ctx, b.game_id, h);
+  return json({ learning: r.learning, guide: r.guide ?? h.guide, learned_at: r.learned_at ?? h.learned_at, error: r.error ?? (r.learning ? null : h.learn_error) });
 }
 
 // ---------- admins: test a feature's model ----------

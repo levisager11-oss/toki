@@ -96,6 +96,16 @@ export function AiFeaturesCard({ baseUrl, aiOn, onChanged }: { baseUrl: string; 
     onChanged();
   };
 
+  // Every feature that has a model, one tiny call each (in turn, so the list fills as they finish).
+  const [testingAll, setTestingAll] = useState(false);
+  const testAll = async () => {
+    setTestingAll(true);
+    for (const r of rows.filter((x) => x.model && !dirty(x))) await test(r.feature);
+    setTestingAll(false);
+  };
+  const tested = Object.values(tests).filter((x): x is TestResult => !!x && x !== "running");
+  const failed = tested.filter((x) => !x.ok).length;
+
   return (
     <section className="form ai-card" aria-labelledby="ai-features-h">
       <h2 id="ai-features-h">{t("ai.features.title")}</h2>
@@ -104,6 +114,16 @@ export function AiFeaturesCard({ baseUrl, aiOn, onChanged }: { baseUrl: string; 
         <button type="button" className="btn" onClick={loadModels}>{t("ai.models.find")}</button>
         <small aria-live="polite">{modelsMsg || t("ai.features.findHelp")}</small>
       </div>
+      {aiOn && (
+        <div className="model-find">
+          <button type="button" className="btn" onClick={testAll} disabled={testingAll || anyDirty || !rows.some((r) => r.model)}>
+            {testingAll ? t("ai.testing") : t("ai.testAll")}
+          </button>
+          <small aria-live="polite">
+            {anyDirty ? t("ai.testSaveFirst") : !testingAll && tested.length ? (failed ? t("ai.testAllFailed", { n: failed }) : t("ai.testAllOk", { n: tested.length })) : t("ai.testAllHelp")}
+          </small>
+        </div>
+      )}
       <ul className="ai-features">
         {rows.map((r) => {
           const id = `ai-f-${r.feature}`;

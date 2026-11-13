@@ -6,7 +6,7 @@ import { AiError, complete, estimateTokens, type ChatMessage, type Completion, t
 
 /** The AI features; each has its own model in ai_features (an empty model turns it off). */
 export const AI_FEATURES = [
-  "translate", "similar", "suggest", "help", "learn", "release", "describe", "summary", "connect", "connect_steps", "connect_quick",
+  "translate", "similar", "suggest", "help", "learn", "release", "describe", "summary", "connect", "connect_steps", "connect_quick", "moderate",
 ] as const;
 export type AiFeature = (typeof AI_FEATURES)[number];
 
@@ -18,7 +18,7 @@ export async function featureOn(db: Db, feature: AiFeature): Promise<boolean> {
   return !!f?.model;
 }
 
-interface Reservation {
+export interface Reservation {
   id: number;
   provider: ProviderName;
   base_url: string;
@@ -42,15 +42,22 @@ export interface BudgetedCall {
   thinking?: Thinking;
   temperature?: number;
   timeoutMs?: number;
+  /** A JSON schema the answer must follow (Anthropic's structured outputs). */
+  schema?: Record<string, unknown>;
+  /** Called with each piece of the answer as it is written (streamed answers). */
+  onText?: (delta: string) => void;
   fetchImpl?: typeof fetch;
 }
 
-/** Raises DbError("ai_disabled" | "ai_off" | "not_allowed" | "rate_limited" | "cap_reached" | "quota_reached") or AiError. */
-export async function budgetedCompletion(call: BudgetedCall): Promise<Completion & { cost: number }> {
+/**
+ * Reserves the call's highest possible cost and says which model to call.
+ * Raises DbError("ai_disabled" | "ai_off" | "not_allowed" | "rate_limited" | "cap_reached" | "quota_reached"), or AiError without a key.
+ */
+export async function reserve(call: Pick<BudgetedCall, "db" | "keys" | "userId" | "feature" | "testFeature" | "jobId" | "messages" | "maxTokens">): Promise<{ reservation: Reservation; inputTokens: number }> {
   if (!Object.values(call.keys).some(Boolean)) throw new AiError("not_configured");
   // Each message also costs a few tokens of its own.
   const inputTokens = estimateTokens(call.messages.map((m) => m.content).join("\n")) + 10 * call.messages.length;
-  const r = await call.db.rpc<Reservation>("ai_reserve", {
+  const reservation = await call.db.rpc<Reservation>("ai_reserve", {
     p_user: call.userId,
     p_feature: call.feature,
     p_job: call.jobId ?? null,
@@ -58,9 +65,15 @@ export async function budgetedCompletion(call: BudgetedCall): Promise<Completion
     p_max_output_tokens: call.maxTokens,
     p_test_feature: call.testFeature ?? null,
   });
+  return { reservation, inputTokens };
+}
+
+/** Raises DbError("ai_disabled" | "ai_off" | "not_allowed" | "rate_limited" | "cap_reached" | "quota_reached") or AiError. */
+export async function budgetedCompletion(call: BudgetedCall): Promise<Completion & { cost: number }> {
+  const { reservation: r, inputTokens } = await reserve(call);
   let result: Completion;
   try {
-    result = await complete({ provider: r.provider, baseUrl: r.base_url, model: r.model, apiKey: call.keys[r.provider] ?? "", thinking: call.thinking ?? r.thinking }, { messages: call.messages, maxTokens: call.maxTokens, temperature: call.temperature, timeoutMs: call.timeoutMs }, call.fetchImpl);
+    result = await complete({ provider: r.provider, baseUrl: r.base_url, model: r.model, apiKey: call.keys[r.provider] ?? "", thinking: call.thinking ?? r.thinking }, { messages: call.messages, maxTokens: call.maxTokens, temperature: call.temperature, timeoutMs: call.timeoutMs, schema: call.schema, onText: call.onText }, call.fetchImpl);
   } catch (e) {
     // A request the service refused with an error status wasn't worked on. Otherwise (e.g. the
     // connection broke) the service may have charged for reading it: count that, on the safe side.

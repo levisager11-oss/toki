@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
 import { ago } from "../lib/feedback";
 import { ApiError, githubRepos, type GitHubInfo } from "../lib/ai";
-import { assistError, gameHelp, saveGameHelp, useAiFeature, type GameHelp } from "../lib/assist";
+import { assistError, gameHelp, gameLearning, saveGameHelp, useAiFeature, type AssistError, type GameHelp } from "../lib/assist";
 
 /** For the game's developer: what the "Ask AI" helper knows (tips, and a guide learned from GitHub). */
 export function HelperSetup({ gameId }: { gameId: string }) {
@@ -32,6 +32,29 @@ export function HelperSetup({ gameId }: { gameId: string }) {
     githubRepos().then((g) => setRepos(g.repos ?? [])).catch(() => setRepos([]));
   }, [on, gameId]);
 
+  // While the AI learns the game (a batch at half the price, usually a few minutes), look again
+  // every 20 seconds; the guide is also collected when the developer or a player comes back.
+  const learning = !!help?.learn_batch;
+  useEffect(() => {
+    if (!on || !learning) return;
+    let alive = true;
+    const look = () =>
+      gameLearning(gameId)
+        .then((r) => {
+          if (!alive || r.learning) return;
+          setHelp((h) => (h ? { ...h, guide: r.guide, learned_at: r.learned_at, learn_batch: null, learn_error: r.error } : h));
+          if (r.error) setErr(t(`assist.err.${(r.error.startsWith("ai_") ? r.error : "error") as AssistError}`));
+          else setMsg(t("helper.setup.learned"));
+        })
+        .catch(() => {});
+    look();
+    const timer = setInterval(look, 20_000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [on, learning, gameId, t]);
+
   if (!on || help === undefined) return null;
 
   const save = async (learn: boolean) => {
@@ -48,8 +71,10 @@ export function HelperSetup({ gameId }: { gameId: string }) {
         repo: name || null,
         guide: r.guide ?? (name ? h?.guide ?? "" : ""),
         learned_at: r.learned_at ?? (name ? h?.learned_at ?? null : null),
+        learn_batch: r.learning ? "pending" : name ? h?.learn_batch ?? null : null,
+        learn_error: null,
       }));
-      setMsg(learn ? t("helper.setup.learned") : t("helper.setup.saved"));
+      setMsg(r.learning ? "" : learn ? t("helper.setup.learned") : t("helper.setup.saved"));
     } catch (e) {
       setErr(t(`assist.err.${assistError(e)}`));
       setDetail(e instanceof ApiError ? e.detail : "");
@@ -82,6 +107,7 @@ export function HelperSetup({ gameId }: { gameId: string }) {
         </p>
       )}
       {showGuide && help?.guide && <pre className="helper-guide">{help.guide}</pre>}
+      {learning && <p className="check" role="status" aria-busy="true">{t("helper.setup.learningBatch")}</p>}
       {msg && <p className="check good" role="status">{msg}</p>}
       {err && (
         <p className="error" role="alert">
@@ -92,7 +118,7 @@ export function HelperSetup({ gameId }: { gameId: string }) {
       <div className="actions">
         <button type="button" className="btn" onClick={() => save(false)} disabled={!!busy}>{busy === "save" ? t("rel.form.saving") : t("helper.setup.save")}</button>
         {repo && (
-          <button type="button" className="btn" onClick={() => save(true)} disabled={!!busy}>
+          <button type="button" className="btn" onClick={() => save(true)} disabled={!!busy || learning}>
             {busy === "learn" ? t("helper.setup.learning") : sameRepo && help?.learned_at ? t("helper.setup.relearn") : t("helper.setup.learn")}
           </button>
         )}

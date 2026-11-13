@@ -31,11 +31,21 @@ The AI page shows these steps with direct links, and a "Check again" button.
 
 ## 2. Anthropic key (on Toki)
 
-Make an API key in the Claude Console (API keys), paste it on the AI page and save. The server stores keys encrypted (AES-256-GCM, with a key derived from the Supabase secret
+Make an API key in the Claude Console (API keys), paste it on the AI page and save. Before it is
+saved, Toki asks Anthropic whether the key works (it lists the models, which costs nothing), so a
+mistyped key is never stored; when Anthropic can't be reached, "Save it anyway" stores it
+unchecked. The AI page checks the key in use again each time it opens. The server stores keys encrypted (AES-256-GCM, with a key derived from the Supabase secret
 key), and nobody can read them back, not even admins. If you ever change the Supabase secret key,
 save the key again.
 
-## 3. GitHub App (on Toki)
+## 3. Turn on the AI (on Toki, one click)
+
+Once the key works, **Turn on AI** switches the AI on with a monthly cap of $50 for all of Toki and
+$5 a month per developer (where nothing is set yet), then makes one tiny test call. If your
+Anthropic account has no credit yet, it says so right away (Claude Console → Billing). Every
+feature with a model below is then on; change the limits on the same page any time.
+
+## 4. GitHub App (on Toki)
 
 Click **Create the GitHub App**. Toki sends GitHub a filled-in app description (a "manifest"):
 read and write access to code and pull requests only, no webhooks, callback
@@ -44,20 +54,21 @@ On GitHub's page, click **Create GitHub App** (change the name there if it's tak
 you back to Toki with a one-time code; the server exchanges it for the app's credentials and stores
 them encrypted.
 
-## 4. AI settings (on Toki)
+## 5. AI settings (on Toki)
 
 The *AI settings* card has the main switch (off: no feature works and nothing is sent to
 Anthropic), an optional other address for Anthropic's API (empty: `https://api.anthropic.com`),
 Toki's monthly cap and the quota per developer, and Toki Connect's settings. Set a monthly cap
 first: with $0 nothing can run.
 
-## 5. A model per feature (on Toki)
+## 6. A model per feature (on Toki)
 
 The *A model per feature* card (table `ai_features`) has one row per feature: its Claude model,
 how much it may think (sent as "effort") and its prices per million tokens. Known Claude models are
 always in the lists and fill in their list prices (`src/lib/claudeModels.ts`); **Find models** adds
 the ones the key can use. A feature without a model is off, and its buttons don't show. Each row
-has **Test this model** (a tiny call that shows up in the list of calls).
+has **Test this model** (a tiny call that shows up in the list of calls), and **Test every
+feature** tries them all at once.
 
 | Feature | Who | Starts with |
 | --- | --- | --- |
@@ -72,9 +83,27 @@ has **Test this model** (a tiny call that shows up in the list of calls).
 | `connect`: the Toki Connect steps that write code (also Managed Agents) | developers | Sonnet |
 | `connect_steps`: Toki Connect's easy steps (reading code, asking the developer); off: `connect` does them | developers | Haiku |
 | `connect_quick`: leaderboard code in one-click "Add your game"; off: one-click adding leaves the code alone | developers | Sonnet |
+| `moderate`: a first look at open reports on `/reports` (remove / keep / unsure, with a reason, kept on the report; an admin always decides) | admins | off |
 
 The prompts are in `server/assist/prompts.ts` and `server/assist/help.ts`; the helpers' server code
 is `api/assist.ts`.
+
+- **Structured outputs:** every helper that answers in JSON (translations, similar feedback,
+  suggestions, release notes, descriptions, reading a new game, the coding-AI prompt, the report
+  check) sends its JSON schema (`server/assist/schemas.ts`), so the answer always parses. A model
+  that doesn't know structured outputs gets asked again without.
+- **Prompt caching:** the parts that stay the same between calls are cached (read back at a tenth
+  of the price): Ask AI's instructions and the conversation so far (the player's progress comes
+  last, as a system message in the conversation), the board's posts for similar feedback, and
+  Toki Connect's files.
+- **Batches:** "Learn from GitHub" runs as a Message Batch at half the price (`server/ai/batch.ts`).
+  The batch is kept on the game's row (`game_help.learn_batch`) and collected when the developer's
+  form looks again (every 20 seconds while it's open) or a player asks the helper. With another
+  address for Anthropic's API that has no batches, it is learned right away as before.
+- **Streaming:** Ask AI's answers show word by word (`stream: true`, one JSON object per line).
+- **Errors:** a busy Anthropic (429, 529) is retried by the SDK and then shows "very busy, try again
+  in a minute"; a refused key or an account without credit shows players "the AI isn't working right
+  now" and admins the exact reason on the AI page.
 
 - **Ask AI (game helper):** a button on every game's page opens a small chat under the game for
   players who are stuck or have a question about Toki. It answers from the game's description and
@@ -99,7 +128,7 @@ Buttons only show when the feature behind them is on (`ai_status()` lists them):
 `connect` model, Toki Connect's runs and "Fix with AI" are hidden, and the Toki Connect page only
 connects GitHub (which the helpers use for update drafts and the game helper).
 
-## 6. Toki Connect with Claude Managed Agents (optional)
+## 7. Toki Connect with Claude Managed Agents (optional)
 
 The AI page offers "Toki Connect with Claude Managed Agents"
 (off by default). Then a Connect run (adding saves/high scores, or "Fix with AI") doesn't send
@@ -161,7 +190,7 @@ push, and Toki shows the developer a link to GitHub's "Run workflow" button.
 ## Anthropic
 
 `server/ai/anthropic.ts` calls Claude through the official SDK, streamed. On the newest Claude
-models it turns on Anthropic's server-side fallback: if Anthropic's safety checks decline a
+models (Fable 5.2 and 5.1, Opus 5.5 and 5, Sonnet 5.5) it turns on Anthropic's server-side fallback: if Anthropic's safety checks decline a
 request, Anthropic answers it with another fitting model in the same call, instead of failing.
 To turn that off, empty the `WITH_FALLBACK` list there. A refused request that isn't answered shows
 up as `ai_refused`.
