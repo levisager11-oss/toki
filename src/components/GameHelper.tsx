@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
-import { askHelper, assistError, type HelpTurn } from "../lib/assist";
+import { askHelperStream, assistError, type HelpTurn } from "../lib/assist";
 import { browserStorage, readRecord } from "../lib/saves";
 import { saveSummary } from "../lib/saveSummary";
 import { AiText } from "./AiBits";
@@ -28,6 +28,8 @@ export function GameHelper({ game, onClose }: { game: { id: string; title: strin
   const [turns, setTurns] = useState<HelpTurn[]>(() => load(game.id));
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  // The answer while it's being written (word by word).
+  const [partial, setPartial] = useState("");
   const [err, setErr] = useState("");
   const list = useRef<HTMLDivElement>(null);
   // The player's progress as the game last saved it on this device, so hints fit where they are.
@@ -46,6 +48,9 @@ export function GameHelper({ game, onClose }: { game: { id: string; title: strin
     }
     list.current?.scrollTo({ top: list.current.scrollHeight });
   }, [turns, game.id]);
+  useEffect(() => {
+    if (partial) list.current?.scrollTo({ top: list.current.scrollHeight });
+  }, [partial]);
 
   const send = async (e?: FormEvent, question = text) => {
     e?.preventDefault();
@@ -57,7 +62,7 @@ export function GameHelper({ game, onClose }: { game: { id: string; title: strin
     setBusy(true);
     setErr("");
     try {
-      const answer = await askHelper(game.id, next, lang, progress());
+      const answer = await askHelperStream(game.id, next, lang, progress(), setPartial);
       setTurns([...next, { role: "assistant", content: answer }]);
     } catch (e) {
       setErr(t(`assist.err.${assistError(e)}`));
@@ -65,6 +70,7 @@ export function GameHelper({ game, onClose }: { game: { id: string; title: strin
       setTurns(turns);
       setText(q);
     }
+    setPartial("");
     setBusy(false);
   };
 
@@ -99,7 +105,12 @@ export function GameHelper({ game, onClose }: { game: { id: string; title: strin
                 {m.role === "user" ? <p>{m.content}</p> : <AiText text={m.content} />}
               </div>
             ))}
-            {busy && <p className="sub" aria-busy="true">{t("helper.thinking")}</p>}
+            {busy && partial && (
+              <div className="helper-msg" aria-busy="true">
+                <AiText text={partial} />
+              </div>
+            )}
+            {busy && !partial && <p className="sub" aria-busy="true">{t("helper.thinking")}</p>}
           </div>
           {err && <p className="error" role="alert">{err}</p>}
           <form className="inline-form helper-form" onSubmit={send}>

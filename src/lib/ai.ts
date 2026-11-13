@@ -48,7 +48,7 @@ export type SettingsChange = Partial<Pick<AiSettings, "enabled" | "base_url" | "
 
 /** In the order the admin page shows them: players' helpers, developers' helpers, Toki Connect. */
 export const AI_FEATURES = [
-  "translate", "similar", "suggest", "help", "learn", "release", "describe", "summary", "connect", "connect_steps", "connect_quick",
+  "translate", "similar", "suggest", "help", "learn", "release", "describe", "summary", "connect", "connect_steps", "connect_quick", "moderate",
 ] as const;
 export type AiFeature = (typeof AI_FEATURES)[number];
 /** The features players may use; the others are for developers and admins. */
@@ -107,7 +107,12 @@ export interface TestResult {
 
 const aiAction = <T = { ok: boolean }>(body: Record<string, unknown>) => api<T>("/api/ai", { method: "POST", body: JSON.stringify(body) });
 /** The Anthropic API key: stored encrypted on the server; it can't be read back. */
-export const setAiKey = (key: string) => aiAction({ action: "set_ai_key", key });
+export const setAiKey = (key: string, force = false) => aiAction<{ ok: boolean; checked: boolean; models: number }>({ action: "set_ai_key", key, force });
+/** Whether Anthropic accepts the key in use (free: it only lists the models). */
+export const checkAiKey = () => aiAction<{ ok: boolean; models?: number; error?: string; message?: string }>({ action: "check_key" });
+/** What "Turn on AI" sets when nothing is set yet (US dollars a month). */
+export const STARTER_CAP = 50;
+export const STARTER_QUOTA = 5;
 export const clearAiKey = () => aiAction({ action: "clear_ai_key" });
 export const githubFromManifest = (code: string) => aiAction<{ ok: boolean; slug: string; htmlUrl: string }>({ action: "github_manifest", code });
 export const clearGithubApp = () => aiAction({ action: "clear_github" });
@@ -397,7 +402,7 @@ export const checkPrs = () => api<{ checked: number; changed?: number }>("/api/c
 const KNOWN_ERRORS = [
   "ai_disabled", "not_allowed", "cap_reached", "quota_reached", "rate_limited", "ai_not_configured", "ai_provider_error", "ai_timeout", "ai_refused", "ai_empty_answer",
   "ai_bad_answer", "ai_bad_edits", "agent_budget", "github_not_found", "github_error", "github_not_configured", "too_many_steps", "impossible", "cancelled", "busy",
-  "quick_off", "not_hosted",
+  "quick_off", "not_hosted", "ai_busy", "ai_bad_key", "ai_no_credit",
 ] as const;
 export type ConnectError = (typeof KNOWN_ERRORS)[number] | "error";
 

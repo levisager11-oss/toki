@@ -8,6 +8,11 @@ export interface ChatMessage {
   content: string;
   /** Anthropic: this part stays the same between calls, so cache it (other providers ignore it). */
   cache?: boolean;
+  /**
+   * A system message that stays where it is in the conversation (after the last user turn)
+   * instead of joining the instructions at the start, so the start can stay cached.
+   */
+  late?: boolean;
 }
 
 export interface Completion {
@@ -16,6 +21,20 @@ export interface Completion {
   outputTokens: number;
   /** true when the endpoint didn't say how many tokens it used, so they were estimated */
   estimated: boolean;
+  /** true when the answer stopped at the most tokens it could have */
+  truncated?: boolean;
+}
+
+/** What one call asks for. */
+export interface CompletionRequest {
+  messages: ChatMessage[];
+  maxTokens: number;
+  temperature?: number;
+  timeoutMs?: number;
+  /** Anthropic: a JSON schema the answer must follow (structured outputs). */
+  schema?: Record<string, unknown>;
+  /** Anthropic: called with each piece of the answer as it is written. */
+  onText?: (delta: string) => void;
 }
 
 export type ProviderName = "openai_compatible" | "anthropic";
@@ -33,7 +52,7 @@ export interface ProviderConfig {
 
 export class AiError extends Error {
   constructor(
-    readonly code: "not_configured" | "provider_error" | "timeout" | "empty_answer" | "refused",
+    readonly code: "not_configured" | "provider_error" | "timeout" | "empty_answer" | "refused" | "busy" | "bad_key" | "no_credit",
     message: string = code,
     /** The HTTP status when the service answered with an error (it then didn't work on the request). */
     readonly status?: number,
@@ -57,7 +76,7 @@ export const TIMEOUT_MS = 240_000;
 
 export async function complete(
   config: ProviderConfig,
-  req: { messages: ChatMessage[]; maxTokens: number; temperature?: number; timeoutMs?: number },
+  req: CompletionRequest,
   fetchImpl?: typeof fetch,
 ): Promise<Completion> {
   if (!config.apiKey || !config.model || (!config.baseUrl && config.provider !== "anthropic")) throw new AiError("not_configured");
@@ -137,7 +156,7 @@ function withNoThink(messages: ChatMessage[], thinking: Thinking | undefined): C
 
 async function openaiCompatible(
   config: ProviderConfig,
-  req: { messages: ChatMessage[]; maxTokens: number; temperature?: number; timeoutMs?: number },
+  req: CompletionRequest,
   fetchImpl: (url: string, init: RequestInit) => Promise<Response>,
 ): Promise<Completion> {
   const key = `${config.baseUrl} ${config.model}`;

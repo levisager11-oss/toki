@@ -30,10 +30,13 @@ describe("similar feedback", () => {
   ];
 
   it("numbers the existing posts and names the new one", () => {
-    const [, user] = similarPrompt({ kind: "bug", title: "Stuck at level 3", body: "It stops" }, list);
-    expect(user.content).toContain("1. [bug] Game freezes on level 3");
-    expect(user.content).toContain("2. [idea] Add a dark mode — please");
+    const [, posts, user] = similarPrompt({ kind: "bug", title: "Stuck at level 3", body: "It stops" }, list);
+    expect(posts.content).toContain("1. [bug] Game freezes on level 3");
+    expect(posts.content).toContain("2. [idea] Add a dark mode — please");
+    // The board's posts are cached; the new post comes after them.
+    expect(posts.cache).toBe(true);
     expect(user.content).toContain("[bug] Stuck at level 3");
+    expect(user.cache).toBeFalsy();
   });
 
   it("only returns posts from the list, at most 3", () => {
@@ -151,26 +154,32 @@ describe("game helper", async () => {
     expect(system.content).toContain(TOKI_GUIDE.slice(0, 40));
     expect(system.content).toContain("/game/run/feedback");
     expect(system.content).toContain("hint first");
-    expect(user).toEqual({ role: "user", content: "Where is the key?" });
+    expect(user).toEqual({ role: "user", content: "Where is the key?", cache: true });
+    expect(system.cache).toBe(true);
     expect(helpPrompt(null, [{ role: "user", content: "?" }], "en")[0].content).toContain("isn't on a game's page");
   });
 
   it("knows where the player is: their save, best score and playtime", async () => {
     const { scoreText, span } = await import("../server/assist/help");
     const ask = [{ role: "user" as const, content: "What now?" }];
-    const [system] = helpPrompt(game, ask, "en", { save: 'level: 3\ninventory: {"keys":1}', savedAgo: 200, best: scoreText(1200, "points"), seconds: 8040 });
-    expect(system.content).toContain("level: 3");
-    expect(system.content).toContain("last saved about 3 min ago");
-    expect(system.content).toContain("Best score: 1200 points");
-    expect(system.content).toContain("Time played on Toki: about 2 h 14 min");
+    const all = helpPrompt(game, ask, "en", { save: 'level: 3\ninventory: {"keys":1}', savedAgo: 200, best: scoreText(1200, "points"), seconds: 8040 });
+    const [system] = all;
+    // The progress comes last, after the question, so the instructions and the conversation stay cached.
+    const progress = all.at(-1)!;
+    expect(progress).toMatchObject({ role: "system", late: true });
+    expect(system.content).not.toContain("level: 3");
+    expect(progress.content).toContain("level: 3");
+    expect(progress.content).toContain("last saved about 3 min ago");
+    expect(progress.content).toContain("Best score: 1200 points");
+    expect(progress.content).toContain("Time played on Toki: about 2 h 14 min");
     expect(system.content).toContain("where the player is from their save");
     // No save: the helper is told, so it asks instead of guessing.
-    const [none] = helpPrompt(game, ask, "en", { save: "", savedAgo: null, best: null, seconds: 0 });
+    const none = helpPrompt(game, ask, "en", { save: "", savedAgo: null, best: null, seconds: 0 }).at(-1)!;
     expect(none.content).toContain("Save: none that Toki can see");
     expect(none.content).not.toContain("Best score");
     // Without a game there is no progress to talk about.
-    expect(helpPrompt(null, ask, "en", { save: "level: 3", savedAgo: null, best: null, seconds: 0 })[0].content).not.toContain("level: 3");
-    expect(helpPrompt(game, ask, "en")[0].content).not.toContain("<player>");
+    expect(helpPrompt(null, ask, "en", { save: "level: 3", savedAgo: null, best: null, seconds: 0 }).map((m) => m.content).join("")).not.toContain("level: 3");
+    expect(helpPrompt(game, ask, "en").map((m) => m.content).join("")).not.toContain("<player>");
     expect(scoreText(83450, "time")).toBe("83.45 seconds");
     expect([span(20), span(3600), span(3 * 86400)]).toEqual(["about 1 min", "about 1 h", "about 3 days"]);
   });

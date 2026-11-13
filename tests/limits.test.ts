@@ -6,7 +6,10 @@ import { format } from "../src/lib/i18n";
 import { textKeys } from "./textUse";
 
 const ROOT = join(import.meta.dirname, "..");
-const migration = readFileSync(join(ROOT, "supabase", "migrations", "20261130090000_admin_limits.sql"), "utf8");
+// The limits table and later migrations that add a row to it.
+const migration = ["20261130090000_admin_limits.sql", "20261206090000_ai_polish.sql"]
+  .map((f) => readFileSync(join(ROOT, "supabase", "migrations", f), "utf8"))
+  .join("\n");
 const i18n = join(ROOT, "src", "lib", "i18n.tsx");
 const dev = (lang: "En" | "De") => join(ROOT, "src", "lib", "texts", `dev${lang}.ts`);
 
@@ -41,9 +44,12 @@ describe("limits in texts", () => {
 
 describe("limits match the database", () => {
   const rows = (table: string) => {
-    const start = migration.indexOf(`insert into public.${table}`);
-    const block = migration.slice(start, migration.indexOf(";", start));
-    return [...block.matchAll(/\('([a-z0-9_]+)',\s*([^)]*)\)/g)].map((m) => [m[1], m[2].split(",").map((x) => x.trim())] as const);
+    const out: (readonly [string, string[]])[] = [];
+    for (let start = migration.indexOf(`insert into public.${table}`); start >= 0; start = migration.indexOf(`insert into public.${table}`, start + 1)) {
+      const block = migration.slice(start, migration.indexOf(";", start)).replace(/on conflict[\s\S]*$/, "");
+      out.push(...[...block.matchAll(/\('([a-z0-9_]+)',\s*([^)]*)\)/g)].map((m) => [m[1], m[2].split(",").map((x) => x.trim())] as const));
+    }
+    return out;
   };
 
   it("has the same defaults", () => {

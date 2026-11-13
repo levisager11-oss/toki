@@ -1,6 +1,8 @@
 // Claude's list prices (US dollars per million tokens), for the admin page and the server
 // (the Models API has no prices). The admin page offers these models even before the key is saved.
 export const CLAUDE_PRICES: Record<string, { input: number; output: number }> = {
+  "claude-fable-5-2": { input: 8, output: 40 },
+  "claude-mythos-5-2": { input: 8, output: 40 },
   "claude-fable-5-1": { input: 10, output: 50 },
   "claude-mythos-5-1": { input: 10, output: 50 },
   "claude-fable-5": { input: 10, output: 50 },

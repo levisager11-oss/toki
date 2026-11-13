@@ -731,7 +731,7 @@ describe("Anthropic provider", () => {
     const f = sse("OK");
     const c = await complete(cfg, { messages: [{ role: "system", content: "Be brief." }, { role: "user", content: "hi" }], maxTokens: 64 }, f);
     // 12 input tokens, and 3 read from the cache at a tenth of the price
-    expect(c).toEqual({ text: "OK", inputTokens: 13, outputTokens: 5, estimated: false });
+    expect(c).toEqual({ text: "OK", inputTokens: 13, outputTokens: 5, estimated: false, truncated: false });
     const { url, body, headers } = sent(f);
     expect(url).toContain("https://api.anthropic.com/v1/messages");
     expect(headers.get("authorization") ?? headers.get("x-api-key")).toContain("sk-ant-test");
@@ -794,6 +794,62 @@ describe("Anthropic provider", () => {
     const bad = reply({ type: "error", error: { type: "invalid_request_error", message: "bad model" } }, 400);
     await expect(complete(cfg, { messages: [{ role: "user", content: "hi" }], maxTokens: 64 }, bad)).rejects.toMatchObject({ code: "provider_error" });
     await expect(complete({ ...cfg, apiKey: "" }, { messages: [], maxTokens: 1 })).rejects.toMatchObject({ code: "not_configured" });
+  });
+
+  it("asks for structured outputs when there is a schema, and again without when the model doesn't know them", async () => {
+    const schema = { type: "object", properties: { t: { type: "string" } }, required: ["t"], additionalProperties: false };
+    const f = sse('{"t":"x"}');
+    await complete({ ...cfg, thinking: "low" }, { messages: [{ role: "user", content: "hi" }], maxTokens: 64, schema }, f);
+    expect(sent(f).body.output_config).toEqual({ effort: "low", format: { type: "json_schema", schema } });
+    const ok = sse('{"t":"x"}');
+    const g = vi.fn(async (url: string, init: RequestInit) =>
+      JSON.parse(String(init.body)).output_config?.format
+        ? new Response(JSON.stringify({ type: "error", error: { type: "invalid_request_error", message: "output_config.format: structured outputs are not supported on this model" } }), { status: 400, headers: { "content-type": "application/json" } })
+        : ok(url, init),
+    ) as unknown as typeof fetch & ReturnType<typeof vi.fn>;
+    expect((await complete({ ...cfg, model: "claude-haiku-4-5" }, { messages: [{ role: "user", content: "hi" }], maxTokens: 64, schema }, g)).text).toBe('{"t":"x"}');
+    expect(g).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps late system messages in the conversation, or with the instructions where the model can't take them", async () => {
+    const msgs = [{ role: "system" as const, content: "Rules", cache: true }, { role: "user" as const, content: "hi" }, { role: "system" as const, content: "Progress", late: true }];
+    const f = sse("OK");
+    await complete(cfg, { messages: msgs, maxTokens: 64 }, f);
+    expect(sent(f).body.system).toEqual([{ type: "text", text: "Rules", cache_control: { type: "ephemeral" } }]);
+    expect(sent(f).body.messages.at(-1)).toEqual({ role: "system", content: "Progress" });
+    const ok = sse("OK");
+    const g = vi.fn(async (url: string, init: RequestInit) =>
+      JSON.parse(String(init.body)).messages.some((m: { role: string }) => m.role === "system")
+        ? new Response(JSON.stringify({ type: "error", error: { type: "invalid_request_error", message: "role 'system' is not supported on this model" } }), { status: 400, headers: { "content-type": "application/json" } })
+        : ok(url, init),
+    ) as unknown as typeof fetch & ReturnType<typeof vi.fn>;
+    await complete({ ...cfg, model: "claude-haiku-4-5" }, { messages: msgs, maxTokens: 64 }, g);
+    const last = JSON.parse(String((g.mock.calls[1] as [string, RequestInit])[1].body));
+    expect(last.system.map((b: { text: string }) => b.text)).toEqual(["Rules", "Progress"]);
+  });
+
+  it("hands each piece of the answer to onText as it streams", async () => {
+    const parts: string[] = [];
+    const c = await complete(cfg, { messages: [{ role: "user", content: "hi" }], maxTokens: 64, onText: (d) => parts.push(d) }, sse("Hello"));
+    expect(parts.join("")).toBe("Hello");
+    expect(c.text).toBe("Hello");
+  });
+
+  it("names a key Anthropic refuses, an account without credit, and a busy service", async () => {
+    const err = (status: number, type: string, message: string) => reply({ type: "error", error: { type, message } }, status);
+    const req = { messages: [{ role: "user" as const, content: "hi" }], maxTokens: 64 };
+    await expect(complete(cfg, req, err(401, "authentication_error", "invalid x-api-key"))).rejects.toMatchObject({ code: "bad_key" });
+    await expect(complete(cfg, req, err(400, "invalid_request_error", "Your credit balance is too low to access the Anthropic API."))).rejects.toMatchObject({ code: "no_credit" });
+    await expect(complete({ ...cfg, timeoutMs: 1000 } as never, { ...req, timeoutMs: 1000 }, err(529, "overloaded_error", "Overloaded"))).rejects.toMatchObject({ code: "busy" });
+  }, 30_000);
+
+  it("counts every attempt of a call that fell back to another model", async () => {
+    const { usageOf } = await import("../server/ai/anthropic");
+    expect(usageOf({ input_tokens: 10, output_tokens: 5 })).toEqual({ inputTokens: 10, outputTokens: 5 });
+    expect(usageOf({
+      input_tokens: 10, output_tokens: 5,
+      iterations: [{ type: "message", input_tokens: 10, output_tokens: 3 }, { type: "fallback_message", input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 10 }],
+    })).toEqual({ inputTokens: 21, outputTokens: 8 });
   });
 
   it("lists the models with names, context sizes and known prices", async () => {

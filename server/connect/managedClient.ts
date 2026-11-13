@@ -112,14 +112,15 @@ export async function sessionStatus(client: Anthropic, id: string) {
 /** The events Toki acts on, oldest first. */
 export async function sessionEvents(client: Anthropic, id: string): Promise<AgentEvent[]> {
   const out: AgentEvent[] = [];
-  for await (const raw of client.beta.sessions.events.list(id, { limit: 1000 })) {
-    const e = raw as unknown as { type: string; id: string; name?: string; input?: unknown; stop_reason?: { type?: string }; error?: { message?: string }; message?: string };
+  // (100 per page: the SDK fetches the next pages by itself.)
+  for await (const raw of client.beta.sessions.events.list(id, { limit: 100 })) {
+    const e = raw as unknown as { type: string; id: string; name?: string; input?: unknown; stop_reason?: { type?: string }; error?: { type?: string; message?: string }; message?: string };
     if (e.type === "agent.custom_tool_use") {
       out.push({ type: "custom_tool_use", id: e.id, name: e.name ?? "", input: e.input && typeof e.input === "object" ? (e.input as Record<string, unknown>) : {} });
     } else if (e.type === "session.status_idle") {
       out.push({ type: "idle", stop: e.stop_reason?.type ?? "" });
     } else if (e.type === "session.error") {
-      out.push({ type: "error", message: e.error?.message ?? e.message ?? "error" });
+      out.push({ type: "error", message: e.error?.message ?? e.message ?? "error", code: e.error?.type });
     }
     if (out.length > 5000) break;
   }

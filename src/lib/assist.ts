@@ -1,13 +1,13 @@
 // The AI's small helpers for the pages (the AI itself runs on the server, api/assist.ts).
 import { useEffect, useState } from "react";
 import { supabase } from "./supabase";
-import { api } from "./api";
+import { api, ApiError } from "./api";
 
 export type Lang = "en" | "de";
 
 /** The AI features; each has its own model, and one without a model is off. */
 export type AiFeature =
-  | "translate" | "similar" | "suggest" | "help" | "learn" | "release" | "describe" | "summary" | "connect" | "connect_steps" | "connect_quick";
+  | "translate" | "similar" | "suggest" | "help" | "learn" | "release" | "describe" | "summary" | "connect" | "connect_steps" | "connect_quick" | "moderate";
 
 export interface AiStatus {
   /** the features that are on */
@@ -106,6 +106,8 @@ export interface ImprovePrompt {
 }
 /** gameId: a game, or "toki" for Toki itself (admins). */
 export const improvePrompt = (gameId: string, lang: Lang) => assist<ImprovePrompt>({ action: "improve", game_id: gameId, lang });
+/** Admins: the AI's first look at open reports it hasn't seen yet (kept on each report). */
+export const checkReports = (lang: Lang) => assist<{ checked: number; more: boolean }>({ action: "moderate", lang });
 export const summarizeApplication = (id: string, lang: Lang) => assist<{ text: string }>({ action: "application", id, lang }).then((r) => r.text);
 
 export interface HelpTurn {
@@ -119,26 +121,87 @@ export interface HelpTurn {
 export const askHelper = (gameId: string | null, messages: HelpTurn[], lang: Lang, progress?: { save: string; saved_at: number }) =>
   assist<{ text: string }>({ action: "help", game_id: gameId, messages, lang, ...progress }).then((r) => r.text);
 
+/**
+ * The same as askHelper, but the answer comes word by word: onText gets the text so far.
+ * Resolves with the whole answer.
+ */
+export async function askHelperStream(
+  gameId: string | null,
+  messages: HelpTurn[],
+  lang: Lang,
+  progress: { save: string; saved_at: number } | undefined,
+  onText: (soFar: string) => void,
+): Promise<string> {
+  const { data } = await supabase.auth.getSession();
+  const res = await fetch("/api/assist", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${data.session?.access_token ?? ""}` },
+    body: JSON.stringify({ action: "help", game_id: gameId, messages, lang, stream: true, ...progress }),
+  });
+  const type = res.headers.get("content-type") ?? "";
+  if (!res.ok || !res.body || !type.includes("ndjson")) {
+    const b = await res.json().catch(() => ({}));
+    if (res.ok && typeof b?.text === "string") return b.text;
+    throw new ApiError(typeof b?.error === "string" ? b.error : "error", typeof b?.message === "string" ? b.message : "");
+  }
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buffer = "";
+  let soFar = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    buffer += dec.decode(value ?? new Uint8Array(), { stream: !done });
+    const lines = buffer.split("\n");
+    buffer = done ? "" : lines.pop() ?? "";
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      let m: { d?: string; done?: boolean; text?: string; error?: string; message?: string };
+      try {
+        m = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (m.error) throw new ApiError(m.error, m.message ?? "");
+      if (m.done && typeof m.text === "string") return m.text;
+      if (typeof m.d === "string") {
+        soFar += m.d;
+        onText(soFar);
+      }
+    }
+    if (done) break;
+  }
+  if (soFar.trim()) return soFar.trim();
+  throw new ApiError("ai_empty_answer");
+}
+
 export interface GameHelp {
   notes: string;
   installation_id: number | null;
   repo: string | null;
   guide: string;
   learned_at: string | null;
+  /** the AI is learning the game right now (a batch: usually a few minutes, at half the price) */
+  learn_batch?: string | null;
+  /** why the last learning didn't work out */
+  learn_error?: string | null;
 }
 /** What the helper knows about a game (its developer and admins). */
 export async function gameHelp(gameId: string): Promise<GameHelp | null> {
-  const { data, error } = await supabase.from("game_help").select("notes, installation_id, repo, guide, learned_at").eq("game_id", gameId).maybeSingle();
+  const { data, error } = await supabase.from("game_help").select("notes, installation_id, repo, guide, learned_at, learn_batch, learn_error").eq("game_id", gameId).maybeSingle();
   if (error) throw error;
   return data as GameHelp | null;
 }
-/** Saves the tips; with learn, the AI reads the repository again now. */
+/** Saves the tips; with learn, the AI starts reading the repository again (learning: it takes a few minutes). */
 export const saveGameHelp = (h: { game_id: string; notes: string; installation_id?: number; repo?: string; learn?: boolean }) =>
-  assist<{ ok: boolean; learned_at: string | null; guide: string | null }>({ action: "help_setup", ...h });
+  assist<{ ok: boolean; learning?: boolean; learned_at: string | null; guide: string | null }>({ action: "help_setup", ...h });
+/** Whether the AI is still learning the game; collects the guide once it's ready. */
+export const gameLearning = (gameId: string) =>
+  assist<{ learning: boolean; guide: string; learned_at: string | null; error: string | null }>({ action: "help_learning", game_id: gameId });
 
 
 /** Error codes the AI features have texts for. */
-const ERRORS = ["free_off", "rate_limited", "cap_reached", "quota_reached", "not_allowed", "nothing_to_write", "github_error", "ai_timeout", "ai_bad_answer", "ai_provider_error", "ai_empty_answer"] as const;
+const ERRORS = ["free_off", "rate_limited", "cap_reached", "quota_reached", "not_allowed", "nothing_to_write", "github_error", "ai_timeout", "ai_bad_answer", "ai_provider_error", "ai_empty_answer",
+  "ai_busy", "ai_refused", "ai_unavailable"] as const;
 export type AssistError = (typeof ERRORS)[number] | "error";
 export const assistError = (e: unknown): AssistError => {
   const code = e instanceof Error ? e.message : "";
