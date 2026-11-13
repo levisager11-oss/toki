@@ -5,6 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "./i18n";
 
 const SITE_KEY: string | undefined = import.meta.env.VITE_TURNSTILE_SITE_KEY || undefined;
+/** Whether the bot check is set up (the privacy policy only mentions it then). */
+export const CAPTCHA_ON = !!SITE_KEY;
 const SCRIPT = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
 
 interface Turnstile {

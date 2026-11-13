@@ -14,6 +14,7 @@ import { useTitle } from "../lib/useTitle";
 import { Linkify } from "../components/Linkify";
 import { useDraft } from "../lib/useDraft";
 import { ShareButton } from "../components/ShareButton";
+import { ReportButton } from "../components/ReportButton";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -129,6 +130,7 @@ export function FeedbackPost() {
           </p>
           {post.device && <p className="sub"><span className="label">{t("fb.post.device")}</span> {post.device}</p>}
           {!post.private && <p className="sub fb-share"><ShareButton className="linkish" path={`/feedback/${post.id}`} title={post.title} /></p>}
+          {!isAuthor && !post.private && <div className="report-line"><ReportButton key={post.id} kind="feedback" target={post.id} /></div>}
           {isAuthor && (
             <div className="actions">
               <button type="button" className="btn" onClick={() => setEditing(true)}>{t("fb.post.edit")}</button>

@@ -142,7 +142,7 @@ export const devEn = {
   "lim.k.messages_hour": "Chat messages an hour",
   "lim.k.groups_day": "New group chats a day",
   "lim.k.group_size": "People in a group chat",
-  "lim.k.reports_day": "Reported messages a day",
+  "lim.k.reports_day": "Reports a day",
   "lim.k.friend_requests_day": "Friend requests a day",
   "lim.k.game_invites_10min": "Game invites in 10 minutes",
   "lim.k.party_size": "Players in a party",

@@ -15,6 +15,7 @@ import type { Game } from "../lib/types";
 import { NotFound } from "./NotFound";
 import { useTitle } from "../lib/useTitle";
 import { ShareButton } from "../components/ShareButton";
+import { ReportButton } from "../components/ReportButton";
 import { formatDuration } from "../lib/analytics";
 import { currentStreak, playerStreak, utcDay, type Streak } from "../lib/daily";
 import { playerAchievements, type Badge } from "../lib/achievements";
@@ -156,6 +157,7 @@ export function Profile() {
         </div>
       </div>
       {confirmBlock && <p className="hint">{t("soc.blockHelp")}</p>}
+      {p.relation !== "self" && <div className="report-line"><ReportButton key={p.id} kind="profile" target={p.id} /></div>}
       {err && <p className="error" role="alert">{err}</p>}
       {p.relation === "self" && p.banned_until && new Date(p.banned_until) > new Date() && (
         <p className="check warn">{t("soc.bannedUntil", { date: new Date(p.banned_until).toLocaleString(lang === "de" ? "de-CH" : "en") })}</p>

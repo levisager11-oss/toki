@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { ReportButton } from "../components/ReportButton";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
@@ -177,6 +178,7 @@ export function Idea() {
         {idea.status === "open" && dev && <p className="hint">{t("idea.claimHint")}</p>}
       </section>
       {error && <p className="error" role="alert">{error}</p>}
+      {!isAuthor && <div className="report-line"><ReportButton key={idea.id} kind="idea" target={idea.id} /></div>}
       {/* Deleting takes two taps: the first asks "for good?". Kept apart from the buttons above. */}
       {((isAuthor && idea.status === "open") || admin) && (
         <p className="idea-tools">

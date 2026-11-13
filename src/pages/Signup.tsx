@@ -8,6 +8,8 @@ import { useAuth } from "../lib/auth";
 import { inlineLinks } from "../lib/inlineLinks";
 import { passwordError } from "../components/PasswordForm";
 import { isCaptchaError, useCaptcha } from "../lib/captcha";
+import { ageOf, bornValue, MIN_AGE, PARENT_AGE, rememberTooYoung, tooYoungHere } from "../lib/account";
+import { BirthFields } from "../components/BirthFields";
 
 export function Signup() {
   const { t } = useI18n();
@@ -18,6 +20,11 @@ export function Signup() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [month, setMonth] = useState("");
+  const [year, setYear] = useState("");
+  const [parentOk, setParentOk] = useState(false);
+  // Too young for an account (now, or on this device in the last days).
+  const [tooYoung, setTooYoung] = useState(tooYoungHere);
   const [err, setErr] = useState("");
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -31,6 +38,14 @@ export function Signup() {
     setErr("");
     const code = invite.trim();
     const name = username.trim().toLowerCase();
+    const born = bornValue(year, month);
+    if (!born) return;
+    const age = ageOf(born);
+    // Under 13: no account, and nothing they typed is sent anywhere.
+    if (age < MIN_AGE) {
+      rememberTooYoung();
+      return setTooYoung(true);
+    }
     setBusy(true);
     try {
       if (code) {
@@ -42,7 +57,7 @@ export function Signup() {
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
-        options: { data: { invite: code, username: name }, emailRedirectTo: `${window.location.origin}/login`, captchaToken: await captcha.getToken() },
+        options: { data: { invite: code, username: name, born, parent_ok: age < PARENT_AGE && parentOk }, emailRedirectTo: `${window.location.origin}/login`, captchaToken: await captcha.getToken() },
       });
       if (isCaptchaError(error)) return setErr(t("captcha.failed"));
       if (error) {
@@ -75,6 +90,19 @@ export function Signup() {
       </section>
     );
 
+  if (tooYoung)
+    return (
+      <section className="panel narrow">
+        <h1 className="h">{t("age.tooYoung.title")}</h1>
+        <p className="lead">{t("age.tooYoung.text")}</p>
+        <Link to="/" className="btn primary">{t("age.playOn")}</Link>
+      </section>
+    );
+
+  const bornNow = bornValue(year, month);
+  const ageNow = bornNow ? ageOf(bornNow) : null;
+  const needsParent = ageNow !== null && ageNow >= MIN_AGE && ageNow < PARENT_AGE;
+
   return (
     <section className="panel narrow">
       <h1 className="h">{t("signup.title")}</h1>
@@ -88,6 +116,13 @@ export function Signup() {
         <label htmlFor="password">{t("login.password")}</label>
         <input id="password" type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" aria-describedby="pw-help" />
         <small id="pw-help">{t("signup.passwordHelp")}</small>
+        <BirthFields month={month} year={year} onMonth={setMonth} onYear={setYear} />
+        {needsParent && (
+          <label className="fb-check">
+            <input type="checkbox" required checked={parentOk} onChange={(e) => setParentOk(e.target.checked)} />
+            <span>{t("age.parentOk")}</span>
+          </label>
+        )}
         <label htmlFor="invite">{t("signup.invite")}</label>
         <input id="invite" value={invite} onChange={(e) => setInvite(e.target.value)} autoComplete="off" spellCheck={false} aria-describedby="invite-help" />
         <small id="invite-help">{t("signup.inviteHelp")}</small>
@@ -98,10 +133,10 @@ export function Signup() {
             {err === t("signup.emailTaken") && <> <Link to="/login?forgot=1">{t("login.forgot")}</Link></>}
           </p>
         )}
-        <button className="btn primary" disabled={busy}>{busy ? t("loading") : t("signup.submit")}</button>
         <p className="hint">
           {inlineLinks(t("signup.agree"))}
         </p>
+        <button className="btn primary" disabled={busy}>{busy ? t("loading") : t("signup.submit")}</button>
       </form>
       <p className="alt">{t("signup.haveAccount")} <Link to={`/login${location.search}`}>{t("nav.login")}</Link></p>
     </section>

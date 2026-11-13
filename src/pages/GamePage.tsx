@@ -28,6 +28,7 @@ import { Screenshots } from "../components/ShotViewer";
 import { useFreeAi } from "../lib/assist";
 import { CloseIcon, FullscreenIcon, PeopleIcon } from "../components/icons";
 import { ShareButton } from "../components/ShareButton";
+import { ReportButton } from "../components/ReportButton";
 import { GameNameField, InviteFriends, InviteStatus, useGameInvites, useRoomBridge } from "../components/GameInvite";
 import { PartyChat, usePartyOnGame } from "../components/Party";
 import { isParty } from "../lib/party";
@@ -313,6 +314,7 @@ export function GamePage() {
       <GameUpdates game={game} />
       <GameChat game={game} />
       <GameFeedback game={game} />
+      {!canEdit && <div className="report-line"><ReportButton key={game.id} kind="game" target={game.id} /></div>}
 
       {more.length > 0 && (
         <section>

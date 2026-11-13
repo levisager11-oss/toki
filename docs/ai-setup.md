@@ -7,6 +7,16 @@ Almost everything is set up on Toki itself, on the **AI** page (`/admin/ai`, adm
 the real site (`https://www.playtoki.app`), not on a preview, because the GitHub App remembers the
 address it was created from.
 
+## 0. The privacy policy follows these settings by itself
+
+The privacy policy (`/privacy`) says whether the AI features are on and names the AI service that
+gets players' text. It reads that from the settings on the **AI** page: switching AI on or off, or
+entering another service's address, changes the policy and its date right away. Nothing to edit.
+
+Services the policy knows by name (company and country) are listed in `src/lib/policy.ts`
+(Anthropic, OpenAI, Google, OpenRouter, Mistral, Groq). Any other service is named by its address
+until it is added there.
+
 ## 1. Supabase key in Vercel (once, the only step outside Toki)
 
 The server needs it to use the database, and to keep the other keys encrypted.

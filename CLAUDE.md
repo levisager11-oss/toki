@@ -33,3 +33,15 @@ New changes go in `supabase/migrations/` (one file per change). They are tested 
 ## Texts
 
 Every text is in English and German. The German texts use „…“ quotes and “ss” instead of “ß”. Texts live in `src/lib/i18n.tsx`; texts that only pages loaded on demand use (player pages, developer and admin pages, terms and privacy) can live in `src/lib/texts/` and are named in that page's `page()` call in `src/App.tsx`. A new text can always go into `i18n.tsx`; `tests/texts.test.ts` says when one is in the wrong place.
+
+## Legal
+
+Toki is run by a private person in Switzerland and is meant to be safe to use in Switzerland, the EU and the USA. Accounts are for players of 13 and older (13 to 15 with a parent's OK); the terms, the privacy policy and the legal notice are in `src/lib/texts/legalEn.ts` and `legalDe.ts`. When a change touches any of this, update those texts (and their date) in the same change:
+
+- A new kind of data about players, a new place it is stored, or a new deletion time: the privacy policy. Add the table to `export_my_data` (the download on the account page) and make sure it is deleted with the account.
+- A new outside service that sees players' data or their IP address (a host, a script, fonts, an AI service): name it in the privacy policy first. Don't load anything from other companies' servers on pages visitors see without an account.
+- New things players can post where others see them: add "Report" for it (`src/components/ReportButton.tsx`, `report_content`).
+- The privacy policy follows Toki's settings by itself (`src/lib/policy.ts`, `policy_facts()`): the AI services in use, whether games are uploaded to Toki, every deletion time, the bot check. Its date moves when one of them changes. A new setting that changes what the policy has to say must work the same way, never through a text someone has to remember to edit.
+- The terms don't depend on settings: a change to them has to be announced first.
+- No ads, no tracking, nothing that needs a cookie banner.
+- Changes to the terms are announced in a Toki update 14 days before they apply.

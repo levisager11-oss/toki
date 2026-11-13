@@ -144,7 +144,7 @@ export const devDe: Record<GroupKey["dev"], string> = {
   "lim.k.messages_hour": "Chatnachrichten pro Stunde",
   "lim.k.groups_day": "Neue Gruppenchats pro Tag",
   "lim.k.group_size": "Personen in einem Gruppenchat",
-  "lim.k.reports_day": "Gemeldete Nachrichten pro Tag",
+  "lim.k.reports_day": "Meldungen pro Tag",
   "lim.k.friend_requests_day": "Freundschaftsanfragen pro Tag",
   "lim.k.game_invites_10min": "Spieleinladungen in 10 Minuten",
   "lim.k.party_size": "Spieler in einer Party",
