@@ -215,3 +215,44 @@ describe("reports", () => {
     expect(await t.as(b, "select 1 from notifications where kind = 'report_done' and data ->> 'outcome' = 'removed'")).toHaveLength(1);
   });
 });
+
+describe("what the privacy policy says about AI", () => {
+  const facts = () => rpc<{ ai_hosts: string[]; changed_at: string | null }>(null, "policy_facts");
+  const set = (sql: string) => t.admin(`update ai_settings set ${sql} where id = 1`);
+
+  it("follows the AI settings, for everyone", async () => {
+    expect(await facts()).toEqual({ ai_hosts: [], changed_at: null });
+    // set up but still off: nothing is sent anywhere
+    await set("provider = 'anthropic', base_url = '', model = 'm', input_price = 1, output_price = 1");
+    expect(await facts()).toEqual({ ai_hosts: [], changed_at: null });
+    await set("enabled = true");
+    const on = await facts();
+    expect(on.ai_hosts).toEqual(["api.anthropic.com"]);
+    expect(on.changed_at).not.toBeNull();
+    // a second service for the free AI; the same one twice is named once
+    await set("free_enabled = true, free_base_url = 'https://API.Example.com:8443/v1', free_model = 'm'");
+    expect((await facts()).ai_hosts).toEqual(["api.anthropic.com", "api.example.com"]);
+    await set("free_base_url = 'https://api.anthropic.com/v1'");
+    expect((await facts()).ai_hosts).toEqual(["api.anthropic.com"]);
+    await set("enabled = false, free_enabled = false");
+    expect((await facts()).ai_hosts).toEqual([]);
+  });
+
+  it("moves its date only when the service changes", async () => {
+    await set("enabled = true");
+    const before = (await facts()).changed_at;
+    expect(before).not.toBeNull();
+    // prices and models aren't in the policy
+    await set("monthly_cap = 7, model = 'other'");
+    expect((await facts()).changed_at).toBe(before);
+    await new Promise((r) => setTimeout(r, 5));
+    await set("provider = 'openai_compatible', base_url = 'https://api.example.com/v1'");
+    expect((await facts()).changed_at).not.toBe(before);
+    await set("enabled = false");
+  });
+
+  it("gives away nothing else", async () => {
+    await expect(t.as(null, "select * from ai_settings")).rejects.toThrow(/permission denied/);
+    expect(Object.keys(await facts()).sort()).toEqual(["ai_hosts", "changed_at"]);
+  });
+});
