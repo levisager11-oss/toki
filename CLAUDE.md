@@ -41,5 +41,6 @@ Toki is run by a private person in Switzerland and is meant to be safe to use in
 - A new kind of data about players, a new place it is stored, or a new deletion time: the privacy policy. Add the table to `export_my_data` (the download on the account page) and make sure it is deleted with the account.
 - A new outside service that sees players' data or their IP address (a host, a script, fonts, an AI service): name it in the privacy policy first. Don't load anything from other companies' servers on pages visitors see without an account.
 - New things players can post where others see them: add "Report" for it (`src/components/ReportButton.tsx`, `report_content`).
+- The AI service named in the privacy policy is Anthropic. Using another one (also for the free AI) means naming it there first.
 - No ads, no tracking, nothing that needs a cookie banner.
 - Changes to the terms are announced in a Toki update 14 days before they apply.

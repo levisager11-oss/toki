@@ -9,10 +9,11 @@ address it was created from.
 
 ## 0. Name the AI service in the privacy policy (before switching AI on)
 
-The privacy policy (`src/lib/texts/legalEn.ts` and `legalDe.ts`) says the AI features are switched
-off and that the AI service will be named before they are switched on. So before enabling AI on the
-**AI** page, change the "AI features" section to name the service and its country, add it to "Who
-helps run Toki", change the date at the top, and post a Toki update about it.
+The privacy policy (`src/lib/texts/legalEn.ts` and `legalDe.ts`) names Anthropic as Toki's AI
+service and says the AI features are switched off for now. When you enable AI on the **AI** page,
+take "switched off at the moment" out of the "AI features" section, change the date at the top, and
+post a Toki update about it. If you set up any other service (also for the free AI), name it there
+and under "Who helps run Toki" first.
 
 ## 1. Supabase key in Vercel (once, the only step outside Toki)
 
