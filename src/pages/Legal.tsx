@@ -4,6 +4,8 @@ import { listOf, useI18n } from "../lib/i18n";
 import { inlineLinks as inline } from "../lib/inlineLinks";
 import { useTitle } from "../lib/useTitle";
 import { CONTACT_EMAIL } from "../lib/site";
+import { CAPTCHA_ON } from "../lib/captcha";
+import { KEEP_PREVIOUS_DAYS } from "../lib/hostingRules";
 import { aiServiceName, ANTHROPIC_HOST, LEGAL_DATE, loadPolicyFacts, policyDate, type PolicyFacts } from "../lib/policy";
 
 // The terms of service, the privacy policy and the legal notice. Their texts are in
@@ -63,6 +65,12 @@ export function Legal({ page }: { page: (typeof PAGES)[number] }) {
     email: CONTACT_EMAIL,
     ai,
     ai_training: hosts.length > 0 && hosts.every((h) => h === ANTHROPIC_HOST) ? t("legal.privacy.ai.training") : "",
+    // While it can't be loaded, the policy rather says too much than too little.
+    cf_games: facts?.games_hosted === false ? "" : t("legal.privacy.cf.games"),
+    cf_check: CAPTCHA_ON ? t("legal.privacy.cf.check") : "",
+    check_why: CAPTCHA_ON ? t("legal.privacy.check.why") : "",
+    check_cookie: CAPTCHA_ON ? t("legal.privacy.check.cookie") : "",
+    old_days: KEEP_PREVIOUS_DAYS,
     ai_line: services.map((s) => t("legal.privacy.ai.line", { service: s }) + "\n").join(""),
   };
   const day = new Date((page === "privacy" ? policyDate(facts ?? null) : LEGAL_DATE) + "T12:00:00");

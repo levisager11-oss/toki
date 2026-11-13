@@ -1,12 +1,19 @@
-// The privacy policy follows Toki's settings: which AI services get players' text right now, and
-// when that last changed (supabase/migrations/20261202090000_policy_facts.sql). The deletion
-// times in the policy follow the admin's settings too ({keep.…}, see limitValues.ts).
+// The privacy policy follows Toki's settings, so nobody has to edit it when one changes:
+//  * which AI services get players' text right now (the AI page),
+//  * whether games are uploaded to Toki, which Cloudflare then stores and runs,
+//  * every deletion time on /admin/limits ({keep.…} in the text, see limitValues.ts),
+//  * whether the bot check is set up (VITE_TURNSTILE_SITE_KEY) and how long old versions of
+//    uploaded games are kept (KEEP_PREVIOUS_DAYS),
+// and its date is the day one of them last changed (policy_facts() in
+// supabase/migrations/20261202090000_policy_facts.sql and 20261203090000_policy_settings.sql).
 import { supabase } from "./supabase";
 
 export interface PolicyFacts {
   /** Host names of the AI services in use; empty while AI is switched off. */
   ai_hosts: string[];
-  /** When the AI services last changed, if ever. */
+  /** Whether any game is uploaded to Toki (and so stored and run by Cloudflare). */
+  games_hosted: boolean;
+  /** When one of these, or a deletion time, last changed, if ever. */
   changed_at: string | null;
 }
 
@@ -42,5 +49,5 @@ export async function loadPolicyFacts(): Promise<PolicyFacts | null> {
   const { data, error } = await supabase.rpc("policy_facts");
   if (error || !data) return null;
   const d = data as Partial<PolicyFacts>;
-  return { ai_hosts: Array.isArray(d.ai_hosts) ? d.ai_hosts : [], changed_at: d.changed_at ?? null };
+  return { ai_hosts: Array.isArray(d.ai_hosts) ? d.ai_hosts : [], games_hosted: d.games_hosted !== false, changed_at: d.changed_at ?? null };
 }

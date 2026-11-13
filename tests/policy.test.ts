@@ -9,8 +9,8 @@ describe("the privacy policy's facts", () => {
 
   it("show the later of the texts' date and the settings' date", () => {
     expect(policyDate(null, "2026-11-13")).toBe("2026-11-13");
-    expect(policyDate({ ai_hosts: [], changed_at: null }, "2026-11-13")).toBe("2026-11-13");
-    expect(policyDate({ ai_hosts: [], changed_at: "2026-10-01T08:00:00+00:00" }, "2026-11-13")).toBe("2026-11-13");
-    expect(policyDate({ ai_hosts: ["api.anthropic.com"], changed_at: "2026-12-02T08:00:00+00:00" }, "2026-11-13")).toBe("2026-12-02");
+    expect(policyDate({ ai_hosts: [], games_hosted: false, changed_at: null }, "2026-11-13")).toBe("2026-11-13");
+    expect(policyDate({ ai_hosts: [], games_hosted: true, changed_at: "2026-10-01T08:00:00+00:00" }, "2026-11-13")).toBe("2026-11-13");
+    expect(policyDate({ ai_hosts: ["api.anthropic.com"], games_hosted: true, changed_at: "2026-12-02T08:00:00+00:00" }, "2026-11-13")).toBe("2026-12-02");
   });
 });

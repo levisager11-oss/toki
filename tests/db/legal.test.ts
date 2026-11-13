@@ -217,14 +217,14 @@ describe("reports", () => {
 });
 
 describe("what the privacy policy says about AI", () => {
-  const facts = () => rpc<{ ai_hosts: string[]; changed_at: string | null }>(null, "policy_facts");
+  const facts = () => rpc<{ ai_hosts: string[]; games_hosted: boolean; changed_at: string | null }>(null, "policy_facts");
   const set = (sql: string) => t.admin(`update ai_settings set ${sql} where id = 1`);
 
   it("follows the AI settings, for everyone", async () => {
-    expect(await facts()).toEqual({ ai_hosts: [], changed_at: null });
+    expect((await facts()).ai_hosts).toEqual([]);
     // set up but still off: nothing is sent anywhere
     await set("provider = 'anthropic', base_url = '', model = 'm', input_price = 1, output_price = 1");
-    expect(await facts()).toEqual({ ai_hosts: [], changed_at: null });
+    expect((await facts()).ai_hosts).toEqual([]);
     await set("enabled = true");
     const on = await facts();
     expect(on.ai_hosts).toEqual(["api.anthropic.com"]);
@@ -253,6 +253,35 @@ describe("what the privacy policy says about AI", () => {
 
   it("gives away nothing else", async () => {
     await expect(t.as(null, "select * from ai_settings")).rejects.toThrow(/permission denied/);
-    expect(Object.keys(await facts()).sort()).toEqual(["ai_hosts", "changed_at"]);
+    expect(Object.keys(await facts()).sort()).toEqual(["ai_hosts", "changed_at", "games_hosted"]);
+  });
+
+  it("moves its date when a deletion time changes", async () => {
+    const before = (await facts()).changed_at;
+    await new Promise((r) => setTimeout(r, 5));
+    await t.admin("update keep_times set value = value where key = 'chat_public'");
+    expect((await facts()).changed_at).toBe(before);
+    await t.admin("update keep_times set value = value + 1 where key = 'chat_public'");
+    expect((await facts()).changed_at).not.toBe(before);
+  });
+
+  it("knows whether games are uploaded to Toki, and moves its date when that changes", async () => {
+    const dev = await t.user("creator");
+    await t.admin("update games set hosted_site = null");
+    expect((await facts()).games_hosted).toBe(false);
+    const game = await t.game(dev);
+    const before = (await facts()).changed_at;
+    await new Promise((r) => setTimeout(r, 5));
+    await t.admin("update games set hosted_site = 'my-game' where id = $1", [game.id]);
+    const hosted = await facts();
+    expect(hosted.games_hosted).toBe(true);
+    expect(hosted.changed_at).not.toBe(before);
+    // a second uploaded game changes nothing the policy says
+    const second = await t.game(dev);
+    await new Promise((r) => setTimeout(r, 5));
+    await t.admin("update games set hosted_site = 'other-game' where id = $1", [second.id]);
+    expect((await facts()).changed_at).toBe(hosted.changed_at);
+    await t.admin("delete from games where id in ($1, $2)", [game.id, second.id]);
+    expect((await facts()).games_hosted).toBe(false);
   });
 });
