@@ -1313,6 +1313,9 @@ main.content:focus { outline: none; }
 .birth-fields select { flex: 1 1 0; min-width: 0; }
 .age-gate .form { padding: 20px; }
 .age-gate .h { font-size: 22px; }
+/* In a row of buttons the yellow one lines up with the others (forms push it down otherwise). */
+.age-gate .actions, .report-box .actions, .account-data .form .actions { margin-top: 14px; }
+.age-gate .actions .btn.primary { margin-top: 0; align-self: auto; }
 .report-line { margin: 18px 0 0; font-size: 14px; }
 .report-box { max-width: 480px; margin-top: 8px; }
 .account-data { margin-top: 32px; }
