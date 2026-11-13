@@ -489,7 +489,7 @@ export const devDe: Record<GroupKey["dev"], string> = {
   "ai.features.help.learn": "Lernt ein Spiel aus seinem Code, damit „KI fragen“ es kennt.",
   "ai.features.help.release": "Schreibt Entwürfe für Updates.",
   "ai.features.help.describe": "Schreibt Spielbeschreibungen und liest neue Spiele, um ihre Angaben auszufüllen.",
-  "ai.features.help.moderate": "Ein erster Blick auf Meldungen für Admins unter /reports (entscheiden tut immer ein Admin). Aus, bis sie ein Modell hat.",
+  "ai.features.help.moderate": "Ein erster Blick auf Meldungen für Admins unter /reports (entscheiden tut immer ein Admin), ab dem Tag, an dem die angekündigte Änderung der Nutzungsbedingungen gilt. Aus, bis sie ein Modell hat.",
   "ai.features.help.summary": "Fasst Feedback und Bewerbungen zusammen und schreibt Prompts für eine Coding-KI.",
   "ai.features.help.connect": "Schreibt den Code bei Toki Connect (auch mit Managed Agents).",
   "ai.features.help.connect_steps": "Liest bei Toki Connect den Code und stellt dem Entwickler Fragen. Aus: Das Modell oben macht diese Schritte auch.",

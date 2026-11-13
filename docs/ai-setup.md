@@ -83,7 +83,7 @@ feature** tries them all at once.
 | `connect`: the Toki Connect steps that write code (also Managed Agents) | developers | Sonnet |
 | `connect_steps`: Toki Connect's easy steps (reading code, asking the developer); off: `connect` does them | developers | Haiku |
 | `connect_quick`: leaderboard code in one-click "Add your game"; off: one-click adding leaves the code alone | developers | Sonnet |
-| `moderate`: a first look at open reports on `/reports` (remove / keep / unsure, with a reason, kept on the report; an admin always decides) | admins | off |
+| `moderate`: a first look at open reports on `/reports` (remove / keep / unsure, with a reason, kept on the report; an admin always decides). Works from the day the terms allow it (`TERMS_NEXT_DATE` in `src/lib/terms.ts`, 28 November 2026) | admins | off |
 
 The prompts are in `server/assist/prompts.ts` and `server/assist/help.ts`; the helpers' server code
 is `api/assist.ts`.

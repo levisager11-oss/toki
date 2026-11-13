@@ -20,6 +20,7 @@ import {
 import { linksIn, readPage } from "../server/assist/pages.js";
 import { cleanTurns, guideFiles, helpPrompt, learnPrompt, scoreText, type HelpGame, type HelpPlayer } from "../server/assist/help.js";
 import { MAX_SAVE_SUMMARY } from "../src/lib/saveSummary.js";
+import { nextTermsApply } from "../src/lib/terms.js";
 import { pickFiles } from "../server/connect/files.js";
 import { errorDetail } from "../server/connect/agent.js";
 import { DbError, userDb, type Db } from "../server/db.js";
@@ -492,6 +493,8 @@ const MODERATE_BATCH = 10;
  */
 async function moderate(ctx: Ctx, lang: Lang) {
   if (ctx.user.role !== "admin") return json({ error: "not_allowed" }, 403);
+  // The terms allow it only from the day their announced change applies (src/lib/terms.ts).
+  if (!nextTermsApply()) return json({ error: "not_yet" }, 403);
   const [messages, content] = await Promise.all([
     ctx.db.select<{ id: number; body: string; reason: string }>("message_reports", `handled_at=is.null&ai_checked_at=is.null&select=id,body,reason&order=created_at&limit=${MODERATE_BATCH}`),
     ctx.db.select<{ id: number; kind: ReportItem["kind"]; target: string; category: string; reason: string; title: string }>(

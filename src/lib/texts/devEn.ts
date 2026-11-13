@@ -487,7 +487,7 @@ export const devEn = {
   "ai.features.help.learn": "Learns a game from its code, so “Ask AI” knows it.",
   "ai.features.help.release": "Drafts release notes.",
   "ai.features.help.describe": "Writes game descriptions and reads new games to fill in their details.",
-  "ai.features.help.moderate": "A first look at reports for admins on /reports (an admin always decides). Off until it has a model.",
+  "ai.features.help.moderate": "A first look at reports for admins on /reports (an admin always decides), from the day the announced change to the terms applies. Off until it has a model.",
   "ai.features.help.summary": "Summaries of feedback and applications, and prompts for a coding AI.",
   "ai.features.help.connect": "Writes the code of Toki Connect runs (also with Managed Agents).",
   "ai.features.help.connect_steps": "Reads the code and asks the developer questions in Toki Connect runs. Off: the model above does these steps too.",

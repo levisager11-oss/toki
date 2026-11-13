@@ -6,6 +6,7 @@ import { handleReport, listReports, type Report } from "../lib/social";
 import { handleContentReport, listContentReports, REPORT_NOTE_MAX, type ContentReport } from "../lib/account";
 import { Avatar } from "../components/Avatar";
 import { assistError, checkReports, useAiFeature } from "../lib/assist";
+import { nextTermsApply } from "../lib/terms";
 import { useTitle } from "../lib/useTitle";
 
 /** Admins: reported chat messages, and reported games, profiles, feedback posts and ideas. */
@@ -21,7 +22,8 @@ export function Reports() {
   const [err, setErr] = useState("");
   const [reload, setReload] = useState(0);
   // The AI's first look at open reports (an admin still decides).
-  const aiOn = useAiFeature("moderate");
+  // Only from the day the terms allow it (src/lib/terms.ts).
+  const aiOn = useAiFeature("moderate") && nextTermsApply();
   const [checking, setChecking] = useState(false);
   const [aiMsg, setAiMsg] = useState("");
   const unchecked = (list ?? []).some((r) => !r.ai_verdict) || (other ?? []).some((r) => !r.ai_verdict);
