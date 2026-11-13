@@ -3,12 +3,8 @@
 const env = () => (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {};
 
 export interface ServerEnv {
-  /** Key for the OpenAI-compatible endpoint set in the admin dashboard. */
-  aiKey: string;
-  /** Key for Anthropic's API. */
+  /** Key for Anthropic's API (every AI feature uses Claude). */
   anthropicKey: string;
-  /** Key for the free AI's endpoint, when it isn't the strong AI's OpenAI-compatible endpoint. */
-  freeAiKey: string;
   /** Supabase secret key (sb_secret_…) or the older service_role key: skips row level security. */
   serviceKey: string;
   /** webhookSecret: checks GitHub's push events (games that follow a repository); optional. */
@@ -20,9 +16,7 @@ export interface ServerEnv {
 export function serverEnv(): ServerEnv {
   const e = env();
   return {
-    aiKey: e.AI_API_KEY ?? "",
     anthropicKey: e.ANTHROPIC_API_KEY ?? "",
-    freeAiKey: e.FREE_AI_API_KEY ?? "",
     serviceKey: e.SUPABASE_SECRET_KEY || e.SUPABASE_SERVICE_ROLE_KEY || "",
     push: { publicKey: e.VAPID_PUBLIC_KEY ?? "", privateKey: e.VAPID_PRIVATE_KEY ?? "" },
     github: {

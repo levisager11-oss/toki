@@ -5,22 +5,9 @@ import { AiError, TIMEOUT_MS, type ChatMessage, type Completion, type ModelInfo,
 
 export const ANTHROPIC_URL = "https://api.anthropic.com";
 
-/** List prices (US dollars per million tokens), so the admin page can fill them in; the Models API has none. */
-export const CLAUDE_PRICES: Record<string, { input: number; output: number }> = {
-  "claude-fable-5-1": { input: 10, output: 50 },
-  "claude-mythos-5-1": { input: 10, output: 50 },
-  "claude-fable-5": { input: 10, output: 50 },
-  "claude-opus-5-5": { input: 4, output: 20 },
-  "claude-opus-5": { input: 5, output: 25 },
-  "claude-opus-4-8": { input: 5, output: 25 },
-  "claude-opus-4-7": { input: 5, output: 25 },
-  "claude-opus-4-6": { input: 5, output: 25 },
-  "claude-sonnet-5-5": { input: 2, output: 10 },
-  "claude-sonnet-5": { input: 2, output: 10 },
-  "claude-sonnet-4-6": { input: 3, output: 15 },
-  "claude-haiku-5-5": { input: 0.1, output: 0.5 },
-  "claude-haiku-4-5": { input: 1, output: 5 },
-};
+// List prices (US dollars per million tokens), so the admin page can fill them in; the Models API has none.
+export { CLAUDE_PRICES } from "../../src/lib/claudeModels.js";
+import { CLAUDE_PRICES } from "../../src/lib/claudeModels.js";
 
 // On these models, when safety checks decline a request, Anthropic answers it with a fitting
 // other model instead (server-side fallback), in the same call.
@@ -31,11 +18,11 @@ interface Config {
   apiKey: string;
 }
 
-function client(config: Config, fetchImpl?: typeof fetch) {
+function client(config: Config, fetchImpl?: typeof fetch, timeoutMs = TIMEOUT_MS) {
   return new Anthropic({
     apiKey: config.apiKey,
     baseURL: config.baseUrl || ANTHROPIC_URL,
-    timeout: TIMEOUT_MS,
+    timeout: timeoutMs,
     maxRetries: 1,
     ...(fetchImpl ? { fetch: fetchImpl } : {}),
   });
@@ -59,7 +46,7 @@ export function effortFor(thinking: Thinking | undefined): "low" | "medium" | "h
 
 export async function anthropicComplete(
   config: Config & { model: string; thinking?: Thinking },
-  req: { messages: ChatMessage[]; maxTokens: number },
+  req: { messages: ChatMessage[]; maxTokens: number; timeoutMs?: number },
   fetchImpl?: typeof fetch,
 ): Promise<Completion> {
   // Parts marked "cache" get a cache breakpoint: the next call with the same beginning reads them
@@ -73,7 +60,7 @@ export async function anthropicComplete(
   const effort = effortFor(config.thinking);
   const plain = { model: config.model, max_tokens: req.maxTokens, messages, ...(system.length ? { system } : {}) };
   try {
-    const c = client(config, fetchImpl);
+    const c = client(config, fetchImpl, req.timeoutMs);
     // Streamed, because requests can be large and take a while.
     const send = (withEffort: boolean) => {
       const base = { ...plain, ...(withEffort && effort ? { output_config: { effort } } : {}) };

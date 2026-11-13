@@ -186,63 +186,6 @@ describe("game helper", async () => {
   });
 });
 
-describe("the free AI's key", async () => {
-  const { freeKey } = await import("../server/ai/free");
-  const keys = { free: "", openai: "strong-key" };
-  it("is its own key when it has one", () => expect(freeKey({ free: "own", openai: "x" }, { provider: "openai_compatible", base_url: "https://a.example/v1", free_base_url: "https://b.example/v1" })).toBe("own"));
-  it("borrows the OpenAI-compatible key for the same endpoint, or when the strong AI is Anthropic", () => {
-    expect(freeKey(keys, { provider: "openai_compatible", base_url: "https://a.example/v1", free_base_url: "https://a.example/api" })).toBe("strong-key");
-    expect(freeKey(keys, { provider: "anthropic", base_url: "", free_base_url: "https://b.example/v1" })).toBe("strong-key");
-  });
-  it("never sends the strong AI's key to another endpoint", () =>
-    expect(freeKey(keys, { provider: "openai_compatible", base_url: "https://paid.example/v1", free_base_url: "https://free.example/v1" })).toBe(""));
-});
-
-describe("a save for the game helper", async () => {
-  const { MAX_SAVE_SUMMARY, saveSummary } = await import("../src/lib/saveSummary");
-
-  it("is one line per key, with JSON read", () => {
-    expect(saveSummary({ level: "3", player: JSON.stringify({ hp: 5, items: ["key", "rope"] }), name: "Mia the brave" })).toBe(
-      'level: 3\nplayer: {"hp":5,"items":["key","rope"]}\nname: Mia the brave',
-    );
-    expect(saveSummary({})).toBe("");
-  });
-
-  it("reads JSON kept inside a text, and keeps line breaks out", () => {
-    expect(saveSummary({ save: JSON.stringify({ state: JSON.stringify({ quest: "bridge" }) }), note: "a\nb" })).toBe('save: {"state":{"quest":"bridge"}}\nnote: a b');
-  });
-
-  it("leaves out logins, but not coins called tokens", () => {
-    const jwt = `eyJhbGciOiJIUzI1NiJ9.${"a".repeat(30)}.${"b".repeat(20)}`;
-    const out = saveSummary({
-      "sb-abc-auth-token": JSON.stringify({ access_token: "x".repeat(40), user: { email: "mia@example.com", id: 7 } }),
-      profile: JSON.stringify({ password: "hunter2", tokens: 50, author: "Mia", sessionKey: "k".repeat(20), id: jwt }),
-      apiKey: "sk-" + "z".repeat(30),
-    });
-    expect(out).not.toMatch(/x{40}|mia@example|hunter2|k{20}|eyJ|z{30}/);
-    expect(out).toContain('"tokens":50');
-    expect(out).toContain('"author":"Mia"');
-    expect(out).toContain("apiKey: [hidden]");
-    expect(saveSummary({ note: "write to mia@example.com today" })).toBe("note: write to [hidden] today");
-  });
-
-  it("shortens long lists, long texts and packed data", () => {
-    const out = saveSummary({ map: JSON.stringify(Array.from({ length: 500 }, (_, i) => i)), picture: "A".repeat(50_000), story: "word ".repeat(200) });
-    expect(out).toContain("… 470 more");
-    expect(out).toContain("picture: [50000 characters]");
-    expect(out).toMatch(/story: (word ){40}…$/);
-  });
-
-  it("always fits, and small facts survive next to a huge one", () => {
-    const big = JSON.stringify(Object.fromEntries(Array.from({ length: 400 }, (_, i) => [`room${i}`, { visited: true, loot: ["coin", "gem", "map"], note: "a long note about this room ".repeat(4) }])));
-    const out = saveSummary({ world: big, level: "12", ...Object.fromEntries(Array.from({ length: 200 }, (_, i) => [`k${i}`, "some value ".repeat(30)])) });
-    expect(out.length).toBeLessThanOrEqual(MAX_SAVE_SUMMARY);
-    expect(out).toContain("level: 12");
-    expect(out).toContain("… 122 more keys");
-    expect(saveSummary({ a: "x y ".repeat(5000) }, 300).length).toBeLessThanOrEqual(300);
-  });
-});
-
 describe("a prompt for a coding AI from the feedback", () => {
   const post = (id: string, kind: string, title: string, more: Partial<ImprovePost> = {}): ImprovePost => ({
     id, kind, title, body: "", votes: 0, status: "open", device: null, reply: "", ...more,

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
 import {
-  ApiError, aiStatus, clearAiKey, clearGithubApp, createGithubApp, githubAppStateMatches, githubFromManifest, setAiKey, type AiStatus, type Provider,
+  ApiError, aiStatus, clearAiKey, clearGithubApp, createGithubApp, githubAppStateMatches, githubFromManifest, setAiKey, type AiStatus,
 } from "../lib/ai";
 import { githubManifest } from "../lib/githubManifest";
 
@@ -11,8 +11,8 @@ const SUPABASE_KEYS = "https://supabase.com/dashboard/project/oygszctxhkubofspyw
 const VERCEL_ENV = "https://vercel.com/levisager11-oss-projects/toki/settings/environment-variables";
 const VERCEL_DEPLOYS = "https://vercel.com/levisager11-oss-projects/toki/deployments";
 
-/** Setting up the AI on Toki: the Supabase key (in Vercel), the key of the chosen provider and the GitHub App (here). */
-export function AiSetup({ provider }: { provider: Provider }) {
+/** Setting up the AI on Toki: the Supabase key (in Vercel), the Anthropic API key and the GitHub App (here). */
+export function AiSetup() {
   const { t } = useI18n();
   const [params] = useSearchParams();
   const navigate = useNavigate();
@@ -51,15 +51,14 @@ export function AiSetup({ provider }: { provider: Provider }) {
     if (confirm !== what) return setConfirm(what);
     setRemoving(true);
     setMsg(null);
-    (what === "key" ? clearAiKey(provider) : clearGithubApp())
+    (what === "key" ? clearAiKey() : clearGithubApp())
       .then(() => setReload((n) => n + 1))
       .catch(() => setMsg({ ok: false, text: t("error") }))
       .finally(() => { setRemoving(false); setConfirm(""); });
   };
   const s = ready ? status : null;
-  const anthropic = provider === "anthropic";
-  const hasKey = anthropic ? !!s?.anthropicKey : !!s?.aiKey;
-  const keySource = anthropic ? s?.anthropicKeySource : s?.aiKeySource;
+  const hasKey = !!s?.anthropicKey;
+  const keySource = s?.anthropicKeySource;
 
   return (
     <section className="ai-card" aria-labelledby="ai-setup-h">
@@ -94,7 +93,7 @@ export function AiSetup({ provider }: { provider: Provider }) {
           </li>
 
           <li className={hasKey ? "done" : "todo"}>
-            <StepHead n={2} done={hasKey} title={t(anthropic ? "setup.anthropic.title" : "setup.ai.title")} />
+            <StepHead n={2} done={hasKey} title={t("setup.anthropic.title")} />
             {!ready ? (
               <p className="sub">{t("setup.afterStep1")}</p>
             ) : hasKey ? (
@@ -105,7 +104,7 @@ export function AiSetup({ provider }: { provider: Provider }) {
                 )}
               </div>
             ) : (
-              <AiKeyForm key={provider} provider={provider} onSaved={() => setReload((n) => n + 1)} />
+              <AiKeyForm onSaved={() => setReload((n) => n + 1)} />
             )}
           </li>
 
@@ -159,9 +158,8 @@ function CopyName({ text }: { text: string }) {
   );
 }
 
-function AiKeyForm({ provider, onSaved }: { provider: Provider; onSaved: () => void }) {
+function AiKeyForm({ onSaved }: { onSaved: () => void }) {
   const { t } = useI18n();
-  const anthropic = provider === "anthropic";
   const [key, setKey] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(false);
@@ -170,7 +168,7 @@ function AiKeyForm({ provider, onSaved }: { provider: Provider; onSaved: () => v
     setBusy(true);
     setErr(false);
     try {
-      await setAiKey(key.trim(), provider);
+      await setAiKey(key.trim());
       setKey("");
       onSaved();
     } catch {
@@ -180,10 +178,10 @@ function AiKeyForm({ provider, onSaved }: { provider: Provider; onSaved: () => v
   };
   return (
     <form className="setup-key" onSubmit={submit}>
-      <label htmlFor="ai-key" className="sr-only">{t(anthropic ? "setup.anthropic.title" : "setup.ai.title")}</label>
-      <input id="ai-key" type="password" autoComplete="off" spellCheck={false} required minLength={8} maxLength={500} value={key} onChange={(e) => setKey(e.target.value)} placeholder={t(anthropic ? "setup.anthropic.placeholder" : "setup.ai.placeholder")} />
+      <label htmlFor="ai-key" className="sr-only">{t("setup.anthropic.title")}</label>
+      <input id="ai-key" type="password" autoComplete="off" spellCheck={false} required minLength={8} maxLength={500} value={key} onChange={(e) => setKey(e.target.value)} placeholder={t("setup.anthropic.placeholder")} />
       <button className="btn primary" disabled={busy || key.trim().length < 8}>{t("setup.ai.save")}</button>
-      <small>{t(anthropic ? "setup.anthropic.help" : "setup.ai.help")}</small>
+      <small>{t("setup.anthropic.help")}</small>
       {err && <p className="error" role="alert">{t("error")}</p>}
     </form>
   );

@@ -15,7 +15,7 @@ import { AiBox } from "../components/AiBits";
 import { HelperSetup } from "../components/HelperSetup";
 import { AchievementsSetup } from "../components/AchievementsSetup";
 import { BoardsSetup } from "../components/BoardsSetup";
-import { assistError, describeGame, useFreeAi } from "../lib/assist";
+import { assistError, describeGame, useAiFeature } from "../lib/assist";
 import { useTitle } from "../lib/useTitle";
 import { extFor, removeGameImages, shrinkGameImage } from "../lib/gameImages";
 import { HostedUpload, type Picked } from "../components/HostedUpload";
@@ -55,7 +55,7 @@ export function GameForm() {
   const navigate = useNavigate();
   const location = useLocation();
   const hosting = useHosting();
-  const freeAi = useFreeAi();
+  const freeAi = useAiFeature("describe");
   const [orig, setOrig] = useState<Game | null>(null);
   useTitle(editSlug ? t("form.editTitle") : t("form.addTitle"));
   const [missing, setMissing] = useState(false);
@@ -355,7 +355,7 @@ export function GameForm() {
     navigate(`/game/${row.slug}`);
   };
 
-  /** "Fill in from a link": fills the fields that are still empty, then lets the free AI write both descriptions. */
+  /** "Fill in from a link": fills the fields that are still empty, then lets the AI write both descriptions. */
   const applyImport = async (d: Imported) => {
     setDirty(true);
     if (d.title && !title.trim()) onTitle(d.title);
@@ -625,7 +625,7 @@ export function GameForm() {
 /** "Write with AI": the description in English and German, from what's filled in and the game's page. */
 function DescribeWithAi({ game, onUse }: { game: Parameters<typeof describeGame>[0]; onUse: (d: { en: string; de: string }) => void }) {
   const { t } = useI18n();
-  const on = useFreeAi();
+  const on = useAiFeature("describe");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [draft, setDraft] = useState<{ en: string; de: string } | null>(null);

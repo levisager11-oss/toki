@@ -72,10 +72,10 @@ export function LimitsAdmin() {
   );
 }
 
-/** "Game ideas a day"; the free AI's limits use the features' names. */
+/** "Game ideas a day"; the AI limits use the features' names. */
 export function limitLabel(t: ReturnType<typeof useI18n>["t"], key: LimitKey): string {
   // Each key has its text (tests/limits.test.ts checks).
-  return t((key.startsWith("ai_") ? `ai.free.feature.${key.slice(3)}` : `lim.k.${key}`) as Key);
+  return t((key.startsWith("ai_") ? `ai.feature.${key.slice(3)}` : `lim.k.${key}`) as Key);
 }
 
 function LimitLine({ row }: { row: LimitRow }) {

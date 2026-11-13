@@ -223,18 +223,16 @@ describe("what the privacy policy says about AI", () => {
   it("follows the AI settings, for everyone", async () => {
     expect((await facts()).ai_hosts).toEqual([]);
     // set up but still off: nothing is sent anywhere
-    await set("provider = 'anthropic', base_url = '', model = 'm', input_price = 1, output_price = 1");
+    await set("base_url = ''");
     expect((await facts()).ai_hosts).toEqual([]);
     await set("enabled = true");
     const on = await facts();
     expect(on.ai_hosts).toEqual(["api.anthropic.com"]);
     expect(on.changed_at).not.toBeNull();
-    // a second service for the free AI; the same one twice is named once
-    await set("free_enabled = true, free_base_url = 'https://API.Example.com:8443/v1', free_model = 'm'");
-    expect((await facts()).ai_hosts).toEqual(["api.anthropic.com", "api.example.com"]);
-    await set("free_base_url = 'https://api.anthropic.com/v1'");
-    expect((await facts()).ai_hosts).toEqual(["api.anthropic.com"]);
-    await set("enabled = false, free_enabled = false");
+    // Anthropic through another address: that address is named
+    await set("base_url = 'https://API.Example.com:8443/v1'");
+    expect((await facts()).ai_hosts).toEqual(["api.example.com"]);
+    await set("base_url = '', enabled = false");
     expect((await facts()).ai_hosts).toEqual([]);
   });
 
@@ -243,12 +241,13 @@ describe("what the privacy policy says about AI", () => {
     const before = (await facts()).changed_at;
     expect(before).not.toBeNull();
     // prices and models aren't in the policy
-    await set("monthly_cap = 7, model = 'other'");
+    await set("monthly_cap = 7");
+    await t.admin("update ai_features set model = 'other' where feature = 'help'");
     expect((await facts()).changed_at).toBe(before);
     await new Promise((r) => setTimeout(r, 5));
-    await set("provider = 'openai_compatible', base_url = 'https://api.example.com/v1'");
+    await set("base_url = 'https://api.example.com/v1'");
     expect((await facts()).changed_at).not.toBe(before);
-    await set("enabled = false");
+    await set("enabled = false, base_url = ''");
   });
 
   it("gives away nothing else", async () => {

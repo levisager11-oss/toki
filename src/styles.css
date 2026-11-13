@@ -866,21 +866,14 @@ a.author:hover { text-decoration: underline; color: var(--fg); }
   .setup-how .btn, .setup-key .btn { align-self: stretch; padding-block: 11px; }
 }
 
-/* searching the AI endpoint's models */
-.model-picker { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+/* a Claude model per AI feature (admins) */
 .model-find { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
 .model-find .btn { margin: 0; }
-.model-picker .sub { margin: 0; }
-.model-list { list-style: none; margin: 0; padding: 0; max-height: 300px; overflow-y: auto; border: 1px solid var(--line); background: var(--bg); }
-.model-list li + li { border-top: 1px solid var(--line); }
-.model-list button { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 10px; border: 0; background: transparent; cursor: pointer; text-align: left; overflow-wrap: anywhere; }
-.model-list button:hover { background: var(--surface); }
-.model-list button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
-.model-list button[aria-pressed="true"] .sub { color: var(--accent-ink); }
-.model-list b { font-size: 14px; font-weight: 600; }
-@media (pointer: coarse) {
-  .model-list button { padding: 11px 12px; }
-}
+.ai-features { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.ai-feature { display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--line); background: var(--bg); padding: 10px 12px; }
+.ai-feature-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.ai-feature .pair { margin: 0; }
+.ai-feature .check { margin: 0; }
 
 /* admin overview */
 .admin-links { list-style: none; padding: 0; margin: 20px 0 0; display: grid; gap: 10px; }

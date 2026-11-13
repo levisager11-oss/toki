@@ -18,7 +18,8 @@ export interface AgentSettings {
   environment_id: string | null;
 }
 
-export const AGENT_SETTINGS = "base_url,model,thinking,agent_budget,agent_id,agent_version,agent_config,environment_id";
+// (The model and thinking come from ai_features: Toki Connect's "connect".)
+export const AGENT_SETTINGS = "base_url,agent_budget,agent_id,agent_version,agent_config,environment_id";
 
 export function agentClient(apiKey: string, baseUrl: string) {
   return new Anthropic({ apiKey, baseURL: baseUrl || ANTHROPIC_URL, timeout: 60_000, maxRetries: 1 });

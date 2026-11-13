@@ -65,7 +65,7 @@ describe("limits match the database", () => {
       for (const k of RATE_ERRORS) expect(first.has(`limit.err.${k}`), `limit.err.${k} (${lang})`).toBe(true);
       const admin = new Set(textKeys(dev(lang === "en" ? "En" : "De"), lang === "en" ? "devEn" : "devDe"));
       for (const k of Object.keys(DEFAULT_LIMITS)) {
-        const key = k.startsWith("ai_") ? `ai.free.feature.${k.slice(3)}` : `lim.k.${k}`;
+        const key = k.startsWith("ai_") ? `ai.feature.${k.slice(3)}` : `lim.k.${k}`;
         expect(admin.has(key), `${key} (${lang})`).toBe(true);
       }
       for (const k of Object.keys(DEFAULT_KEEP)) expect(admin.has(`lim.keep.${k}`), `lim.keep.${k} (${lang})`).toBe(true);

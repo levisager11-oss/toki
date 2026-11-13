@@ -8,7 +8,7 @@ import { matches, plays, SORTS, sortGames, type Sort } from "../lib/games";
 import { Cover } from "../components/Cover";
 import { GameCard, GameGrid, GridSkeleton, Plays, RecentItem } from "../components/GameCard";
 import { useAuth } from "../lib/auth";
-import { suggestions, useFreeAi, type Suggestion } from "../lib/assist";
+import { suggestions, useAiFeature, type Suggestion } from "../lib/assist";
 import { PeopleIcon, PlayIcon } from "../components/icons";
 import { useLatestUpdates } from "../lib/releases";
 import { Avatar } from "../components/Avatar";
@@ -267,11 +267,11 @@ function useImageRatios(urls: (string | null)[]) {
 const SUGGEST_KEY = "toki.suggest";
 const SUGGEST_MS = 30 * 60_000;
 
-/** "You might like": games the free AI picked from what the player liked and played. */
+/** "You might like": games the AI picked from what the player liked and played. */
 function Suggested({ games, recentSlugs }: { games: Game[]; recentSlugs: string[] }) {
   const { t, lang } = useI18n();
   const { session } = useAuth();
-  const on = useFreeAi();
+  const on = useAiFeature("suggest");
   const userId = session?.user.id ?? "";
   const [list, setList] = useState<Suggestion[]>([]);
   const recentKey = recentSlugs.slice(0, 10).join(",");

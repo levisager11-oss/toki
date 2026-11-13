@@ -13,37 +13,23 @@ export function usd(n: number): string {
 
 // ---------- admins ----------
 
-export type Provider = "openai_compatible" | "anthropic";
 export const OUTPUT_LIMITS = [8000, 16000, 32000, 64000, 128000] as const;
-export const THINKING = ["default", "off", "low", "medium", "high", "xhigh", "max"] as const;
+/** How much a model may think (sent to Claude as "effort"; Claude can't turn thinking off). */
+export const THINKING = ["default", "low", "medium", "high", "xhigh", "max"] as const;
 export type Thinking = (typeof THINKING)[number];
 
 export interface AiSettings {
+  /** the AI as a whole: off, nothing is sent to Anthropic */
   enabled: boolean;
-  provider: Provider;
+  /** another address for Anthropic's API (empty: api.anthropic.com) */
   base_url: string;
-  model: string;
-  input_price: number;
-  output_price: number;
   monthly_cap: number;
   default_quota: number;
-  /** how much the strong AI may think (Anthropic: effort) */
-  thinking: Thinking;
-  /** most tokens the strong AI may write per Toki Connect step, thinking included */
+  /** most tokens Toki Connect may write per step, thinking included */
   max_output_tokens: number;
-  /** Toki Connect with Claude Managed Agents (Anthropic only), and its cap per run in US dollars */
+  /** Toki Connect with Claude Managed Agents, and its cap per run in US dollars */
   agent_enabled: boolean;
   agent_budget: number;
-  /** the free AI (an OpenAI-compatible endpoint, no prices or quotas) */
-  free_enabled: boolean;
-  free_base_url: string;
-  free_model: string;
-  /** how much the free AI may think before answering */
-  free_thinking: Thinking;
-  /** Toki Connect lets the free AI do the easy steps */
-  connect_free_steps: boolean;
-  /** one-click add: which AI adds leaderboard code */
-  quick_code_ai: "free" | "strong" | "off";
   updated_at: string;
 }
 
@@ -52,35 +38,42 @@ export async function getAiSettings(): Promise<AiSettings> {
   if (error) throw error;
   const s = data as Record<string, unknown>;
   // numeric columns come back as text
-  for (const k of ["input_price", "output_price", "monthly_cap", "default_quota", "agent_budget"]) s[k] = Number(s[k]);
+  for (const k of ["monthly_cap", "default_quota", "agent_budget"]) s[k] = Number(s[k]);
   return s as unknown as AiSettings;
 }
 
-export type SettingsChange = Partial<
-  Pick<AiSettings, "enabled" | "provider" | "base_url" | "model" | "input_price" | "output_price" | "monthly_cap" | "default_quota" | "thinking" | "max_output_tokens" | "agent_enabled" | "agent_budget" | "free_enabled" | "free_base_url" | "free_model" | "free_thinking" | "connect_free_steps" | "quick_code_ai">
->;
+export type SettingsChange = Partial<Pick<AiSettings, "enabled" | "base_url" | "monthly_cap" | "default_quota" | "max_output_tokens" | "agent_enabled" | "agent_budget">>;
 
-export interface FreeUsage {
-  feature: string;
-  calls: number;
-  failed: number;
-  tokens: number;
+// ---------- a model per feature ----------
+
+/** In the order the admin page shows them: players' helpers, developers' helpers, Toki Connect. */
+export const AI_FEATURES = [
+  "translate", "similar", "suggest", "help", "learn", "release", "describe", "summary", "connect", "connect_steps", "connect_quick",
+] as const;
+export type AiFeature = (typeof AI_FEATURES)[number];
+/** The features players may use; the others are for developers and admins. */
+export const PLAYER_FEATURES: readonly AiFeature[] = ["translate", "similar", "suggest", "help"];
+
+export interface AiFeatureModel {
+  feature: AiFeature;
+  /** empty: the feature is off */
+  model: string;
+  input_price: number;
+  output_price: number;
+  thinking: Thinking;
 }
 
-/** The free AI's calls in the last 7 days, per feature (admins). */
-export async function freeUsage(): Promise<FreeUsage[]> {
-  const since = new Date(Date.now() - 6 * 86_400_000).toISOString().slice(0, 10);
-  const { data, error } = await supabase.from("ai_free_usage").select("feature, calls, failed, input_tokens, output_tokens").gte("day", since);
+export async function getAiFeatures(): Promise<AiFeatureModel[]> {
+  const { data, error } = await supabase.from("ai_features").select("feature, model, input_price, output_price, thinking");
   if (error) throw error;
-  const by = new Map<string, FreeUsage>();
-  for (const r of data as { feature: string; calls: number; failed: number; input_tokens: number; output_tokens: number }[]) {
-    const u = by.get(r.feature) ?? { feature: r.feature, calls: 0, failed: 0, tokens: 0 };
-    u.calls += r.calls;
-    u.failed += r.failed;
-    u.tokens += Number(r.input_tokens) + Number(r.output_tokens);
-    by.set(r.feature, u);
-  }
-  return [...by.values()].sort((a, b) => b.calls - a.calls);
+  const rows = (data as AiFeatureModel[]).map((r) => ({ ...r, input_price: Number(r.input_price), output_price: Number(r.output_price) }));
+  return rows.sort((a, b) => AI_FEATURES.indexOf(a.feature) - AI_FEATURES.indexOf(b.feature));
+}
+
+export async function saveAiFeature(row: AiFeatureModel): Promise<void> {
+  const { feature, ...change } = row;
+  const { error } = await supabase.from("ai_features").update(change).eq("feature", feature);
+  if (error) throw error;
 }
 
 export async function saveAiSettings(change: SettingsChange): Promise<void> {
@@ -89,14 +82,9 @@ export async function saveAiSettings(change: SettingsChange): Promise<void> {
 }
 
 export interface AiStatus {
-  aiKey: boolean;
-  /** "env": set in Vercel's settings; "toki": set up on this page */
-  aiKeySource: "env" | "toki" | null;
   anthropicKey: boolean;
+  /** "env": set in Vercel's settings; "toki": set up on this page */
   anthropicKeySource: "env" | "toki" | null;
-  /** the free AI's own key (optional) */
-  freeAiKey: boolean;
-  freeAiKeySource: "env" | "toki" | null;
   serviceKey: boolean;
   github: boolean;
   githubSource: "env" | "toki" | null;
@@ -118,10 +106,9 @@ export interface TestResult {
 }
 
 const aiAction = <T = { ok: boolean }>(body: Record<string, unknown>) => api<T>("/api/ai", { method: "POST", body: JSON.stringify(body) });
-/** Stored encrypted on the server; it can't be read back. */
-/** "free": the free AI's own key. */
-export const setAiKey = (key: string, provider: Provider | "free") => aiAction({ action: "set_ai_key", key, provider });
-export const clearAiKey = (provider: Provider | "free") => aiAction({ action: "clear_ai_key", provider });
+/** The Anthropic API key: stored encrypted on the server; it can't be read back. */
+export const setAiKey = (key: string) => aiAction({ action: "set_ai_key", key });
+export const clearAiKey = () => aiAction({ action: "clear_ai_key" });
 export const githubFromManifest = (code: string) => aiAction<{ ok: boolean; slug: string; htmlUrl: string }>({ action: "github_manifest", code });
 export const clearGithubApp = () => aiAction({ action: "clear_github" });
 
@@ -155,7 +142,8 @@ export function githubAppStateMatches(state: string | null): boolean {
   }
 }
 
-export const testAi = () => api<TestResult>("/api/ai", { method: "POST", body: JSON.stringify({ action: "test" }) });
+/** Tries the model of one feature, with a tiny request (counted like any call). */
+export const testAi = (feature: AiFeature) => api<TestResult>("/api/ai", { method: "POST", body: JSON.stringify({ action: "test", feature }) });
 
 export interface Overview {
   month_start: string;
@@ -407,7 +395,7 @@ export const cancelJob = (id: string) => connect({ action: "cancel", id });
 export const checkPrs = () => api<{ checked: number; changed?: number }>("/api/connect", { method: "POST", body: JSON.stringify({ action: "prs" }) });
 
 const KNOWN_ERRORS = [
-  "ai_disabled", "not_allowed", "cap_reached", "quota_reached", "ai_not_configured", "ai_provider_error", "ai_timeout", "ai_refused", "ai_empty_answer",
+  "ai_disabled", "not_allowed", "cap_reached", "quota_reached", "rate_limited", "ai_not_configured", "ai_provider_error", "ai_timeout", "ai_refused", "ai_empty_answer",
   "ai_bad_answer", "ai_bad_edits", "agent_budget", "github_not_found", "github_error", "github_not_configured", "too_many_steps", "impossible", "cancelled", "busy",
   "quick_off", "not_hosted",
 ] as const;
@@ -426,22 +414,6 @@ export interface ModelInfo {
   outputPrice?: number;
 }
 
-/** The models the provider offers, at the address in the form (empty: Anthropic itself). */
-export const findModels = (provider: Provider, baseUrl: string) =>
-  aiAction<{ models: ModelInfo[] }>({ action: "models", provider, base_url: baseUrl.trim() }).then((r) => r.models);
-
-/** Models whose id or name contains every word of the search, in any order. */
-export function searchModels(models: ModelInfo[], query: string): ModelInfo[] {
-  const words = query.toLowerCase().split(/[\s/:_-]+/).filter(Boolean);
-  if (!words.length) return models;
-  return models.filter((m) => {
-    const hay = `${m.id} ${m.name ?? ""}`.toLowerCase();
-    return words.every((w) => hay.includes(w));
-  });
-}
-
-/** "128k", "1M" for a context size in tokens. */
-export function tokensShort(n: number): string {
-  if (n >= 1_000_000) return `${Math.round(n / 100_000) / 10}M`.replace(".0M", "M");
-  return `${Math.round(n / 1000)}k`;
-}
+/** Claude's models, through the address in the form (empty: Anthropic itself). */
+export const findModels = (baseUrl: string) =>
+  aiAction<{ models: ModelInfo[] }>({ action: "models", base_url: baseUrl.trim() }).then((r) => r.models);

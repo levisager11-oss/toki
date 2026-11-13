@@ -93,11 +93,11 @@ describe("changing", () => {
     await setLimit(admin, "party_size", 8, 8);
   });
 
-  it("uses the free AI calls per hour that the admin set", async () => {
-    await t.admin("update ai_settings set free_enabled = true, free_base_url = 'https://free.example/api', free_model = 'qwen'");
+  it("uses the AI calls per hour that the admin set", async () => {
+    await t.admin("update ai_settings set enabled = true, monthly_cap = 100");
     const player = await t.user();
     await override(admin, player.id, "ai_suggest", 1);
-    const take = () => t.service("select ai_free_take($1, 'suggest')", [player.id]);
+    const take = () => t.service("select ai_reserve($1, 'suggest', null, 10, 10)", [player.id]);
     await take();
     await expect(take()).rejects.toThrow("rate_limited");
   });

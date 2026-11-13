@@ -11,7 +11,7 @@ export interface HostingStatus {
   domain: string | null;
   maxBytes: number;
   /** One-click add: which AI adds leaderboard code */
-  quickCode?: "free" | "strong" | "off";
+  quickCode?: "strong" | "off";
   /** admins only */
   source?: "env" | "toki" | null;
   accountId?: string | null;

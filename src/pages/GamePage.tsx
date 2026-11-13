@@ -25,7 +25,7 @@ import { setPlaying } from "../lib/useBadges";
 import { TranslateToggle, useTranslate } from "../components/AiBits";
 import { GameHelper } from "../components/GameHelper";
 import { Screenshots } from "../components/ShotViewer";
-import { useFreeAi } from "../lib/assist";
+import { useAiFeature } from "../lib/assist";
 import { CloseIcon, FullscreenIcon, PeopleIcon } from "../components/icons";
 import { ShareButton } from "../components/ShareButton";
 import { ReportButton } from "../components/ReportButton";
@@ -54,7 +54,7 @@ export function GamePage() {
   const fillScreen = pseudoFull || landscapePhone;
   const game = findGame(games, slug);
   const [helper, setHelper] = useState(false);
-  const freeAi = useFreeAi();
+  const freeAi = useAiFeature("help");
   const gameId = game?.id;
   const userId = session?.user.id;
   const saves = useSaveBridge(gameFrame, gameId, game?.play_url, userId);

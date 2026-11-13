@@ -1,17 +1,17 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
-import { assistError, improvePrompt, useFreeAi, type ImprovePrompt } from "../lib/assist";
+import { assistError, improvePrompt, useAiFeature, type ImprovePrompt } from "../lib/assist";
 import { AiBox } from "./AiBits";
 
 /**
- * "Make a prompt for an AI": the free AI reads a game's open feedback, leaves out what doesn't help,
+ * "Make a prompt for an AI": the AI reads a game's open feedback, leaves out what doesn't help,
  * and Toki shows a prompt to copy into any AI that works on the game's code.
- * gameId: a game, "toki", or "" while no single game is chosen. Nothing when the free AI is off.
+ * gameId: a game, "toki", or "" while no single game is chosen. Nothing when summaries are off.
  */
 export function PromptButton({ gameId }: { gameId: string }) {
   const { t, lang } = useI18n();
-  const on = useFreeAi();
+  const on = useAiFeature("summary");
   const [result, setResult] = useState<ImprovePrompt | null>(null);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);

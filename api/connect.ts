@@ -1,14 +1,14 @@
 // Toki Connect for developers: start a run, take its next step, answer the AI's questions, cancel.
 // Every action checks that the run (and the GitHub installation) belongs to the logged-in account.
-import { budgetedCompletion } from "../server/ai/budget.js";
-import { freeCompletion, freeSettings } from "../server/ai/free.js";
+import { budgetedCompletion, featureOn } from "../server/ai/budget.js";
+import type { ChatMessage } from "../server/ai/provider.js";
 import { addable, errorCode, errorDetail, step, uploadFeatures, type Bug, type Feature, type Job, type Message, type StepResult } from "../server/connect/agent.js";
 import { agentStep } from "../server/connect/managed.js";
 import {
   AGENT_SETTINGS, agentClient, changesFile, ensureAgent, interrupt, replyTool, sendMessage, sessionEvents, sessionStatus, startSession, type AgentSettings,
 } from "../server/connect/managedClient.js";
 import Anthropic from "@anthropic-ai/sdk";
-import { DbError } from "../server/db.js";
+import { DbError, type Db } from "../server/db.js";
 import { githubConfigured } from "../server/env.js";
 import { github } from "../server/github.js";
 import { body, context, isUuid, json, type Ctx } from "../server/http.js";
@@ -22,7 +22,8 @@ const LEASE_MS = 290_000;
 
 interface Row extends Omit<Job, "game" | "bug"> {
   engine: "steps" | "agent";
-  ai: "strong" | "free";
+  /** "quick": a one-click run (its own model, connect_quick); "strong": every other run. */
+  ai: "strong" | "quick";
   user_id: string;
   installation_id: number | null;
   game_id: string | null;
@@ -59,14 +60,11 @@ async function view(ctx: Ctx, id: string) {
   return job ? json({ job }) : json({ error: "not_found" }, 404);
 }
 
-/** Which AI writes the code: one-click runs use the admin's choice for them, others the strong AI. */
-async function whichAi(ctx: Ctx, quick: boolean): Promise<"strong" | "free" | Response> {
-  if (!quick) return "strong";
-  const [s] = await ctx.db.select<{ quick_code_ai: "free" | "strong" | "off" }>("ai_settings", "id=eq.1&select=quick_code_ai");
-  const choice = s?.quick_code_ai ?? "free";
-  if (choice === "off") return json({ error: "quick_off" }, 503);
-  if (choice === "free" && (!(await freeSettings(ctx.db)) || !(ctx.env.freeAiKey || ctx.env.aiKey))) return json({ error: "ai_not_configured" }, 503);
-  return choice;
+/** Which model writes the code: one-click runs have their own (connect_quick), others use connect's. */
+async function whichAi(ctx: Ctx, quick: boolean): Promise<"strong" | "quick" | Response> {
+  if (!ctx.env.anthropicKey) return json({ error: "ai_not_configured" }, 503);
+  if (!(await featureOn(ctx.db, quick ? "connect_quick" : "connect"))) return json({ error: quick ? "quick_off" : "ai_disabled" }, 503);
+  return quick ? "quick" : "strong";
 }
 
 /** A run on a game uploaded to Toki: Toki Connect reads its live files and puts its change live. */
@@ -78,10 +76,6 @@ async function startUpload(ctx: Ctx, b: Record<string, unknown>) {
   if (!game.hosted_site || !live) return json({ error: "not_hosted" }, 409);
   const ai = await whichAi(ctx, b.quick === true);
   if (ai instanceof Response) return ai;
-  if (ai === "strong") {
-    const [settings] = await ctx.db.select<{ enabled: boolean }>("ai_settings", "id=eq.1&select=enabled");
-    if (!settings?.enabled || (!ctx.env.aiKey && !ctx.env.anthropicKey)) return json({ error: "ai_disabled" }, 503);
-  }
   try {
     const [job] = await ctx.db.insert<{ id: string }>("connect_jobs", {
       user_id: ctx.user.id,
@@ -125,12 +119,10 @@ async function start(ctx: Ctx, b: Record<string, unknown>) {
     gameId = post.game_id;
   }
   if (!Number.isSafeInteger(installation) || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo) || !features.length) return json({ error: "bad_request" }, 400);
-  if (ai === "strong" && !ctx.env.aiKey && !ctx.env.anthropicKey) return json({ error: "ai_not_configured" }, 503);
   if (!githubConfigured(ctx.env.github)) return json({ error: "github_not_configured" }, 503);
-  const [settings] = await ctx.db.select<{ enabled: boolean; provider: string; agent_enabled: boolean }>("ai_settings", "id=eq.1&select=enabled,provider,agent_enabled");
-  if (ai === "strong" && !settings?.enabled) return json({ error: "ai_disabled" }, 503);
-  // Claude Managed Agents when the admin turned it on (Anthropic only); otherwise step by step.
-  const engine = ai === "strong" && settings.agent_enabled && settings.provider === "anthropic" && ctx.env.anthropicKey ? "agent" : "steps";
+  const [settings] = await ctx.db.select<{ agent_enabled: boolean }>("ai_settings", "id=eq.1&select=agent_enabled");
+  // Claude Managed Agents when the admin turned it on; otherwise step by step.
+  const engine = ai === "strong" && settings?.agent_enabled ? "agent" : "steps";
 
   // The installation must be one GitHub confirmed for this account, and the repository one it can use.
   const [owned] = await ctx.db.select("github_installations", `user_id=eq.${ctx.user.id}&installation_id=eq.${installation}&select=installation_id`);
@@ -203,11 +195,11 @@ async function run(ctx: Ctx, b: Record<string, unknown>, origin: string) {
     }
     return view(ctx, job.id);
   }
-  // The free AI does the easy steps, when it's set up and the admin allows it.
-  const [opts] = await ctx.db.select<{ connect_free_steps: boolean; max_output_tokens: number | null }>("ai_settings", "id=eq.1&select=connect_free_steps,max_output_tokens");
-  const freeAi = opts?.connect_free_steps && (ctx.env.freeAiKey || ctx.env.aiKey) ? await freeSettings(ctx.db) : null;
+  // A cheaper model does the easy steps (reading the code, asking the developer), when it has one.
+  const [opts] = await ctx.db.select<{ max_output_tokens: number | null }>("ai_settings", "id=eq.1&select=max_output_tokens");
+  const easySteps = job.ai !== "quick" && (await featureOn(ctx.db, "connect_steps"));
   const gh = github(ctx.env.github);
-  const freeOnly = job.ai === "free" ? await freeSettings(ctx.db) : null;
+  const keys = { openai_compatible: "", anthropic: ctx.env.anthropicKey };
   const result = await step({ ...job, game, bug }, {
     origin: SITE_URL,
     maxOutputTokens: opts?.max_output_tokens ?? undefined,
@@ -223,18 +215,14 @@ async function run(ctx: Ctx, b: Record<string, unknown>, origin: string) {
       return gh.repo(job.installation_id, job.repo);
     },
     async ai(messages, maxTokens, opts) {
-      // One-click runs where the admin chose the free AI: it writes the code too (no cost).
-      if (job.ai === "free") {
-        const c = await freeCompletion({ db: ctx.db, keys: { free: ctx.env.freeAiKey, openai: ctx.env.aiKey }, userId: ctx.user.id, feature: "connect", messages, settings: freeOnly, timeoutMs: 240_000 });
-        return c.text;
-      }
-      const c = await budgetedCompletion({ db: ctx.db, keys: { openai_compatible: ctx.env.aiKey, anthropic: ctx.env.anthropicKey }, userId: ctx.user.id, feature: "connect", jobId: job.id, messages, maxTokens, thinking: opts?.thinking });
+      const feature = job.ai === "quick" ? "connect_quick" : "connect";
+      const c = await budgetedCompletion({ db: ctx.db, keys, userId: ctx.user.id, feature, jobId: job.id, messages, maxTokens, thinking: opts?.thinking });
       return c.text;
     },
-    ...(freeAi && job.ai !== "free"
+    ...(easySteps
       ? {
-          async free(messages: Parameters<typeof freeCompletion>[0]["messages"]) {
-            const c = await freeCompletion({ db: ctx.db, keys: { free: ctx.env.freeAiKey, openai: ctx.env.aiKey }, userId: ctx.user.id, feature: "connect", messages, settings: freeAi, timeoutMs: 120_000 });
+          async free(messages: ChatMessage[]) {
+            const c = await budgetedCompletion({ db: ctx.db, keys, userId: ctx.user.id, feature: "connect_steps", jobId: job.id, messages, maxTokens: EASY_STEP_TOKENS, timeoutMs: 120_000 });
             return c.text;
           },
         }
@@ -247,6 +235,18 @@ async function run(ctx: Ctx, b: Record<string, unknown>, origin: string) {
   });
   await saveStep(ctx, job, result);
   return view(ctx, job.id);
+}
+
+/** The most tokens an easy step (reading code, asking the developer) may write. */
+const EASY_STEP_TOKENS = 16_000;
+
+/** The agent's settings, with Toki Connect's model, thinking and output price (ai_features). */
+async function agentSettings(db: Db): Promise<AgentSettings & { output_price: string }> {
+  const [[s], [f]] = await Promise.all([
+    db.select<Omit<AgentSettings, "model" | "thinking">>("ai_settings", `id=eq.1&select=${AGENT_SETTINGS}`),
+    db.select<{ model: string; thinking: AgentSettings["thinking"]; output_price: string }>("ai_features", "feature=eq.connect&select=model,thinking,output_price"),
+  ]);
+  return { ...s, model: f?.model ?? "", thinking: f?.thinking ?? "default", output_price: f?.output_price ?? "0" };
 }
 
 /** false when the run was cancelled meanwhile (then nothing is saved). */
@@ -299,7 +299,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * the AI budget (so quotas and Toki's monthly cap hold); when it ends, its real cost replaces that.
  */
 async function runAgent(ctx: Ctx, row: Row, job: Job, origin: string): Promise<StepResult> {
-  const [s] = await ctx.db.select<AgentSettings & { output_price: string }>("ai_settings", `id=eq.1&select=${AGENT_SETTINGS},output_price`);
+  const s = await agentSettings(ctx.db);
   const client = agentClient(ctx.env.anthropicKey, s.base_url);
   const budget = Number(s.agent_budget);
   const state = { ...(job.state ?? {}) };

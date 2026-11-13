@@ -2,7 +2,7 @@ import { useId, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
-import { similarFeedback, useFreeAi, type SimilarPost } from "../lib/assist";
+import { similarFeedback, useAiFeature, type SimilarPost } from "../lib/assist";
 import {
   createPost, deviceSummary, FeedbackError, KINDS, LIMITS, similarPosts,
   type FeedbackKind, type FeedbackPost,
@@ -34,8 +34,8 @@ export function FeedbackForm({ gameId, posts, kind: initialKind = "bug", onPoste
   const similar = useMemo(() => (title.trim().length >= 4 ? similarPosts(title, posts) : []), [title, posts]);
   const isBug = kind === "bug";
   const { session } = useAuth();
-  const freeAi = useFreeAi() && !!session;
-  // What the free AI found for exactly this text (checked once before posting).
+  const freeAi = useAiFeature("similar") && !!session;
+  // What the AI found for exactly this text (checked once before posting).
   const [aiFound, setAiFound] = useState<{ key: string; posts: SimilarPost[] } | null>(null);
   const [checking, setChecking] = useState(false);
   const key = `${kind}\n${title.trim()}\n${body.trim()}`;
