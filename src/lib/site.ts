@@ -4,3 +4,6 @@
  * keep using the www address or the page's own origin.
  */
 export const SITE_URL = "https://playtoki.app";
+
+/** Where to reach whoever runs Toki: privacy questions, reports, authorities (the legal notice and the privacy policy show it). */
+export const CONTACT_EMAIL = "legal@playtoki.app";

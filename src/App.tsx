@@ -86,6 +86,7 @@ export function App() {
           <Route path="feedback/:id" element={<Later><FeedbackPost /></Later>} />
           <Route path="terms" element={<Later><Legal page="terms" /></Later>} />
           <Route path="privacy" element={<Later><Legal page="privacy" /></Later>} />
+          <Route path="imprint" element={<Later><Legal page="imprint" /></Later>} />
           <Route path="login" element={<Later><Login /></Later>} />
           <Route path="signup" element={<Later><Signup /></Later>} />
           <Route path="reset-password" element={<Later><ResetPassword /></Later>} />

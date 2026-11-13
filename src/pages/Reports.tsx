@@ -3,15 +3,19 @@ import { Link } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
 import { ago } from "../lib/feedback";
 import { handleReport, listReports, type Report } from "../lib/social";
+import { handleContentReport, listContentReports, REPORT_NOTE_MAX, type ContentReport } from "../lib/account";
 import { Avatar } from "../components/Avatar";
 import { useTitle } from "../lib/useTitle";
 
-/** Admins: reported chat messages. */
+/** Admins: reported chat messages, and reported games, profiles, feedback posts and ideas. */
 export function Reports() {
   const { t, lang } = useI18n();
   useTitle(t("nav.reports"));
   const [open, setOpen] = useState(true);
   const [list, setList] = useState<Report[] | null>(null);
+  const [other, setOther] = useState<ContentReport[] | null>(null);
+  // The reason the owner is told, per report.
+  const [notes, setNotes] = useState<Record<number, string>>({});
   const [days, setDays] = useState(7);
   const [err, setErr] = useState("");
   const [reload, setReload] = useState(0);
@@ -19,7 +23,9 @@ export function Reports() {
   useEffect(() => {
     let alive = true;
     setList(null);
+    setOther(null);
     listReports(open).then((r) => alive && setList(r), () => alive && setErr(t("error")));
+    listContentReports(open).then((r) => alive && setOther(r), () => alive && setErr(t("error")));
     return () => {
       alive = false;
     };
@@ -35,6 +41,19 @@ export function Reports() {
     }
   };
 
+  const actOther = async (r: ContentReport, outcome: "dismissed" | "removed" | "banned") => {
+    setErr("");
+    try {
+      await handleContentReport(r.id, outcome, notes[r.id]?.trim() ?? "", outcome === "banned" ? days : 0);
+      setReload((n) => n + 1);
+    } catch {
+      setErr(t("error"));
+    }
+  };
+  // Where the reported thing is. Ideas and feedback posts open by their id; games and profiles by name.
+  const where = (r: ContentReport) =>
+    r.kind === "feedback" ? `/feedback/${r.target}` : r.kind === "idea" ? `/ideas/${r.target}` : r.kind === "profile" && r.owner ? `/u/${r.owner.username}` : null;
+
   return (
     <section className="panel reports">
       <div className="sechead">
@@ -45,7 +64,7 @@ export function Reports() {
         </div>
       </div>
       <p className="lead">{t("rep.help")}</p>
-      {open && !!list?.length && (
+      {open && (!!list?.length || !!other?.length) && (
         <label className="inline-form">
           {t("rep.banFor")}
           <select value={days} onChange={(e) => setDays(Number(e.target.value))}>
@@ -76,6 +95,45 @@ export function Reports() {
                 </div>
               ) : (
                 <p className="sub">{t(`rep.outcome.${r.outcome ?? "dismissed"}`)}</p>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="sechead"><h2>{t("rep.other.title")}</h2></div>
+      <p className="lead">{t("rep.other.help")}</p>
+      {other === null ? <p className="msg">{t("loading")}</p> : other.length === 0 ? <p className="msg">{t("rep.none")}</p> : (
+        <ul className="report-list">
+          {other.map((r) => (
+            <li key={r.id}>
+              <div className="msg-head">
+                <b>{t(`mod.what.${r.kind}`)}: {where(r) ? <Link to={where(r)!}>{r.title}</Link> : r.title}</b>
+                <span className="st st-planned">{t(`report.cat.${r.category}`)}</span>
+                <time className="sub">{ago(r.created_at, lang)}</time>
+              </div>
+              {r.reason && <blockquote>{r.reason}</blockquote>}
+              <p className="sub">
+                {t("rep.by", { who: r.reporter ? `@${r.reporter.username}` : "?" })}
+                {r.owner && <> · {t("rep.other.owner")} <Link to={`/u/${r.owner.username}`}>@{r.owner.username}</Link></>}
+              </p>
+              {open ? (
+                <>
+                  <input
+                    maxLength={REPORT_NOTE_MAX}
+                    value={notes[r.id] ?? ""}
+                    onChange={(e) => setNotes((n) => ({ ...n, [r.id]: e.target.value }))}
+                    placeholder={t("rep.other.note")}
+                    aria-label={t("rep.other.note")}
+                  />
+                  <div className="actions">
+                    <button type="button" className="btn" onClick={() => actOther(r, "dismissed")}>{t("rep.dismiss")}</button>
+                    <button type="button" className="btn danger" onClick={() => actOther(r, "removed")}>{t(`rep.other.remove.${r.kind}`)}</button>
+                    <button type="button" className="btn danger" onClick={() => actOther(r, "banned")} disabled={!r.owner}>{t("rep.other.removeBan", { n: days })}</button>
+                  </div>
+                </>
+              ) : (
+                <p className="sub">{t(`rep.other.outcome.${r.outcome ?? "dismissed"}`)}{r.note && <> · {lang === "de" ? `„${r.note}“` : `“${r.note}”`}</>}</p>
               )}
             </li>
           ))}

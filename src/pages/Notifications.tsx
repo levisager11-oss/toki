@@ -102,6 +102,17 @@ export function Notifications() {
         // An update for their games (src/lib/gameUpdates.ts) leads to its card, with the one-click update.
         if (gameUpdate(d.topic)) return { line: t(updateKeys(d.topic!).notif as Key), to: `/my-games#update-${d.topic}` };
         return { line: t(d.topic === "multiplayer" ? "notif.devMultiplayer" : "notif.devNews"), to: "/my-games#toki-features" };
+      case "moderation": {
+        // What was removed, the admin's reason, a ban if there is one, and how to object.
+        const why = d.note ? ` ${t("mod.why", { note: d.note })}` : "";
+        const ban = d.days ? ` ${t("mod.banned", { n: d.days })}` : "";
+        return { line: `${t(`mod.removed.${d.what ?? "message"}`, { title: d.title ?? "" })}${why}${ban} ${t("mod.appeal")}`, to: "/imprint" };
+      }
+      case "report_done":
+        return {
+          line: `${t(`mod.report.${d.what ?? "message"}`, { title: d.title ?? "" })} ${t(d.outcome === "dismissed" ? "mod.reportKept" : "mod.reportRemoved")}`,
+          to: "/terms",
+        };
       default:
         // A kind this version of Toki doesn't know yet.
         return { line: t("notif.other"), to: "/updates" };

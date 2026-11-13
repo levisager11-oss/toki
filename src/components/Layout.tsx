@@ -15,6 +15,7 @@ import { useAiStatus } from "../lib/assist";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { InvitePopup } from "./GameInvite";
 import { PartyBar } from "./Party";
+import { AgeGate } from "./AgeGate";
 import { keepPush } from "../lib/push";
 
 // The admin pages, all reached through "Admin" in the sidebar.
@@ -190,6 +191,7 @@ export function Layout() {
               <span className="side-legal">
                 <Link to="/terms">{t("nav.terms")}</Link>
                 <Link to="/privacy">{t("nav.privacy")}</Link>
+                <Link to="/imprint">{t("nav.imprint")}</Link>
               </span>
             </div>
             <NavLink to="/updates">{t("rel.whatsNew")}{newUpdate && <span className="new-dot" title={t("rel.newSinceVisit")}><span className="sr-only">{t("rel.newSinceVisit")}</span></span>}</NavLink>
@@ -245,6 +247,7 @@ export function Layout() {
         </header>
         {offline && <p className="offline-bar" role="status">{t("offline")}</p>}
         {profile && <PartyBar me={profile.id} />}
+        <AgeGate />
         <main className="content" id="main" tabIndex={-1}>
           {/* A new boundary per page, so going to another page clears an error. */}
           <ErrorBoundary key={location.pathname}>
@@ -256,6 +259,7 @@ export function Layout() {
             {profile && <Link to="/ideas">{t(canCreate(profile) ? "idea.title" : "idea.mine")}</Link>}
             <Link to="/terms">{t("nav.terms")}</Link>
             <Link to="/privacy">{t("nav.privacy")}</Link>
+            <Link to="/imprint">{t("nav.imprint")}</Link>
           </footer>
         </main>
       </div>

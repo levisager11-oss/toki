@@ -266,7 +266,9 @@ export type NotificationKind =
   /** Toki can do something new for developers' games */
   | "dev_news"
   /** a game idea: proposed (to developers), a reply, claimed, given back or done */
-  | "game_idea";
+  | "game_idea"
+  /** an admin removed something of yours (with the reason), or handled something you reported */
+  | "moderation" | "report_done";
 
 export interface Notification {
   id: number;
@@ -285,6 +287,11 @@ export interface Notification {
     /** game_idea: the idea, and what happened to it */
     idea?: string;
     event?: "new" | "reply" | "claimed" | "released" | "done";
+    /** moderation, report_done: what it was about, the admin's reason, days banned, and what the admin did */
+    what?: "game" | "profile" | "feedback" | "idea" | "message";
+    note?: string;
+    days?: number | null;
+    outcome?: "dismissed" | "removed" | "banned";
   };
   created_at: string;
   read_at: string | null;

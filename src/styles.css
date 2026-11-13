@@ -1305,3 +1305,17 @@ main.content:focus { outline: none; }
   .board-pick button { padding: 7px 12px; }
   .board-edit-foot .linkish { padding: 6px 0; }
 }
+
+/* Age question, reports, your data */
+.birth-fields { border: 0; padding: 0; margin: 12px 0 0; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.birth-fields legend { padding: 0; font-weight: 700; font-size: 14px; margin-bottom: 6px; }
+.birth-fields .inline-form { display: flex; gap: 8px; }
+.birth-fields select { flex: 1 1 0; min-width: 0; }
+.age-gate .form { padding: 20px; }
+.age-gate .h { font-size: 22px; }
+.report-line { margin: 18px 0 0; font-size: 14px; }
+.report-box { max-width: 480px; margin-top: 8px; }
+.account-data { margin-top: 32px; }
+.account-data h2 { font-size: 19px; margin: 0 0 6px; }
+.account-data .form { margin-top: 12px; }
+.legal-more { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 24px; }

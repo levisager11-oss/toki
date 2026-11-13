@@ -7,6 +7,13 @@ Almost everything is set up on Toki itself, on the **AI** page (`/admin/ai`, adm
 the real site (`https://www.playtoki.app`), not on a preview, because the GitHub App remembers the
 address it was created from.
 
+## 0. Name the AI service in the privacy policy (before switching AI on)
+
+The privacy policy (`src/lib/texts/legalEn.ts` and `legalDe.ts`) says the AI features are switched
+off and that the AI service will be named before they are switched on. So before enabling AI on the
+**AI** page, change the "AI features" section to name the service and its country, add it to "Who
+helps run Toki", change the date at the top, and post a Toki update about it.
+
 ## 1. Supabase key in Vercel (once, the only step outside Toki)
 
 The server needs it to use the database, and to keep the other keys encrypted.

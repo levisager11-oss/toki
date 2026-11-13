@@ -10,6 +10,7 @@ import { MyFeedback } from "../components/MyFeedback";
 import { EditProfile } from "../components/EditProfile";
 import { useTitle } from "../lib/useTitle";
 import { PasswordForm } from "../components/PasswordForm";
+import { AccountData } from "../components/AccountData";
 
 export function Account() {
   const { t } = useI18n();
@@ -84,6 +85,8 @@ export function Account() {
           />
         )}
       </details>
+
+      <AccountData />
 
       <div className="actions" style={{ marginTop: 32 }}>
         <button type="button" className="btn" onClick={() => signOut().then(() => navigate("/"))}>{t("nav.logout")}</button>
