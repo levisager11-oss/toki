@@ -7,7 +7,7 @@ import {
 import { KindTag } from "./FeedbackBits";
 import { AiBox } from "./AiBits";
 import { githubRepos, type GitHubInfo } from "../lib/ai";
-import { assistError, draftRelease, useFreeAi } from "../lib/assist";
+import { assistError, draftRelease, useAiFeature } from "../lib/assist";
 
 /** Posting or editing an update, and choosing the feedback it fixes. */
 export function ReleaseForm({ gameId, release, suggestedVersion = "", suggestedSmallVersion = "", onSaved, onCancel }: {
@@ -23,7 +23,7 @@ export function ReleaseForm({ gameId, release, suggestedVersion = "", suggestedS
 }) {
   const { t } = useI18n();
   const id = useId();
-  const freeAi = useFreeAi();
+  const freeAi = useAiFeature("release");
   const [version, setVersion] = useState(release?.version ?? suggestedVersion);
   const [small, setSmall] = useState(release?.small ?? false);
   const [title, setTitle] = useState(release?.title ?? "");

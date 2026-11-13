@@ -17,10 +17,14 @@ beforeAll(async () => {
 
 describe("AI status", () => {
   it("tells everyone which AI is on", async () => {
-    await t.admin("update ai_settings set enabled = false, free_enabled = true, free_base_url = 'https://free.example/api', free_model = 'qwen'");
-    expect(await t.as(null, "select ai_status() as s")).toEqual([{ s: { free: true, strong: false } }]);
-    await t.admin("update ai_settings set free_enabled = false");
-    expect(await t.as(player, "select ai_status() as s")).toEqual([{ s: { free: false, strong: false } }]);
+    await t.admin("update ai_settings set enabled = false");
+    expect(await t.as(player, "select ai_status() as s")).toEqual([{ s: { features: [], free: false, strong: false } }]);
+    await t.admin("update ai_settings set enabled = true");
+    await t.admin("update ai_features set model = '', input_price = 0, output_price = 0 where feature not in ('translate', 'help')");
+    expect(await t.as(null, "select ai_status() as s")).toEqual([{ s: { features: ["help", "translate"], free: true, strong: false } }]);
+    await t.admin("update ai_features set model = 'claude-sonnet-5-5', input_price = 2, output_price = 10 where feature = 'connect'");
+    expect(await t.as(null, "select ai_status() as s")).toEqual([{ s: { features: ["connect", "help", "translate"], free: true, strong: true } }]);
+    await t.admin("update ai_settings set enabled = false");
   });
 });
 
@@ -40,10 +44,13 @@ describe("game helper", () => {
 
   it("lets players ask and developers learn, each only so often an hour", async () => {
     await t.admin("delete from ai_free_limits");
-    await t.admin("update ai_settings set free_enabled = true");
-    for (let i = 0; i < 40; i++) await t.service("select ai_free_take($1, 'help')", [player.id]);
-    await expect(t.service("select ai_free_take($1, 'help')", [player.id])).rejects.toThrow(/rate_limited/);
-    await expect(t.service("select ai_free_take($1, 'learn')", [player.id])).rejects.toThrow(/not_allowed/);
-    await t.service("select ai_free_take($1, 'learn')", [dev.id]);
+    await t.admin("update ai_settings set enabled = true, monthly_cap = 100");
+    await t.admin("update ai_features set model = 'claude-haiku-5-5', input_price = 0.1, output_price = 0.5 where feature in ('help', 'learn')");
+    const take = (who: { id: string }, f: string) => t.service("select ai_reserve($1, $2, null, 10, 10)", [who.id, f]);
+    for (let i = 0; i < 40; i++) await take(player, "help");
+    await expect(take(player, "help")).rejects.toThrow(/rate_limited/);
+    await expect(take(player, "learn")).rejects.toThrow(/not_allowed/);
+    await take(dev, "learn");
+    await t.admin("update ai_settings set enabled = false");
   });
 });

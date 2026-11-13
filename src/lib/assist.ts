@@ -1,26 +1,35 @@
-// The free AI's small helpers for the pages (the AI itself runs on the server, api/assist.ts).
+// The AI's small helpers for the pages (the AI itself runs on the server, api/assist.ts).
 import { useEffect, useState } from "react";
 import { supabase } from "./supabase";
 import { api } from "./api";
 
 export type Lang = "en" | "de";
 
+/** The AI features; each has its own model, and one without a model is off. */
+export type AiFeature =
+  | "translate" | "similar" | "suggest" | "help" | "learn" | "release" | "describe" | "summary" | "connect" | "connect_steps" | "connect_quick";
+
 export interface AiStatus {
-  /** the free AI: small helpers */
+  /** the features that are on */
+  features: AiFeature[];
+  /** any small helper is on */
   free: boolean;
-  /** the strong AI: Toki Connect and bug fixes */
+  /** Toki Connect is on */
   strong: boolean;
 }
+
+const OFF: AiStatus = { features: [], free: false, strong: false };
 
 let status: Promise<AiStatus> | null = null;
 /** Which AI is on (asked once per visit), so buttons only show when the AI behind them works. */
 export function useAiStatus(): AiStatus {
-  const [s, setS] = useState<AiStatus>({ free: false, strong: false });
+  const [s, setS] = useState<AiStatus>(OFF);
   useEffect(() => {
     let alive = true;
     status ??= Promise.resolve(supabase.rpc("ai_status")).then(
-      ({ data, error }) => (error || !data ? { free: false, strong: false } : { free: data.free === true, strong: data.strong === true }),
-      () => ({ free: false, strong: false }),
+      ({ data, error }) =>
+        error || !data ? OFF : { features: Array.isArray(data.features) ? data.features : [], free: data.free === true, strong: data.strong === true },
+      () => OFF,
     );
     status.then((v) => alive && setS(v));
     return () => {
@@ -30,8 +39,8 @@ export function useAiStatus(): AiStatus {
   return s;
 }
 
-/** Whether the free AI's helpers are on. */
-export const useFreeAi = () => useAiStatus().free;
+/** Whether an AI feature is on (it has a model and the AI is on). */
+export const useAiFeature = (feature: AiFeature) => useAiStatus().features.includes(feature);
 
 const assist = <T,>(body: Record<string, unknown>) => api<T>("/api/assist", { method: "POST", body: JSON.stringify(body) });
 
@@ -127,19 +136,9 @@ export async function gameHelp(gameId: string): Promise<GameHelp | null> {
 export const saveGameHelp = (h: { game_id: string; notes: string; installation_id?: number; repo?: string; learn?: boolean }) =>
   assist<{ ok: boolean; learned_at: string | null; guide: string | null }>({ action: "help_setup", ...h });
 
-export interface FreeTest {
-  ok: boolean;
-  text?: string;
-  inputTokens?: number;
-  outputTokens?: number;
-  estimated?: boolean;
-  error?: string;
-  message?: string;
-}
-export const testFreeAi = () => assist<FreeTest>({ action: "test" });
 
-/** Error codes the free features have texts for. */
-const ERRORS = ["free_off", "rate_limited", "not_allowed", "nothing_to_write", "github_error", "ai_timeout", "ai_bad_answer", "ai_provider_error", "ai_empty_answer"] as const;
+/** Error codes the AI features have texts for. */
+const ERRORS = ["free_off", "rate_limited", "cap_reached", "quota_reached", "not_allowed", "nothing_to_write", "github_error", "ai_timeout", "ai_bad_answer", "ai_provider_error", "ai_empty_answer"] as const;
 export type AssistError = (typeof ERRORS)[number] | "error";
 export const assistError = (e: unknown): AssistError => {
   const code = e instanceof Error ? e.message : "";

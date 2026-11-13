@@ -20,8 +20,9 @@ beforeEach(async () => {
   await t.admin("delete from ai_usage");
   await t.admin("delete from ai_quotas");
   await t.admin("delete from connect_jobs");
-  await t.admin(`update ai_settings set enabled = true, base_url = 'https://ai.example/v1', model = 'test-model',
-    input_price = 1, output_price = 2, monthly_cap = 20, default_quota = 5`);
+  await t.admin("delete from ai_free_limits");
+  await t.admin("update ai_settings set enabled = true, base_url = '', monthly_cap = 20, default_quota = 5");
+  await t.admin("update ai_features set model = 'test-model', input_price = 1, output_price = 2, thinking = 'default'");
 });
 
 const M = 1_000_000;
@@ -34,20 +35,32 @@ const budget = (who: { id: string }) => t.as<{ b: { enabled: boolean; spent: num
 
 describe("settings", () => {
   it("are only visible to and changeable by admins", async () => {
-    expect(await t.as(admin, "select model from ai_settings")).toEqual([{ model: "test-model" }]);
-    expect(await t.as(dev, "select model from ai_settings")).toEqual([]);
-    expect(await t.as(player, "select model from ai_settings")).toEqual([]);
-    await expect(t.as(null, "select model from ai_settings")).rejects.toThrow(/permission denied/);
+    expect(await t.as(admin, "select default_quota from ai_settings")).toEqual([{ default_quota: "5.00" }]);
+    expect(await t.as(dev, "select default_quota from ai_settings")).toEqual([]);
+    expect(await t.as(player, "select default_quota from ai_settings")).toEqual([]);
+    await expect(t.as(null, "select default_quota from ai_settings")).rejects.toThrow(/permission denied/);
     expect(await t.as(dev, "update ai_settings set monthly_cap = 999 returning id")).toEqual([]);
     const [s] = await t.as<{ monthly_cap: string; updated_by: string }>(admin, "update ai_settings set monthly_cap = 15 returning monthly_cap, updated_by");
     expect(s).toEqual({ monthly_cap: "15.00", updated_by: admin.id });
   });
 
-  it("can't be turned on without an endpoint, a model and prices", async () => {
-    await expect(t.as(admin, "update ai_settings set input_price = 0")).rejects.toThrow(/check/);
-    await expect(t.as(admin, "update ai_settings set model = ''")).rejects.toThrow(/check/);
+  it("need prices for every feature with a model, and an https address", async () => {
+    await expect(t.as(admin, "update ai_features set input_price = 0 where feature = 'translate'")).rejects.toThrow(/check/);
+    await t.as(admin, "update ai_features set model = '', input_price = 0, output_price = 0 where feature = 'translate'");
     await expect(t.as(admin, "update ai_settings set base_url = 'http://insecure.example'")).rejects.toThrow(/check/);
-    await t.as(admin, "update ai_settings set enabled = false, input_price = 0");
+    await expect(t.as(admin, "update ai_features set thinking = 'ultra' where feature = 'help'")).rejects.toThrow(/check/);
+  });
+
+  it("let only admins see and change the models per feature", async () => {
+    expect(await t.as(dev, "select * from ai_features")).toEqual([]);
+    expect(await t.as(dev, "update ai_features set model = 'x' returning feature")).toEqual([]);
+    const rows = await t.as<{ feature: string }>(admin, "update ai_features set model = 'claude-haiku-5-5' where feature = 'summary' returning feature");
+    expect(rows).toEqual([{ feature: "summary" }]);
+    await expect(t.as(admin, "insert into ai_features (feature) values ('other')")).rejects.toThrow(/permission denied/);
+  });
+
+  it("are Anthropic only", async () => {
+    await expect(t.as(admin, "update ai_settings set provider = 'openai_compatible'")).rejects.toThrow(/check/);
   });
 
   it("let admins choose the most tokens per step from a few steps", async () => {
@@ -67,7 +80,7 @@ describe("settings", () => {
 describe("spending limits", () => {
   it("reserves the highest possible cost and returns the settings to use", async () => {
     const r = await reserve(dev, M, M / 2);
-    expect(r).toMatchObject({ provider: "openai_compatible", base_url: "https://ai.example/v1", model: "test-model", thinking: "default" });
+    expect(r).toMatchObject({ provider: "anthropic", base_url: "", model: "test-model", thinking: "default" });
     expect(Number(r.max_cost)).toBe(2);
   });
 
@@ -119,12 +132,49 @@ describe("spending limits", () => {
     await reserve(dev, M, M);
   });
 
-  it("refuses when the AI is off, and for players", async () => {
+  it("refuses when the AI is off, and developer features for players", async () => {
     await expect(reserve(player, 1, 1)).rejects.toThrow(/not_allowed/);
+    for (const f of ["learn", "release", "describe", "summary", "connect_steps", "connect_quick"]) await expect(reserve(player, 1, 1, f)).rejects.toThrow(/not_allowed/);
     await expect(reserve(dev, 1, 1, "test")).rejects.toThrow(/not_allowed/);
-    await reserve(admin, 1, 1, "test");
     await t.admin("update ai_settings set enabled = false");
     await expect(reserve(dev, 1, 1)).rejects.toThrow(/ai_disabled/);
+  });
+
+  it("lets players translate, find similar feedback, get suggestions and ask the game helper", async () => {
+    for (const f of ["translate", "similar", "suggest", "help"]) {
+      const r = await reserve(player, 100, 100, f);
+      expect(r.model).toBe("test-model");
+    }
+    // Players have no money quota, only Toki's cap and the calls per hour.
+    expect((await t.admin<{ n: number }>("select count(*)::int as n from ai_usage where user_id = $1", [player.id]))[0].n).toBe(4);
+  });
+
+  it("uses each feature's own model and prices", async () => {
+    await t.admin("update ai_features set model = 'claude-haiku-5-5', input_price = 0.1, output_price = 0.5 where feature = 'translate'");
+    const r = await reserve(player, M, M, "translate");
+    expect(r.model).toBe("claude-haiku-5-5");
+    expect(Number(r.max_cost)).toBeCloseTo(0.6);
+    expect((await reserve(dev, M, M)).model).toBe("test-model");
+  });
+
+  it("refuses a feature without a model", async () => {
+    await t.admin("update ai_features set model = '', input_price = 0, output_price = 0 where feature = 'suggest'");
+    await expect(reserve(player, 1, 1, "suggest")).rejects.toThrow(/ai_off/);
+  });
+
+  it("counts calls per hour per feature", async () => {
+    await t.admin("update limits set player = 2 where key = 'ai_translate'");
+    await reserve(player, 1, 1, "translate");
+    await reserve(player, 1, 1, "translate");
+    await expect(reserve(player, 1, 1, "translate")).rejects.toThrow(/rate_limited/);
+    await reserve(player, 1, 1, "similar");
+    await t.admin("update limits set player = 120 where key = 'ai_translate'");
+  });
+
+  it("tests a feature's model for admins", async () => {
+    await t.admin("update ai_features set model = 'claude-haiku-5-5' where feature = 'help'");
+    const r = await t.service<{ r: Reservation }>("select ai_reserve($1, 'test', null, 1, 1, 'help') as r", [admin.id]).then((x) => x[0].r);
+    expect(r.model).toBe("claude-haiku-5-5");
   });
 
   it("can only be reserved and settled by the server", async () => {
@@ -223,19 +273,6 @@ describe("server secrets", () => {
 });
 
 describe("Anthropic as provider", () => {
-  it("can be chosen by admins, without an endpoint address", async () => {
-    const [s] = await t.as<{ provider: string; base_url: string }>(admin, "update ai_settings set provider = 'anthropic', base_url = '', model = 'claude-opus-5-5' returning provider, base_url");
-    expect(s).toEqual({ provider: "anthropic", base_url: "" });
-    const r = await reserve(dev, 1000, 1000);
-    expect(r).toMatchObject({ provider: "anthropic", base_url: "", model: "claude-opus-5-5" });
-  });
-
-  it("still needs an address for OpenAI-compatible endpoints, and only known providers", async () => {
-    await expect(t.as(admin, "update ai_settings set provider = 'openai_compatible', base_url = ''")).rejects.toThrow(/check/);
-    await expect(t.as(admin, "update ai_settings set provider = 'other'")).rejects.toThrow(/check/);
-    expect(await t.as(dev, "update ai_settings set provider = 'anthropic' returning id")).toEqual([]);
-  });
-
   it("keeps the Anthropic key apart from the other one", async () => {
     await t.service("insert into server_secrets (name, value) values ('anthropic_api_key', 'v1:x') on conflict (name) do update set value = excluded.value");
     expect(await t.service("select name from server_secrets where name = 'anthropic_api_key'")).toEqual([{ name: "anthropic_api_key" }]);

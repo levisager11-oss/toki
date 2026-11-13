@@ -20,7 +20,7 @@ export function Connect() {
   const location = useLocation();
   const navigate = useNavigate();
   const [budget, setBudget] = useState<Budget | null>(null);
-  // Without the strong AI, this page is only for connecting GitHub (the free AI helpers read it too).
+  // Without the strong AI, this page is only for connecting GitHub (the AI helpers read it too).
   const { strong } = useAiStatus();
   const [gh, setGh] = useState<GitHubInfo | null>(null);
   const [jobs, setJobs] = useState<ConnectJob[] | null>(null);

@@ -143,6 +143,40 @@ describe("reviewing applications", () => {
   });
 });
 
+describe("questions on an application", () => {
+  const note = (who: Who, id: string, text: string) =>
+    t.as<{ n: { by: string; text: string }[] }>(who, "select application_note($1, $2) as n", [id, text]).then((r) => r[0].n);
+  const notifs = (who: { id: string }) =>
+    t.admin<{ data: { event: string; application: string } }>("select data from notifications where user_id = $1 and kind = 'application' order by id", [who.id]);
+
+  it("lets an admin ask and the applicant answer, each telling the other", async () => {
+    const a = await apply(player);
+    expect(await note(admin, a.id, "Which of these games did you make?")).toEqual([expect.objectContaining({ by: "admin", text: "Which of these games did you make?" })]);
+    expect((await notifs(player)).map((n) => n.data)).toEqual([{ event: "question", application: a.id }]);
+    const after = await note(player, a.id, "  All three.  ");
+    expect(after.map((n) => [n.by, n.text])).toEqual([["admin", "Which of these games did you make?"], ["applicant", "All three."]]);
+    expect((await notifs(admin)).at(-1)?.data).toEqual({ event: "answer", application: a.id });
+    expect(await t.as(player, "select jsonb_array_length(notes) as n from developer_applications where id = $1", [a.id])).toEqual([{ n: 2 }]);
+  });
+
+  it("is only for the applicant and admins, and only while the application is open", async () => {
+    const a = await apply(player);
+    await expect(note(stranger, a.id, "hi")).rejects.toThrow(/not_allowed/);
+    await expect(note(creator, a.id, "hi")).rejects.toThrow(/not_allowed/);
+    await expect(note(player, a.id, "   ")).rejects.toThrow(/bad_text/);
+    await expect(note(player, a.id, "x".repeat(1001))).rejects.toThrow(/bad_text/);
+    await expect(t.as(player, "update developer_applications set notes = '[]' where id = $1", [a.id])).rejects.toThrow(/permission denied/);
+    await review(admin, a.id, false);
+    await expect(note(admin, a.id, "one more thing")).rejects.toThrow(/closed/);
+  });
+
+  it("keeps at most 20 notes", async () => {
+    const a = await apply(player);
+    for (let i = 0; i < 20; i++) await note(i % 2 ? player : admin, a.id, `note ${i}`);
+    await expect(note(admin, a.id, "21")).rejects.toThrow(/full/);
+  });
+});
+
 describe("adding games, as before", () => {
   it("lets only developers add games, and shows them to everyone right away", async () => {
     await expect(t.as(player, "insert into games (slug, title, category, play_url, created_by) values ('player-game', 'x', 'arcade', 'https://x.example', $1)", [player.id])).rejects.toThrow(/row-level security/);

@@ -164,7 +164,9 @@ export const LESS_THINKING: Thinking[] = ["medium", "low"];
 
 /** Error codes the page explains to the developer. */
 export function errorCode(e: unknown): string {
-  if (e instanceof DbError && /^(ai_disabled|not_allowed|cap_reached|quota_reached)$/.test(e.message)) return e.message;
+  if (e instanceof DbError && /^(ai_disabled|not_allowed|cap_reached|quota_reached|rate_limited)$/.test(e.message)) return e.message;
+  // A feature without a model counts as the AI being off.
+  if (e instanceof DbError && e.message === "ai_off") return "ai_disabled";
   if (e instanceof AiError) return `ai_${e.code}`;
   if (e instanceof GitHubError) return e.status === 404 ? "github_not_found" : "github_error";
   return "error";

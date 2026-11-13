@@ -3,13 +3,13 @@ import { Link } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
 import { ago } from "../lib/feedback";
 import { ApiError, githubRepos, type GitHubInfo } from "../lib/ai";
-import { assistError, gameHelp, saveGameHelp, useFreeAi, type GameHelp } from "../lib/assist";
+import { assistError, gameHelp, saveGameHelp, useAiFeature, type GameHelp } from "../lib/assist";
 
 /** For the game's developer: what the "Ask AI" helper knows (tips, and a guide learned from GitHub). */
 export function HelperSetup({ gameId }: { gameId: string }) {
   const { t, lang } = useI18n();
   const id = useId();
-  const on = useFreeAi();
+  const on = useAiFeature("learn");
   const [help, setHelp] = useState<GameHelp | null | undefined>(undefined);
   const [notes, setNotes] = useState("");
   const [repo, setRepo] = useState("");

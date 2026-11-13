@@ -1,7 +1,10 @@
-# Setting up Toki's AI (Toki Connect)
+# Setting up Toki's AI
 
-Toki Connect lets developers have an AI add Toki saves and high scores to their game: it reads the
-game's GitHub repository, may ask the developer questions, and opens a pull request.
+Every AI feature on Toki uses Claude, through Anthropic's API, and each feature has its own model:
+small helpers for players and developers (translations, similar feedback, game suggestions, "Ask
+AI", release note drafts, descriptions, summaries) and Toki Connect, which adds Toki saves and high
+scores to a game: it reads the game's code, may ask the developer questions, and opens a pull
+request.
 
 Almost everything is set up on Toki itself, on the **AI** page (`/admin/ai`, admins only). Do it on
 the real site (`https://www.playtoki.app`), not on a preview, because the GitHub App remembers the
@@ -10,12 +13,9 @@ address it was created from.
 ## 0. The privacy policy follows these settings by itself
 
 The privacy policy (`/privacy`) says whether the AI features are on and names the AI service that
-gets players' text. It reads that from the settings on the **AI** page: switching AI on or off, or
-entering another service's address, changes the policy and its date right away. Nothing to edit.
-
-Services the policy knows by name (company and country) are listed in `src/lib/policy.ts`
-(Anthropic, OpenAI, Google, OpenRouter, Mistral, Groq). Any other service is named by its address
-until it is added there.
+gets players' text (Anthropic). It reads that from the settings on the **AI** page: switching AI on
+or off, or entering another address for Anthropic's API, changes the policy and its date right
+away. Nothing to edit.
 
 ## 1. Supabase key in Vercel (once, the only step outside Toki)
 
@@ -29,13 +29,11 @@ The server needs it to use the database, and to keep the other keys encrypted.
 
 The AI page shows these steps with direct links, and a "Check again" button.
 
-## 2. AI key (on Toki)
+## 2. Anthropic key (on Toki)
 
-Pick the provider in the AI settings first (an OpenAI-compatible endpoint, or Anthropic), then
-paste its key on the AI page and save. Each provider has its own key, so you can switch between
-them. The server stores keys encrypted (AES-256-GCM, with a key derived from the Supabase secret
+Make an API key in the Claude Console (API keys), paste it on the AI page and save. The server stores keys encrypted (AES-256-GCM, with a key derived from the Supabase secret
 key), and nobody can read them back, not even admins. If you ever change the Supabase secret key,
-save the keys again.
+save the key again.
 
 ## 3. GitHub App (on Toki)
 
@@ -48,39 +46,35 @@ them encrypted.
 
 ## 4. AI settings (on Toki)
 
-Fill in the endpoint address (the part before `/chat/completions`, e.g.
-`https://api.example.com/v1`; for Anthropic leave it empty), the model, and the prices per million
-tokens from your provider's price list. **Find models** asks the provider which models it offers, so
-you can search them; when the provider tells the prices (OpenRouter does, and for Claude models Toki
-knows the list prices), they are filled in, but check them. Toki counts costs with these prices; without them the AI can't be turned on. Check the
-monthly cap ($20) and the quota per developer ($5), turn the AI on, save, and **Test the
-connection** (it costs a tiny amount and shows up in the list of calls).
+The *AI settings* card has the main switch (off: no feature works and nothing is sent to
+Anthropic), an optional other address for Anthropic's API (empty: `https://api.anthropic.com`),
+Toki's monthly cap and the quota per developer, and Toki Connect's settings. Set a monthly cap
+first: with $0 nothing can run.
 
-## 5. Free AI (on Toki)
+## 5. A model per feature (on Toki)
 
-Next to the "strong AI" above (prices, quotas, the monthly cap; used to write code), Toki has a
-**Free AI**: an OpenAI-compatible endpoint where tokens cost nothing (e.g. a school's endpoint). It
-uses the same key as the OpenAI-compatible endpoint (`AI_API_KEY`). Fill in its address and model
-in the *Free AI* card on the AI page, turn it on, save and test it.
+The *A model per feature* card (table `ai_features`) has one row per feature: its Claude model,
+how much it may think (sent as "effort") and its prices per million tokens. Known Claude models are
+always in the lists and fill in their list prices (`src/lib/claudeModels.ts`); **Find models** adds
+the ones the key can use. A feature without a model is off, and its buttons don't show. Each row
+has **Test this model** (a tiny call that shows up in the list of calls).
 
-**Key:** the free AI can have its own key (the "Own key" field in the Free AI card, or
-`FREE_AI_API_KEY` in Vercel). Without one, it uses the OpenAI-compatible key, but only when the
-strong AI is Anthropic or the same endpoint, so the strong AI's key never goes to another service.
+| Feature | Who | Starts with |
+| --- | --- | --- |
+| `translate`: posts, replies, chat messages and game descriptions (each translation is saved for 30 days) | players | Haiku |
+| `similar`: similar feedback before posting | players | Haiku |
+| `suggest`: "You might like" on the home page (saved for a day per account) | players | Haiku |
+| `help`: "Ask AI" on a game's page | players | Haiku |
+| `learn`: learns a game from its GitHub repository for "Ask AI" | developers | Haiku |
+| `release`: release note drafts (from a few words, ticked feedback and commits) | developers | Haiku |
+| `describe`: game descriptions in both languages, and reading new games in one-click adding | developers | Haiku |
+| `summary`: summaries of the feedback inbox and of applications, prompts for a coding AI | developers | Haiku |
+| `connect`: the Toki Connect steps that write code (also Managed Agents) | developers | Sonnet |
+| `connect_steps`: Toki Connect's easy steps (reading code, asking the developer); off: `connect` does them | developers | Haiku |
+| `connect_quick`: leaderboard code in one-click "Add your game"; off: one-click adding leaves the code alone | developers | Sonnet |
 
-It does the small helpers (`api/assist.ts`, prompts in `server/assist/prompts.ts`):
-
-- **Translate** posts, replies, chat messages and game descriptions between English and German
-  (on request; each translation is saved for 30 days, so it's made once).
-- **Similar feedback:** before a bug report or idea is posted, it points to posts about the same thing.
-- **You might like:** game suggestions on the home page, from what a player liked and played
-  (saved for a day per account).
-- For developers: **release note drafts** (from a few words, the ticked feedback and the commits
-  on GitHub since the last update), **game descriptions** in both languages, a **summary of
-  the feedback inbox**, and a **prompt for a coding AI** made from a game's open feedback (the free AI
-  sorts out posts that don't help and puts the same wishes together; Toki writes the prompt around
-  its tasks, without the players' own words or links: `improvePrompt` in `server/assist/prompts.ts`). For admins: a **summary of a developer application** (with what its links show).
-- **Toki Connect's easy steps** (if ticked): it reads the code and asks the developer; only the
-  step that writes the change uses the strong AI. If the free AI fails, the strong AI takes over.
+The prompts are in `server/assist/prompts.ts` and `server/assist/help.ts`; the helpers' server code
+is `api/assist.ts`.
 
 - **Ask AI (game helper):** a button on every game's page opens a small chat under the game for
   players who are stuck or have a question about Toki. It answers from the game's description and
@@ -92,24 +86,26 @@ It does the small helpers (`api/assist.ts`, prompts in `server/assist/prompts.ts
   their game's form ("AI helper for players"): tips, and "Learn from GitHub" (one call, saved in
   `game_help`; "Learn again" after an update).
 
-There are no prices, so instead every account may use each helper only so often an hour
-(`ai_free_take` in `supabase/migrations/20261112090000_free_ai.sql`, e.g. 120 translations, 10
-suggestions). Calls are counted per day and helper (one row each) and shown on the AI page.
+Every call counts against Toki's monthly cap; developers also have their quota. On top of that,
+every account may use each feature only so often an hour (the `ai_…` limits on `/admin/limits`,
+e.g. 120 translations, 10 suggestions; the Connect features share `ai_connect`). Players have no
+money quota: the calls per hour and the monthly cap hold them. Rules:
+`supabase/migrations/20261204090000_ai_feature_models.sql`.
 
 "Fix with AI" on a bug report (developers and admins) starts a Toki Connect run that fixes the bug
-and opens a pull request. It uses the strong AI and its limits.
+and opens a pull request. It uses the `connect` model and its limits.
 
-Buttons only show when the AI behind them is on (`ai_status()`): without the strong AI, Toki
-Connect's runs and "Fix with AI" are hidden, and the Toki Connect page only connects GitHub (which
-the free helpers use for update drafts and the game helper).
+Buttons only show when the feature behind them is on (`ai_status()` lists them): without a
+`connect` model, Toki Connect's runs and "Fix with AI" are hidden, and the Toki Connect page only
+connects GitHub (which the helpers use for update drafts and the game helper).
 
-## 6. Toki Connect with Claude Managed Agents (optional, Anthropic only)
+## 6. Toki Connect with Claude Managed Agents (optional)
 
-With the strong AI on Anthropic, the AI page offers "Toki Connect with Claude Managed Agents"
+The AI page offers "Toki Connect with Claude Managed Agents"
 (off by default). Then a Connect run (adding saves/high scores, or "Fix with AI") doesn't send
 files to the AI step by step: a Claude agent works in its own copy of the repository on
-Anthropic's servers, finds what it needs itself, and can try things. With any other provider, or
-with it off, Connect works step by step as before.
+Anthropic's servers, finds what it needs itself, and can try things. With it off, Connect works
+step by step as before.
 
 - **Read-only:** the agent gets a GitHub token that can only read that one repository, and the
   token never enters its sandbox. When done, it writes its changes into one JSON file; Toki checks
@@ -117,7 +113,7 @@ with it off, Connect works step by step as before.
 - **It talks to Toki through two tools:** `ask_developer` (the run pauses for the developer's
   answers, as before) and `finish`.
 - **Cheap by design:** short instructions (read only what's needed, smallest change, no installs
-  or long test runs), no web access, the thinking level from the strong AI's settings, and a hard
+  or long test runs), no web access, the model and thinking level of the `connect` feature, and a hard
   cap per run ("Most per run", $1 by default) that Anthropic enforces. The whole cap is reserved
   from the developer's quota and Toki's monthly cap while the run works; afterwards only its real
   cost counts (`ai_settle_amount`).
@@ -130,7 +126,7 @@ with it off, Connect works step by step as before.
 ## Using Vercel's settings instead
 
 Every key can also be set as an environment variable in Vercel; those win over what is stored on
-Toki: `AI_API_KEY`, `ANTHROPIC_API_KEY`, and for a GitHub App made by hand `GITHUB_APP_ID`, `GITHUB_APP_SLUG`,
+Toki: `ANTHROPIC_API_KEY`, and for a GitHub App made by hand `GITHUB_APP_ID`, `GITHUB_APP_SLUG`,
 `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY` (the whole `.pem`).
 A GitHub App made by hand needs: callback URL `https://www.playtoki.app/connect/github`, "Request
 user authorization (OAuth) during installation" on, webhook off, repository permissions Contents,
@@ -153,9 +149,11 @@ push, and Toki shows the developer a link to GitHub's "Run workflow" button.
 
 - Before every AI call, the server reserves the call's highest possible cost (the request's size
   plus the most it may answer). The database checks, under one lock, that this fits the
-  developer's quota for the month and Toki's monthly cap. After the answer, the real cost replaces
-  the reservation. So requests at the same time can't overspend either.
-- Admins have no quota of their own; the monthly cap applies to everyone.
+  feature's calls per hour, the developer's quota for the month and Toki's monthly cap. After the
+  answer, the real cost replaces the reservation. So requests at the same time can't overspend
+  either.
+- Only developers have a quota. Admins have none of their own, and players are held by the calls
+  per hour; the monthly cap applies to everyone.
 - Months are calendar months in UTC.
 - One run makes at most 8 AI calls and can only change the requested features. Changes to
   `.github/` are refused (only Toki itself adds the build file, see above).

@@ -268,7 +268,9 @@ export type NotificationKind =
   /** a game idea: proposed (to developers), a reply, claimed, given back or done */
   | "game_idea"
   /** an admin removed something of yours (with the reason), or handled something you reported */
-  | "moderation" | "report_done";
+  | "moderation" | "report_done"
+  /** a question from an admin on your developer application (to you), or the applicant's answer (to admins) */
+  | "application";
 
 export interface Notification {
   id: number;
@@ -286,7 +288,9 @@ export interface Notification {
     board_name_de?: string | null;
     /** game_idea: the idea, and what happened to it */
     idea?: string;
-    event?: "new" | "reply" | "claimed" | "released" | "done";
+    event?: "new" | "reply" | "claimed" | "released" | "done" | "question" | "answer";
+    /** application: which developer application */
+    application?: string;
     /** moderation, report_done: what it was about, the admin's reason, days banned, and what the admin did */
     what?: "game" | "profile" | "feedback" | "idea" | "message";
     note?: string;

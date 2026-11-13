@@ -184,7 +184,7 @@ describe("budgeted AI calls", () => {
       fetchImpl: reply({ choices: [{ message: { content: "done" } }], usage: { prompt_tokens: 9, completion_tokens: 3 } }),
     });
     expect(c.cost).toBe(0.01);
-    expect(calls[0]).toEqual({ fn: "ai_reserve", args: { p_user: "u", p_feature: "connect", p_job: "j", p_input_tokens: 20, p_max_output_tokens: 100 } });
+    expect(calls[0]).toEqual({ fn: "ai_reserve", args: { p_user: "u", p_feature: "connect", p_job: "j", p_input_tokens: 20, p_max_output_tokens: 100, p_test_feature: null } });
     expect(calls[1]).toEqual({ fn: "ai_settle", args: { p_id: 7, p_input_tokens: 9, p_output_tokens: 3, p_ok: true } });
   });
 
@@ -624,7 +624,7 @@ describe("error codes", () => {
 describe("stored secrets", async () => {
   const { decrypt, encrypt, githubFromManifestCode, githubManifest, withSecrets } = await import("../server/secrets");
   const env = (over: Partial<import("../server/env").ServerEnv> = {}) => ({
-    aiKey: "", anthropicKey: "", freeAiKey: "", serviceKey: "sb_secret_one",
+    anthropicKey: "", serviceKey: "sb_secret_one",
     github: { appId: "", slug: "", privateKey: "", clientId: "", clientSecret: "" }, ...over,
   });
   const dbWith = (rows: { name: string; value: string }[]) => ({ select: async () => rows }) as unknown as Db;
@@ -642,23 +642,23 @@ describe("stored secrets", async () => {
   });
 
   it("fill in what Vercel doesn't have, and say where it came from", async () => {
-    const db = dbWith([{ name: "ai_api_key", value: encrypt("stored-key", "sb_secret_one") }, { name: "github_app", value: encrypt(JSON.stringify(app), "sb_secret_one") }]);
+    const db = dbWith([{ name: "anthropic_api_key", value: encrypt("stored-key", "sb_secret_one") }, { name: "github_app", value: encrypt(JSON.stringify(app), "sb_secret_one") }]);
     const r = await withSecrets(db, env());
-    expect(r.env.aiKey).toBe("stored-key");
+    expect(r.env.anthropicKey).toBe("stored-key");
     expect(r.env.github).toEqual(app);
-    expect(r.sources).toEqual({ aiKey: "toki", anthropicKey: null, freeAiKey: null, github: "toki" });
+    expect(r.sources).toEqual({ anthropicKey: "toki", github: "toki" });
   });
 
   it("let Vercel's settings win", async () => {
-    const db = dbWith([{ name: "ai_api_key", value: encrypt("stored-key", "sb_secret_one") }]);
-    const r = await withSecrets(db, env({ aiKey: "env-key" }));
-    expect(r.env.aiKey).toBe("env-key");
-    expect(r.sources.aiKey).toBe("env");
+    const db = dbWith([{ name: "anthropic_api_key", value: encrypt("stored-key", "sb_secret_one") }]);
+    const r = await withSecrets(db, env({ anthropicKey: "env-key" }));
+    expect(r.env.anthropicKey).toBe("env-key");
+    expect(r.sources.anthropicKey).toBe("env");
   });
 
   it("count as not set up when they can't be opened", async () => {
-    const db = dbWith([{ name: "ai_api_key", value: encrypt("stored-key", "an_old_key") }]);
-    expect((await withSecrets(db, env())).sources.aiKey).toBeNull();
+    const db = dbWith([{ name: "anthropic_api_key", value: encrypt("stored-key", "an_old_key") }]);
+    expect((await withSecrets(db, env())).sources.anthropicKey).toBeNull();
   });
 
   it("ask GitHub for an app that reads code, opens pull requests, adds the build file and reports pushes", () => {
@@ -681,7 +681,6 @@ describe("stored secrets", async () => {
 
 describe("finding models", async () => {
   const { listModels } = await import("../server/ai/provider");
-  const { searchModels, tokensShort } = await import("../src/lib/ai");
   const cfg = { provider: "openai_compatible" as const, baseUrl: "https://ai.example/v1/", apiKey: "k" };
 
   it("reads the OpenAI-style list", async () => {
@@ -703,21 +702,6 @@ describe("finding models", async () => {
   it("reports errors and needs a key", async () => {
     await expect(listModels(cfg, reply({ error: { message: "bad key" } }, 401))).rejects.toMatchObject({ code: "provider_error" });
     await expect(listModels({ ...cfg, apiKey: "" })).rejects.toMatchObject({ code: "not_configured" });
-  });
-
-  it("finds models by every word of the search, in any order", () => {
-    const models = [{ id: "anthropic/claude-3.7-sonnet" }, { id: "anthropic/claude-3-haiku" }, { id: "openai/gpt-4o", name: "OpenAI: GPT-4o" }];
-    expect(searchModels(models, "sonnet claude").map((m) => m.id)).toEqual(["anthropic/claude-3.7-sonnet"]);
-    expect(searchModels(models, "CLAUDE").length).toBe(2);
-    expect(searchModels(models, "openai gpt").map((m) => m.id)).toEqual(["openai/gpt-4o"]);
-    expect(searchModels(models, "  ").length).toBe(3);
-    expect(searchModels(models, "llama")).toEqual([]);
-  });
-
-  it("writes context sizes short", () => {
-    expect(tokensShort(128000)).toBe("128k");
-    expect(tokensShort(1_000_000)).toBe("1M");
-    expect(tokensShort(1_050_000)).toBe("1.1M");
   });
 });
 

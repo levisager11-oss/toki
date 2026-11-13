@@ -99,17 +99,17 @@ describe("games that follow a GitHub repository", () => {
 });
 
 describe("one-click add", () => {
-  it("lets admins choose which AI adds leaderboard code, free by default", async () => {
-    expect((await t.admin<{ quick_code_ai: string }>("select quick_code_ai from ai_settings where id = 1"))[0].quick_code_ai).toBe("free");
-    await t.as(admin, "update ai_settings set quick_code_ai = 'strong' where id = 1");
-    expect((await t.admin<{ quick_code_ai: string }>("select quick_code_ai from ai_settings where id = 1"))[0].quick_code_ai).toBe("strong");
-    await expect(t.as(admin, "update ai_settings set quick_code_ai = 'magic' where id = 1")).rejects.toThrow(/check constraint/);
-    await t.as(dev, "update ai_settings set quick_code_ai = 'off' where id = 1");
-    expect((await t.admin<{ quick_code_ai: string }>("select quick_code_ai from ai_settings where id = 1"))[0].quick_code_ai).toBe("strong");
+  it("lets admins choose which model adds leaderboard code", async () => {
+    const model = () => t.admin<{ model: string }>("select model from ai_features where feature = 'connect_quick'").then((r) => r[0].model);
+    expect(await model()).toBe("claude-sonnet-5-5");
+    await t.as(admin, "update ai_features set model = 'claude-haiku-5-5', input_price = 0.1, output_price = 0.5 where feature = 'connect_quick'");
+    expect(await model()).toBe("claude-haiku-5-5");
+    await t.as(dev, "update ai_features set model = '' where feature = 'connect_quick'");
+    expect(await model()).toBe("claude-haiku-5-5");
   });
 
   it("keeps runs on uploaded games without a GitHub installation, and GitHub runs with one", async () => {
-    await t.service("insert into connect_jobs (user_id, repo, features, source, ai) values ($1, 'toki/snake', '{scores}', 'upload', 'free')", [dev.id]);
+    await t.service("insert into connect_jobs (user_id, repo, features, source, ai) values ($1, 'toki/snake', '{scores}', 'upload', 'quick')", [dev.id]);
     await expect(t.service("insert into connect_jobs (user_id, repo, features) values ($1, 'a/b', '{scores}')", [otherDev.id])).rejects.toThrow(/connect_jobs_installation_check/);
   });
 });

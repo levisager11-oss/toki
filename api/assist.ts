@@ -1,4 +1,4 @@
-// The free AI's small helpers, for every logged-in account: translations, similar feedback,
+// The AI's small helpers, for every logged-in account: translations, similar feedback,
 // "You might like" games; and for developers and admins: release note drafts, game descriptions,
 // summaries of the feedback inbox and of developer applications, and a prompt for a coding AI made
 // from a game's feedback.
@@ -7,10 +7,11 @@
 // messages are read with the account's own login, so row level security decides what it may see.
 // (Only a player's own words come with the request: their question to the game helper, and their
 // own save in that game as this browser has it.)
-// Each account may make only so many free calls an hour per feature (ai_free_take).
+// Each feature has its own Claude model (ai_features). Every call is counted against Toki's
+// monthly cap, developers' quotas and the calls per hour per feature (ai_reserve).
 import { createHash } from "node:crypto";
 import { AiError } from "../server/ai/provider.js";
-import { freeCompletion, type FreeFeature } from "../server/ai/free.js";
+import { AI_FEATURES, budgetedCompletion, featureOn, type AiFeature } from "../server/ai/budget.js";
 import {
   applicationPrompt, describePrompt, improvePrompt, improveText, inboxPrompt, plain, readDescribe, readImprove, readRelease, readSimilar, readSuggest,
   readTranslation, releasePrompt, similarPrompt, suggestPrompt, translatePrompt, type CatalogGame, type ImprovePost, type InboxPost, type Lang,
@@ -26,7 +27,6 @@ import { github, GitHubError } from "../server/github.js";
 import { body, context, isUuid, json, type Ctx } from "../server/http.js";
 import type { ChatMessage } from "../server/ai/provider.js";
 import { basics, gameFolder, readScan, readTokiJson, scanPrompt, withToki, type ScanFile } from "../server/assist/scan.js";
-import { freeSettings } from "../server/ai/free.js";
 
 // Vercel gives this function 5 minutes (vercel.json). Players and developers wait for most
 // answers, so those get 90 seconds; learning a game from its code may take longer.
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
       case "help_setup":
         return await helpSetup(ctx, b);
       case "test":
-        return await test(ctx);
+        return await test(ctx, b);
       default:
         return json({ error: "bad_request" }, 400);
     }
@@ -74,8 +74,12 @@ export async function POST(request: Request) {
 }
 
 function failed(e: unknown): Response {
-  if (e instanceof DbError && /^(free_off|not_allowed|rate_limited)$/.test(e.message)) return json({ error: e.message }, e.message === "rate_limited" ? 429 : 403);
-  if (e instanceof AiError) return json({ error: e.code === "not_configured" ? "free_off" : `ai_${e.code}`, message: errorDetail(e) ?? "" }, 502);
+  if (e instanceof DbError && /^(ai_disabled|ai_off)$/.test(e.message)) return json({ error: "free_off" }, 403);
+  if (e instanceof DbError && /^(not_allowed|rate_limited|cap_reached|quota_reached)$/.test(e.message)) return json({ error: e.message }, e.message === "not_allowed" ? 403 : 429);
+  if (e instanceof AiError) {
+    const code = e.code === "not_configured" ? "free_off" : e.code === "refused" ? "ai_bad_answer" : `ai_${e.code}`;
+    return json({ error: code, message: errorDetail(e) ?? "" }, 502);
+  }
   if (e instanceof GitHubError) return json({ error: "github_error", message: errorDetail(e) ?? "" }, 502);
   return json({ error: "error" }, 500);
 }
@@ -83,9 +87,30 @@ function failed(e: unknown): Response {
 const hash = (s: string) => createHash("sha256").update(s).digest("hex");
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
-/** One call to the free AI, without a token limit (tokens cost nothing there). */
-async function ask(ctx: Ctx, feature: FreeFeature, messages: ChatMessage[], temperature = 0.2, timeoutMs = TIMEOUT_MS): Promise<string> {
-  const c = await freeCompletion({ db: ctx.db, keys: { free: ctx.env.freeAiKey, openai: ctx.env.aiKey }, userId: ctx.user.id, feature, messages, temperature, timeoutMs });
+/** The most tokens each helper may write, thinking included (what a call may cost is reserved first). */
+const MAX_TOKENS: Record<Exclude<AiFeature, "connect" | "connect_steps" | "connect_quick">, number> = {
+  translate: 8000,
+  similar: 2000,
+  suggest: 4000,
+  help: 4000,
+  learn: 16000,
+  release: 4000,
+  describe: 6000,
+  summary: 6000,
+};
+
+/** One call to the feature's model. */
+async function ask(ctx: Ctx, feature: keyof typeof MAX_TOKENS, messages: ChatMessage[], temperature = 0.2, timeoutMs = TIMEOUT_MS): Promise<string> {
+  const c = await budgetedCompletion({
+    db: ctx.db,
+    keys: { openai_compatible: "", anthropic: ctx.env.anthropicKey },
+    userId: ctx.user.id,
+    feature,
+    messages,
+    maxTokens: MAX_TOKENS[feature],
+    temperature,
+    timeoutMs,
+  });
   return c.text;
 }
 
@@ -341,7 +366,7 @@ async function scan(ctx: Ctx, b: Record<string, unknown>) {
   const tokiFile = files.find((f) => f.path === "toki.json");
   let proposal = basics(files, name);
   let ai = false;
-  if (await freeSettings(ctx.db)) {
+  if (await featureOn(ctx.db, "describe")) {
     try {
       proposal = readScan(await ask(ctx, "describe", scanPrompt(files, paths, proposal, name), 0.3), proposal);
       ai = true;
@@ -524,20 +549,24 @@ async function helpSetup(ctx: Ctx, b: Record<string, unknown>) {
   return json({ ok: true, learned_at: row.learned_at ?? null, guide: row.guide ?? null });
 }
 
-// ---------- admins: test the free AI ----------
+// ---------- admins: test a feature's model ----------
 
-async function test(ctx: Ctx) {
+async function test(ctx: Ctx, b: Record<string, unknown>) {
   if (ctx.user.role !== "admin") return json({ error: "not_allowed" }, 403);
+  const feature = AI_FEATURES.find((f) => f === b.feature) ?? "translate";
   try {
-    const c = await freeCompletion({
+    const c = await budgetedCompletion({
       db: ctx.db,
-      keys: { free: ctx.env.freeAiKey, openai: ctx.env.aiKey },
+      keys: { openai_compatible: "", anthropic: ctx.env.anthropicKey },
       userId: ctx.user.id,
       feature: "test",
+      testFeature: feature,
       messages: [{ role: "user", content: "Reply with the single word OK." }],
+      // Room for models that think before answering; the real cost is what gets counted.
+      maxTokens: 1024,
       timeoutMs: TIMEOUT_MS,
     });
-    return json({ ok: true, text: c.text.slice(0, 200), inputTokens: c.inputTokens, outputTokens: c.outputTokens, estimated: c.estimated });
+    return json({ ok: true, text: c.text.slice(0, 200), inputTokens: c.inputTokens, outputTokens: c.outputTokens, estimated: c.estimated, cost: c.cost });
   } catch (e) {
     const r = failed(e);
     const out = (await r.json()) as { error: string; message?: string };

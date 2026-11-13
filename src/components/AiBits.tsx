@@ -1,12 +1,12 @@
 import { Fragment, useRef, useState } from "react";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
-import { assistError, detectLang, translate, useFreeAi, type TranslateKind } from "../lib/assist";
+import { assistError, detectLang, translate, useAiFeature, type TranslateKind } from "../lib/assist";
 
-/** A button that asks the free AI for a summary and shows it (nothing when the free AI is off). */
+/** A button that asks the AI for a summary and shows it (nothing when summaries are off). */
 export function SummaryButton({ label, load }: { label: string; load: () => Promise<string> }) {
   const { t } = useI18n();
-  const on = useFreeAi();
+  const on = useAiFeature("summary");
   const [text, setText] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -37,7 +37,7 @@ export function SummaryButton({ label, load }: { label: string; load: () => Prom
 }
 
 export interface Translation {
-  /** whether to offer translating (logged in, free AI on, and the text is in the other language) */
+  /** whether to offer translating (logged in, AI on, and the text is in the other language) */
   offer: boolean;
   /** the translated texts while they're shown */
   texts: string[] | null;
@@ -50,7 +50,7 @@ export interface Translation {
 export function useTranslate(kind: TranslateKind, id: string | number, sample: string): Translation {
   const { lang, t } = useI18n();
   const { session } = useAuth();
-  const on = useFreeAi();
+  const on = useAiFeature("translate");
   const [texts, setTexts] = useState<string[] | null>(null);
   const [cache, setCache] = useState<{ lang: string; texts: string[] } | null>(null);
   const [shown, setShown] = useState(false);

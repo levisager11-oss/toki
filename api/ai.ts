@@ -1,5 +1,5 @@
 // Admins: set up the AI key and the Toki GitHub App on Toki, see what is set up, and test the AI.
-import { budgetedCompletion } from "../server/ai/budget.js";
+import { AI_FEATURES, budgetedCompletion } from "../server/ai/budget.js";
 import { listModels } from "../server/ai/provider.js";
 import { errorCode } from "../server/connect/agent.js";
 import { body, context, json } from "../server/http.js";
@@ -10,12 +10,8 @@ export async function GET(request: Request) {
   if (ctx instanceof Response) return ctx;
   return json({
     serviceKey: true,
-    aiKey: !!ctx.sources.aiKey,
-    aiKeySource: ctx.sources.aiKey,
     anthropicKey: !!ctx.sources.anthropicKey,
     anthropicKeySource: ctx.sources.anthropicKey,
-    freeAiKey: !!ctx.sources.freeAiKey,
-    freeAiKeySource: ctx.sources.freeAiKey,
     github: !!ctx.sources.github,
     githubSource: ctx.sources.github,
     githubSlug: ctx.env.github.slug || null,
@@ -31,9 +27,11 @@ export async function POST(request: Request) {
       try {
         const c = await budgetedCompletion({
           db: ctx.db,
-          keys: { openai_compatible: ctx.env.aiKey, anthropic: ctx.env.anthropicKey },
+          keys: { openai_compatible: "", anthropic: ctx.env.anthropicKey },
           userId: ctx.user.id,
           feature: "test",
+          // The feature whose model is tried.
+          testFeature: AI_FEATURES.find((f) => f === b.feature) ?? "connect",
           messages: [{ role: "user", content: "Reply with the single word OK." }],
           // Room for models that think before answering; the real cost is what gets counted.
           maxTokens: 1024,
@@ -43,13 +41,11 @@ export async function POST(request: Request) {
         return json({ ok: false, error: errorCode(e), message: e instanceof Error ? e.message.slice(0, 300) : "" });
       }
     case "models": {
-      // The provider and address chosen in the form (before saving).
-      const provider = b.provider === "anthropic" ? "anthropic" : "openai_compatible";
+      // Claude's models, through the address chosen in the form (before saving; empty: Anthropic).
       const baseUrl = typeof b.base_url === "string" ? b.base_url.trim() : "";
-      if (baseUrl ? !/^https:\/\/\S+$/.test(baseUrl) || baseUrl.length > 300 : provider !== "anthropic") return json({ error: "bad_url" }, 400);
+      if (baseUrl && (!/^https:\/\/\S+$/.test(baseUrl) || baseUrl.length > 300)) return json({ error: "bad_url" }, 400);
       try {
-        const apiKey = provider === "anthropic" ? ctx.env.anthropicKey : ctx.env.aiKey;
-        const models = await listModels({ provider, baseUrl, apiKey });
+        const models = await listModels({ provider: "anthropic", baseUrl, apiKey: ctx.env.anthropicKey });
         return json({ models });
       } catch (e) {
         return json({ error: errorCode(e), message: e instanceof Error ? e.message.slice(0, 300) : "" }, 502);
@@ -58,11 +54,11 @@ export async function POST(request: Request) {
     case "set_ai_key": {
       const key = typeof b.key === "string" ? b.key.trim() : "";
       if (key.length < 8 || key.length > 500 || /\s/.test(key)) return json({ error: "bad_request" }, 400);
-      await saveSecret(ctx.db, ctx.env, secretFor(b.provider), key, ctx.user.id);
+      await saveSecret(ctx.db, ctx.env, "anthropic_api_key", key, ctx.user.id);
       return json({ ok: true });
     }
     case "clear_ai_key":
-      await removeSecret(ctx.db, secretFor(b.provider));
+      await removeSecret(ctx.db, "anthropic_api_key");
       return json({ ok: true });
     case "github_manifest": {
       // GitHub sends the admin back with a one-time code after they created the app there.
@@ -83,6 +79,3 @@ export async function POST(request: Request) {
       return json({ error: "bad_request" }, 400);
   }
 }
-
-/** Where a provider's key is kept: "free" is the free AI's own key. */
-const secretFor = (provider: unknown) => (provider === "anthropic" ? "anthropic_api_key" : provider === "free" ? "free_ai_api_key" : "ai_api_key");

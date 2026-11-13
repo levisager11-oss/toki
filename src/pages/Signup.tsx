@@ -20,6 +20,7 @@ export function Signup() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [again, setAgain] = useState("");
   const [month, setMonth] = useState("");
   const [year, setYear] = useState("");
   const [parentOk, setParentOk] = useState(false);
@@ -40,6 +41,7 @@ export function Signup() {
     const name = username.trim().toLowerCase();
     const born = bornValue(year, month);
     if (!born) return;
+    if (password !== again) return setErr(t("pw.mismatch"));
     const age = ageOf(born);
     // Under 13: no account, and nothing they typed is sent anywhere.
     if (age < MIN_AGE) {
@@ -116,6 +118,8 @@ export function Signup() {
         <label htmlFor="password">{t("login.password")}</label>
         <input id="password" type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" aria-describedby="pw-help" />
         <small id="pw-help">{t("signup.passwordHelp")}</small>
+        <label htmlFor="password2">{t("signup.passwordAgain")}</label>
+        <input id="password2" type="password" required minLength={8} value={again} onChange={(e) => setAgain(e.target.value)} autoComplete="new-password" />
         <BirthFields month={month} year={year} onMonth={setMonth} onYear={setYear} />
         {needsParent && (
           <label className="fb-check">
