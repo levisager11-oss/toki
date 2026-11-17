@@ -1,4 +1,4 @@
-/* Toki save support v9. Put this in the game's HTML <head>, before the game's own scripts.
+/* Toki save support v10. Put this in the game's HTML <head>, before the game's own scripts.
    Inside Toki, it keeps a copy of everything the game stores in localStorage, so progress
    survives closing the app (iPhone deletes storage of games shown inside other sites) and
    follows logged-in players to other devices. Outside Toki it does nothing.
@@ -13,7 +13,8 @@
    chose in Toki), now if it knows it and again when it changes; use it in rooms instead of asking.
    toki.name has it too (null until Toki said).
    On phones inside Toki, swipes and quick taps in the game don't scroll or zoom the Toki page
-   around it (only where the game itself has nothing to scroll). */
+   around it (only where the game itself has nothing to scroll). While the game fills the
+   screen, Toki's page can't move anyway, so taps are left alone there. */
 (function () {
   // Games hosted on Toki get this script added for them; a second copy in the game does nothing.
   if (window.__tokiSave) return;
@@ -49,6 +50,8 @@
     if (window.toki.name) try { fn(window.toki.name); } catch (err) { /* the game's own error */ }
   };
   if (!inToki) return;
+  // Toki says when the game fills the screen (real fullscreen, or filling it on phones).
+  var filled = false;
   // Phones (iPhone above all) pass a swipe or a fast double tap in a game up to the Toki page,
   // which then scrolls or zooms away from the game mid-play. Stop that, except where the game
   // itself has something to scroll. Games keep their own touch-action: this one has no weight.
@@ -67,12 +70,14 @@
       if (shut(document.documentElement) || shut(document.body)) return false;
       return root.scrollHeight > window.innerHeight + 1 || root.scrollWidth > window.innerWidth + 1;
     };
+    // iPhones drop the tap when a finger's first tiny movement is stopped. While the game fills
+    // the screen the page behind it can't scroll, so one finger is left alone there.
     var free = true;
     document.addEventListener("touchstart", function (e) {
       free = e.touches.length < 2 && scrolls(e.target);
     }, { passive: true, capture: true });
     document.addEventListener("touchmove", function (e) {
-      if ((!free || e.touches.length > 1) && e.cancelable) e.preventDefault();
+      if (((!free && !filled) || e.touches.length > 1) && e.cancelable) e.preventDefault();
     }, { passive: false, capture: true });
     document.addEventListener("gesturestart", function (e) { e.preventDefault(); }, { passive: false });
   }
@@ -82,6 +87,7 @@
     if (m.type === "host" && hostFn) {
       try { hostFn(); } catch (err) { /* the game's own error: the player can still open a room by hand */ }
     }
+    if (m.type === "fill") filled = m.data === true;
     if (m.type === "name" && typeof m.data === "string") {
       var n = m.data.replace(/[\u0000-\u001f<>]/g, "").replace(/\s+/g, " ").trim().slice(0, 20);
       if (!n || n === window.toki.name) return;

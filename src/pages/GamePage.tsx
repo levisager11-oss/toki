@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Navigate, useParams, useSearchParams } from "react-router-dom";
 import { useTitle } from "../lib/useTitle";
 import { useI18n } from "../lib/i18n";
@@ -36,6 +36,9 @@ import { useBadges } from "../lib/useBadges";
 import { maxPlayers, partyId, playUrl, roomCode } from "../lib/invites";
 
 const LANDSCAPE_PHONE = "(orientation: landscape) and (pointer: coarse) and (max-height: 600px)";
+// iPhones and iPads (iPads say they are Macs).
+const APPLE_TOUCH = typeof navigator !== "undefined" &&
+  (/iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1));
 // A visit counts as a play after this long on the page (the server counts one per browser per day).
 const PLAY_AFTER_MS = 10_000;
 
@@ -52,6 +55,8 @@ export function GamePage() {
   // Phone turned sideways: the game fills the screen on its own; turning back to portrait leaves.
   const landscapePhone = useMediaQuery(LANDSCAPE_PHONE);
   const fillScreen = pseudoFull || landscapePhone;
+  // The page behind the game can't move: the game's script then leaves taps alone (toki-save.js).
+  const filled = isFull || fillScreen;
   const game = findGame(games, slug);
   const [helper, setHelper] = useState(false);
   const freeAi = useAiFeature("help");
@@ -77,6 +82,14 @@ export function GamePage() {
   const joinCode = game?.multiplayer ? roomCode(params.get("room")) : null;
   const src = game ? playUrl(game, joinCode) : "";
   const frameKey = `${src}|${userId ?? ""}|${frameRun}`;
+  const tellFilled = useCallback(() => {
+    try {
+      gameFrame.current?.contentWindow?.postMessage({ toki: 1, type: "fill", data: filled }, new URL(src).origin);
+    } catch {
+      // Not a full address: the game keeps its default.
+    }
+  }, [filled, src]);
+  useEffect(tellFilled, [tellFilled, frameKey]);
   const bridge = useRoomBridge(gameFrame, game, frameKey);
   const inviteFirst = game?.multiplayer && userId && /^[0-9a-f-]{36}$/i.test(params.get("invite") ?? "") ? params.get("invite") : null;
   const invites = useGameInvites(game, bridge, inviteFirst);
@@ -214,7 +227,10 @@ export function GamePage() {
             </div>
           </div>
         )}
-        <div className={`frame ${isFull ? "is-full" : ""} ${fillScreen ? "pseudo-full" : ""}`} ref={frameWrap}>
+        {/* with-close: the way out gets its own strip above the game, so it never covers the
+            game's own buttons (often top right). top-gap: iPhones in landscape keep taps along
+            the top edge of the screen for themselves, so the game starts just below it. */}
+        <div className={`frame ${isFull ? "is-full" : ""} ${fillScreen ? "pseudo-full" : ""} ${pseudoFull && !landscapePhone ? "with-close" : ""} ${landscapePhone && APPLE_TOUCH ? "top-gap" : ""}`} ref={frameWrap}>
           {pseudoFull && !landscapePhone && (
             <button type="button" className="close-full" onClick={() => setPseudoFull(false)} aria-label={t("game.exitFullscreen")}>
               <CloseIcon />
@@ -234,6 +250,7 @@ export function GamePage() {
             // On computers, keys go to the game right away (no click into it first), unless
             // the visitor is already somewhere else on the page, e.g. typing in the search.
             onLoad={(e) => {
+              tellFilled();
               const active = document.activeElement;
               if (matchMedia("(pointer: fine)").matches && (!active || active === document.body)) e.currentTarget.focus({ preventScroll: true });
             }}
