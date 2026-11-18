@@ -295,7 +295,7 @@ export const playerDe: Record<GroupKey["player"], string> = {
   "prof.playtime": "Spielzeit",
   "prof.gamesPlayed": "Gespielte Spiele",
   "prof.gamesMade": "Eigene Spiele",
-  "prof.mostPlayed": "Am meisten gespielt",  "idea.title": "Spielideen",
+  "prof.mostPlayed": "Am meisten gespielt",
   "idea.lead.dev": "Spiele, die sich Spieler und andere Entwickler wünschen. Sprecht darüber, und übernimm eine Idee, um sie zu bauen.",
   "idea.lead.player": "Die Spiele, die du vorgeschlagen hast, und was daraus geworden ist.",
   "idea.filter": "Anzeigen",

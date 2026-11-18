@@ -88,7 +88,8 @@ export function textKeys(file: string, name: string): string[] {
   const start = text.search(new RegExp(`^(?:export )?const ${name}\\b[^\\n]*= \\{$`, "m"));
   if (start < 0) throw new Error(`no texts ${name} in ${file}`);
   const body = text.slice(start, text.indexOf("\n};", start));
-  return [...body.matchAll(/^ {2}"([^"]+)": /gm)].map((m) => m[1]);
+  // A key starts a line, or follows the end of the text before it on the same line.
+  return [...body.matchAll(/(?:^ {2}|[",] +)"([^"]+)": /gm)].map((m) => m[1]);
 }
 
 export const rel = (p: string) => relative(root, p);
