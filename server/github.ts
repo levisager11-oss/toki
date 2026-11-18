@@ -29,6 +29,14 @@ export interface TreeEntry {
   size?: number;
 }
 
+export interface MergedPull {
+  number: number;
+  title: string;
+  body: string;
+  /** ISO time */
+  mergedAt: string;
+}
+
 export interface Installation {
   id: number;
   account: string;
@@ -156,6 +164,22 @@ export function github(cfg: ServerEnv["github"], fetchImpl: typeof fetch = fetch
           const q = `per_page=60${since ? `&since=${encodeURIComponent(since)}` : ""}`;
           const r = await call<{ commit: { message: string } }[]>(`/repos/${repo}/commits?${q}`, token);
           return r.map((c) => c.commit.message.split("\n")[0].trim()).filter(Boolean);
+        },
+        /**
+         * The newest pull requests merged into the default branch (at most 20, newest first): their
+         * number, title, description and when they were merged.
+         */
+        async mergedPulls(): Promise<MergedPull[]> {
+          const base = (await call<{ default_branch: string }>(`/repos/${repo}`, token)).default_branch;
+          const r = await call<{ number: number; title: string; body: string | null; merged_at: string | null }[]>(
+            `/repos/${repo}/pulls?state=closed&base=${encodeURIComponent(base)}&sort=updated&direction=desc&per_page=50`,
+            token,
+          );
+          return r
+            .filter((p) => p.merged_at)
+            .map((p) => ({ number: p.number, title: p.title.trim().slice(0, 200), body: (p.body ?? "").slice(0, 4000), mergedAt: p.merged_at as string }))
+            .sort((a, b) => Date.parse(b.mergedAt) - Date.parse(a.mergedAt))
+            .slice(0, 20);
         },
         async read(path: string, ref: string): Promise<string> {
           return call<string>(`/repos/${repo}/contents/${enc(path)}?ref=${encodeURIComponent(ref)}`, token, {}, "application/vnd.github.raw+json");
