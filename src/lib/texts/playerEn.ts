@@ -293,7 +293,7 @@ export const playerEn = {
   "prof.playtime": "Playtime",
   "prof.gamesPlayed": "Games played",
   "prof.gamesMade": "Games made",
-  "prof.mostPlayed": "Most played",  "idea.title": "Game ideas",
+  "prof.mostPlayed": "Most played",
   "idea.lead.dev": "Games that players and other developers wish for. Talk about them, and claim one to build it.",
   "idea.lead.player": "The games you proposed, and what became of them.",
   "idea.filter": "Show",
