@@ -894,6 +894,7 @@ a.author:hover { text-decoration: underline; color: var(--fg); }
 .msg-row .ai-translate { margin: 0 0 2px; }
 .ai-start { align-self: flex-start; }
 .ai-inline { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 8px; }
+.rel-change > input { flex: 1 1 200px; min-width: 0; }
 .ai-panel { display: flex; flex-direction: column; gap: 6px; border-left: 3px solid var(--accent); background: var(--bg); padding: 10px 12px; }
 .ai-box { border: 1px solid var(--line); border-left: 3px solid var(--accent); background: var(--surface); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .ai-box-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
