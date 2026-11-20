@@ -121,6 +121,9 @@ export interface ContentReport {
   note: string | null;
   owner: Person | null;
   reporter: Person | null;
+  /** the AI's first look, when an admin asked for it */
+  ai_verdict?: "remove" | "keep" | "unsure" | null;
+  ai_reason?: string | null;
 }
 
 /** Admins: reports about games, profiles, feedback posts and ideas. */

@@ -7,6 +7,7 @@ import { CONTACT_EMAIL } from "../lib/site";
 import { CAPTCHA_ON } from "../lib/captcha";
 import { KEEP_PREVIOUS_DAYS } from "../lib/hostingRules";
 import { aiServiceName, ANTHROPIC_HOST, LEGAL_DATE, loadPolicyFacts, policyDate, type PolicyFacts } from "../lib/policy";
+import { nextTermsApply, TERMS_NEXT_DATE } from "../lib/terms";
 
 // The terms of service, the privacy policy and the legal notice. Their texts are in
 // src/lib/texts/legal*.ts: "## " starts a section, lines starting with "- " become a list,
@@ -56,6 +57,7 @@ export function Legal({ page }: { page: (typeof PAGES)[number] }) {
     };
   }, [page]);
 
+  const nextApply = nextTermsApply();
   // The AI services in use, by name ("Anthropic (Anthropic PBC, USA)").
   const hosts = facts?.ai_hosts ?? [];
   const services = hosts.map((host) => aiServiceName(host) ?? t("legal.privacy.ai.host", { host }));
@@ -72,14 +74,17 @@ export function Legal({ page }: { page: (typeof PAGES)[number] }) {
     check_cookie: CAPTCHA_ON ? t("legal.privacy.check.cookie") : "",
     old_days: KEEP_PREVIOUS_DAYS,
     ai_line: services.map((s) => t("legal.privacy.ai.line", { service: s }) + "\n").join(""),
+    // The terms: the announced change applies from TERMS_NEXT_DATE by itself (src/lib/terms.ts).
+    reports: t(nextApply ? "legal.terms.reports.next" : "legal.terms.reports.now"),
   };
-  const day = new Date((page === "privacy" ? policyDate(facts ?? null) : LEGAL_DATE) + "T12:00:00");
-  const date = new Intl.DateTimeFormat(lang === "de" ? "de-CH" : "en-GB", { day: "numeric", month: "long", year: "numeric" }).format(day);
+  const fmt = (d: string) => new Intl.DateTimeFormat(lang === "de" ? "de-CH" : "en-GB", { day: "numeric", month: "long", year: "numeric" }).format(new Date(d + "T12:00:00"));
+  const date = fmt(page === "privacy" ? policyDate(facts ?? null) : page === "terms" && nextApply ? TERMS_NEXT_DATE : LEGAL_DATE);
   return (
     <article className="legal">
       <h1 className="h">{title}</h1>
       <p className="lead">{t(`legal.${page}.lead`)}</p>
       <p className="hint">{t("legal.updated", { date })}</p>
+      {page === "terms" && !nextApply && <p className="check">{inline(t("legal.terms.coming", { date: fmt(TERMS_NEXT_DATE) }))}</p>}
       <Body text={t(`legal.${page}.body`, vars)} />
       <p className="legal-more">
         {PAGES.filter((other) => other !== page).map((other) => <Link key={other} to={`/${other}`}>{t(`legal.${other}.title`)}</Link>)}

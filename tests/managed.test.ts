@@ -104,9 +104,23 @@ describe("Toki Connect with Managed Agents", () => {
     expect(await agentStep(newJob({ state: { session: "sesn_1" } }), f.deps)).toMatchObject({ status: "failed", error: "agent_budget", cost: 1.01 });
   });
 
-  it("ends the run when the agent stopped for another reason", async () => {
+  it("ends the run when the agent stopped for another reason, and says why", async () => {
+    // Model requests kept failing: Anthropic was busy.
     const f = fake({ status: "idle", events: [{ type: "idle", stop: "retries_exhausted" }] });
-    expect(await agentStep(newJob({ state: { session: "sesn_1" } }), f.deps)).toMatchObject({ status: "failed", error: "ai_provider_error" });
+    expect(await agentStep(newJob({ state: { session: "sesn_1" } }), f.deps)).toMatchObject({ status: "failed", error: "ai_busy" });
+    const r = fake({ status: "idle", events: [{ type: "idle", stop: "refusal" }] });
+    expect(await agentStep(newJob({ state: { session: "sesn_1" } }), r.deps)).toMatchObject({ status: "failed", error: "ai_refused" });
+    // The session's error names the reason: no credit, a repository GitHub won't give.
+    const b = fake({ status: "terminated", events: [{ type: "error", message: "credit balance too low", code: "billing_error" }] });
+    expect(await agentStep(newJob({ state: { session: "sesn_1" } }), b.deps)).toMatchObject({ status: "failed", error: "ai_no_credit" });
+    const g = fake({ status: "idle", events: [{ type: "error", message: "not found", code: "repository_not_found_error" }, { type: "idle", stop: "retries_exhausted" }] });
+    expect(await agentStep(newJob({ state: { session: "sesn_1" } }), g.deps)).toMatchObject({ status: "failed", error: "github_not_found" });
+  });
+
+  it("hands back the changes with python3, or node where there is none", () => {
+    expect(CHANGES_COMMAND).toContain("if command -v python3 >/dev/null; then python3 -c");
+    expect(CHANGES_COMMAND).toContain("else node -e");
+    expect(CHANGES_COMMAND).toContain("/mnt/session/outputs/toki-changes.json");
   });
 
   it("reminds the agent once when it stops without finishing", async () => {

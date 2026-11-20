@@ -54,3 +54,37 @@ describe("game helper", () => {
     await t.admin("update ai_settings set enabled = false");
   });
 });
+
+describe("learning as a batch", () => {
+  it("keeps the batch on the game's row until the guide is collected; the developer sees it", async () => {
+    const game = await t.game(dev);
+    await t.service(
+      "insert into game_help (game_id, notes, learn_batch, learn_usage, learn_started_at) values ($1, '', 'msgbatch_1', 9, now())",
+      [game.id],
+    );
+    expect(await t.as(dev, "select learn_batch, learn_error from game_help where game_id = $1", [game.id])).toEqual([{ learn_batch: "msgbatch_1", learn_error: null }]);
+    await t.service("update game_help set guide = 'Goal', learn_batch = null, learn_usage = null, learn_error = null where game_id = $1", [game.id]);
+    expect(await t.as(dev, "select guide, learn_batch from game_help where game_id = $1", [game.id])).toEqual([{ guide: "Goal", learn_batch: null }]);
+    await expect(t.service("update game_help set learn_error = $2 where game_id = $1", [game.id, "x".repeat(61)])).rejects.toThrow(/check/);
+  });
+});
+
+describe("a first look at reports", () => {
+  it("is off until an admin picks a model, and only for admins and developers' budgets", async () => {
+    expect(await t.service("select model from ai_features where feature = 'moderate'")).toEqual([{ model: "" }]);
+    await t.admin("update ai_settings set enabled = true, monthly_cap = 100");
+    await expect(t.service("select ai_reserve($1, 'moderate', null, 10, 10)", [admin.id])).rejects.toThrow(/ai_off/);
+    await t.admin("update ai_features set model = 'claude-haiku-5-5', input_price = 0.1, output_price = 0.5 where feature = 'moderate'");
+    expect(await t.service("select ai_reserve($1, 'moderate', null, 10, 10) is not null as ok", [admin.id])).toEqual([{ ok: true }]);
+    await expect(t.service("select ai_reserve($1, 'moderate', null, 10, 10)", [player.id])).rejects.toThrow(/not_allowed/);
+    await t.admin("update ai_features set model = '', input_price = 0, output_price = 0 where feature = 'moderate'");
+  });
+
+  it("keeps the AI's verdict on the report, for admins only", async () => {
+    await t.service("insert into content_reports (kind, target, reporter_id, owner_id, category, title) values ('profile', $1, $2, $1, 'harassment', 'x')", [dev2.id, player.id]);
+    await t.service("update content_reports set ai_verdict = 'keep', ai_reason = 'Looks fine', ai_checked_at = now() where owner_id = $1", [dev2.id]);
+    expect(await t.as(admin, "select ai_verdict, ai_reason from content_reports where owner_id = $1", [dev2.id])).toEqual([{ ai_verdict: "keep", ai_reason: "Looks fine" }]);
+    expect(await t.as(player, "select ai_verdict from content_reports")).toEqual([]);
+    await expect(t.service("update content_reports set ai_verdict = 'ban' where owner_id = $1", [dev2.id])).rejects.toThrow(/check/);
+  });
+});

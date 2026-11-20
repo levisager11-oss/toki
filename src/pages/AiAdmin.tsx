@@ -4,7 +4,8 @@ import { ago } from "../lib/feedback";
 import { AiSetup } from "../components/AiSetup";
 import { AiFeaturesCard } from "../components/AiFeaturesCard";
 import {
-  developersWithQuotas, getAiSettings, monthOverview, recentUsage, saveAiSettings, setQuota, usd, OUTPUT_LIMITS, type Overview, type UsageRow,
+  developersWithQuotas, getAiFeatures, getAiSettings, monthOverview, recentUsage, saveAiSettings, setQuota, usd, OUTPUT_LIMITS, STARTER_CAP, STARTER_QUOTA,
+  type AiFeature, type Overview, type UsageRow,
 } from "../lib/ai";
 import { useTitle } from "../lib/useTitle";
 
@@ -25,6 +26,16 @@ export function AiAdmin() {
   const [saveMsg, setSaveMsg] = useState<"" | "saved" | "error">("");
   const [busy, setBusy] = useState(false);
   const [reload, setReload] = useState(0);
+  // A feature with a model, for the test call after "Turn on AI" (the cheapest kind first).
+  const [firstFeature, setFirstFeature] = useState<AiFeature | null>(null);
+  useEffect(() => {
+    getAiFeatures()
+      .then((list) => {
+        const on = list.filter((f) => f.model);
+        setFirstFeature((on.find((f) => f.feature === "translate") ?? on[0])?.feature ?? null);
+      })
+      .catch(() => {});
+  }, [reload]);
 
   useEffect(() => {
     getAiSettings()
@@ -64,21 +75,39 @@ export function AiAdmin() {
   const set = (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm({ ...form, [k]: k === "enabled" || k === "agent_enabled" ? e.target.checked : e.target.value });
 
+  const toChange = (f: Form) => ({
+    enabled: f.enabled,
+    base_url: f.base_url.trim(),
+    monthly_cap: Number(f.monthly_cap) || 0,
+    default_quota: Number(f.default_quota) || 0,
+    max_output_tokens: f.max_output_tokens,
+    agent_enabled: f.agent_enabled,
+    agent_budget: Math.min(50, Math.max(0.1, Number(f.agent_budget) || 1)),
+  });
+
+  // "Turn on AI" in the setup card: on, with starter limits where none are set yet. Settings
+  // changed in the form but not saved yet stay as they were saved.
+  const turnOn = async () => {
+    const base = saved ?? form;
+    const next: Form = {
+      ...base,
+      enabled: true,
+      monthly_cap: Number(base.monthly_cap) > 0 ? base.monthly_cap : String(STARTER_CAP),
+      default_quota: Number(base.default_quota) > 0 ? base.default_quota : String(STARTER_QUOTA),
+    };
+    await saveAiSettings(toChange(next));
+    setSaved(next);
+    setForm({ ...form, enabled: next.enabled, monthly_cap: next.monthly_cap, default_quota: next.default_quota });
+    setReload((n) => n + 1);
+  };
+
   const save = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setSaveMsg("");
     const sent = form;
     try {
-      await saveAiSettings({
-        enabled: form.enabled,
-        base_url: form.base_url.trim(),
-        monthly_cap: cap,
-        default_quota: defaultQuota,
-        max_output_tokens: form.max_output_tokens,
-        agent_enabled: form.agent_enabled,
-        agent_budget: Math.min(50, Math.max(0.1, Number(form.agent_budget) || 1)),
-      });
+      await saveAiSettings(toChange(form));
       setSaveMsg("saved");
       setSaved(sent);
     } catch {
@@ -115,7 +144,10 @@ export function AiAdmin() {
         <p className="hint">{t("ai.capNote")}</p>
       </section>
 
-      <AiSetup />
+      <AiSetup
+        ai={saved ? { enabled: saved.enabled, cap: Number(saved.monthly_cap) || 0, quota: Number(saved.default_quota) || 0, firstFeature } : null}
+        onTurnOn={turnOn}
+      />
 
       <form className="form ai-card" onSubmit={save} aria-labelledby="ai-settings-h">
         <h2 id="ai-settings-h">{t("ai.settings")}</h2>

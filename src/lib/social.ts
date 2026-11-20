@@ -243,6 +243,9 @@ export interface Report {
   outcome: "dismissed" | "deleted" | "banned" | null;
   author: Person | null;
   reporter: Person | null;
+  /** the AI's first look, when an admin asked for it */
+  ai_verdict?: "remove" | "keep" | "unsure" | null;
+  ai_reason?: string | null;
 }
 
 export async function listReports(open: boolean): Promise<Report[]> {

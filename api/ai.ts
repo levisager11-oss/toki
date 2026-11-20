@@ -1,8 +1,9 @@
 // Admins: set up the AI key and the Toki GitHub App on Toki, see what is set up, and test the AI.
 import { AI_FEATURES, budgetedCompletion } from "../server/ai/budget.js";
-import { listModels } from "../server/ai/provider.js";
+import { anthropicCheckKey } from "../server/ai/anthropic.js";
+import { AiError, listModels } from "../server/ai/provider.js";
 import { errorCode } from "../server/connect/agent.js";
-import { body, context, json } from "../server/http.js";
+import { body, context, json, type Ctx } from "../server/http.js";
 import { githubFromManifestCode, removeSecret, saveSecret } from "../server/secrets.js";
 
 export async function GET(request: Request) {
@@ -54,9 +55,17 @@ export async function POST(request: Request) {
     case "set_ai_key": {
       const key = typeof b.key === "string" ? b.key.trim() : "";
       if (key.length < 8 || key.length > 500 || /\s/.test(key)) return json({ error: "bad_request" }, 400);
+      // Asks Anthropic first (the Models API costs nothing), so a mistyped key never gets saved.
+      // When Anthropic can't be reached, the admin may save it anyway ("force").
+      const checked = await checkKey(ctx, key);
+      if (!checked.ok && (checked.error === "ai_bad_key" || b.force !== true)) return json(checked, checked.error === "ai_bad_key" ? 400 : 502);
       await saveSecret(ctx.db, ctx.env, "anthropic_api_key", key, ctx.user.id);
-      return json({ ok: true });
+      return json({ ok: true, checked: checked.ok, models: checked.ok ? checked.models : 0 });
     }
+    case "check_key":
+      // The key in use (from Toki or Vercel): does Anthropic accept it?
+      if (!ctx.env.anthropicKey) return json({ ok: false, error: "ai_not_configured" });
+      return json(await checkKey(ctx, ctx.env.anthropicKey));
     case "clear_ai_key":
       await removeSecret(ctx.db, "anthropic_api_key");
       return json({ ok: true });
@@ -77,5 +86,15 @@ export async function POST(request: Request) {
       return json({ ok: true });
     default:
       return json({ error: "bad_request" }, 400);
+  }
+}
+
+async function checkKey(ctx: Ctx, key: string) {
+  const [settings] = await ctx.db.select<{ base_url: string }>("ai_settings", "id=eq.1&select=base_url").catch(() => []);
+  try {
+    const r = await anthropicCheckKey({ baseUrl: settings?.base_url ?? "", apiKey: key });
+    return { ok: true as const, models: r.models };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof AiError ? `ai_${e.code}` : "error", message: e instanceof Error ? e.message.split(key).join("***").slice(0, 300) : "" };
   }
 }

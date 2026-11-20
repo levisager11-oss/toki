@@ -11,7 +11,7 @@ export const DEFAULT_LIMITS = {
   messages_20s: 8, messages_hour: 200, groups_day: 10, group_size: 20, reports_day: 30,
   friend_requests_day: 30, game_invites_10min: 30, party_size: 8,
   applications_month: 3,
-  ai_translate: 120, ai_similar: 30, ai_suggest: 10, ai_help: 40, ai_release: 30, ai_describe: 30, ai_summary: 30, ai_learn: 10, ai_connect: 60,
+  ai_translate: 120, ai_similar: 30, ai_suggest: 10, ai_help: 40, ai_release: 30, ai_describe: 30, ai_summary: 30, ai_learn: 10, ai_connect: 60, ai_moderate: 30,
   uploads_hour: 30, storage_mb: 1024,
 } as const;
 export const DEFAULT_KEEP = {
