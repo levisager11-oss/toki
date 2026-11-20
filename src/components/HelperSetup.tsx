@@ -84,7 +84,7 @@ export function HelperSetup({ gameId }: { gameId: string }) {
   const sameRepo = !!help?.repo && repo === `${help.installation_id}|${help.repo}`;
 
   return (
-    <details className="helper-setup" open={!!help?.notes || !!help?.learned_at}>
+    <details id="helper" className="helper-setup" open={!!help?.notes || !!help?.learned_at || location.hash === "#helper"}>
       <summary><b id={`${id}-h`}>{t("helper.setup.title")}</b></summary>
       <div className="ai-panel">
       <small>{t("helper.setup.lead")}</small>

@@ -94,7 +94,7 @@ export function AchievementsSetup({ gameId }: { gameId: string }) {
   };
 
   return (
-    <details className="helper-setup ach-setup" open={list.length > 0} onKeyDown={noSubmit}>
+    <details id="achievements" className="helper-setup ach-setup" open={list.length > 0 || location.hash === "#achievements"} onKeyDown={noSubmit}>
       <summary><b>{t("ach.setup.title")}</b>{list.length > 0 && <span className="sub"> · {list.length}/{MAX_ACHIEVEMENTS}</span>}</summary>
       <div className="ai-panel">
         <small>{t("ach.setup.lead")}</small>

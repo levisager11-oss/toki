@@ -21,6 +21,17 @@ describe("reading a game for one-click add", () => {
     expect(basics([{ path: "index.html", text: page + "<script>toki.score(5)</script>" }], "x").has_scores).toBe(true);
   });
 
+  it("knows games that unlock achievements or send to other lists already", () => {
+    const scan = (code: string) => basics([{ path: "index.html", text: `${page}<script>${code}</script>` }], "x");
+    expect(scan("toki.score(5)")).toMatchObject({ has_scores: true, has_achievements: false, has_boards: false });
+    expect(scan('window.toki?.achievement("first-win")').has_achievements).toBe(true);
+    expect(scan('window.toki?.score(points, "hard")').has_boards).toBe(true);
+    expect(scan("toki.score(Math.max(a, b))").has_boards).toBe(false);
+    expect(scan('toki.score(Math.round(t), level.id)').has_boards).toBe(true);
+    // The AI's answer can't take them away.
+    expect(readScan('{"title":"X"}', scan('toki.achievement("a")')).has_achievements).toBe(true);
+  });
+
   it("takes the AI's proposal, but only valid values", () => {
     const base = basics([{ path: "index.html", text: page }], "x");
     const p = readScan(JSON.stringify({ title: "Moon Hop!", description: "Hop.", description_de: "Hüpf.", category: "Platformer", controls: "Space", leaderboard: false, score_order: "sideways" }), base);

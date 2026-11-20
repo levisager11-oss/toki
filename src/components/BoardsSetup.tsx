@@ -83,7 +83,7 @@ export function BoardsSetup({ gameId, mainName, mainNameDe }: { gameId: string; 
   };
 
   return (
-    <details className="helper-setup boards-setup" open={list.length > 0} onKeyDown={noSubmit}>
+    <details id="boards" className="helper-setup boards-setup" open={list.length > 0 || location.hash === "#boards"} onKeyDown={noSubmit}>
       <summary><b>{t("boards.setup.title")}</b>{list.length > 0 && <span className="sub"> · {list.length}/{MAX_BOARDS}</span>}</summary>
       <div className="ai-panel">
         <small>{t("boards.setup.lead")}</small>

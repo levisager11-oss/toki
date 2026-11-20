@@ -298,6 +298,10 @@ export interface Proposal {
   has_rooms?: boolean;
   /** The game keeps progress outside localStorage, so Toki can't keep it without a copy there */
   saves_elsewhere?: boolean;
+  /** The game calls toki.achievement already */
+  has_achievements?: boolean;
+  /** The game sends scores to other lists already (toki.score(points, "id")) */
+  has_boards?: boolean;
 }
 export interface ScanResult {
   proposal: Proposal;
@@ -326,8 +330,14 @@ export async function scanSample(files: PickedFile[], entry: string): Promise<{ 
   return out;
 }
 
-export const scanUpload = (name: string, files: PickedFile[], sample: { path: string; text: string }[]) =>
-  api<ScanResult>("/api/assist", { method: "POST", body: JSON.stringify({ action: "scan", source: "upload", name, paths: files.map((f) => f.path), files: sample }) });
+/** noAi: only the simple checks and toki.json, no AI reads the files ("Fill it in myself"). */
+export const scanUpload = (name: string, files: PickedFile[], sample: { path: string; text: string }[], noAi = false) =>
+  api<ScanResult>("/api/assist", { method: "POST", body: JSON.stringify({ action: "scan", source: "upload", name, paths: files.map((f) => f.path), files: sample, no_ai: noAi }) });
+/** The name Toki guesses a title from: the folder the files are in, else the start page. */
+export const uploadName = (x: { files: PickedFile[]; entry: string }) => {
+  const top = x.files[0]?.path.split("/")[0] ?? "";
+  return x.files.every((f) => f.path.startsWith(`${top}/`)) ? top : x.entry;
+};
 export const scanRepo = (installation_id: number, repo: string, branch: string) =>
   api<ScanResult>("/api/assist", { method: "POST", body: JSON.stringify({ action: "scan", source: "github", installation_id, repo, branch }) });
 
@@ -335,5 +345,5 @@ export const scanRepo = (installation_id: number, repo: string, branch: string) 
  * Starts Toki Connect adding what the developer ticked when adding the game: saves, a
  * leaderboard, friend invites, all in one run (one new live version, or one pull request).
  */
-export const startAdditions = (p: { game_id: string; lang: string; features: ("saves" | "scores" | "multiplayer")[] } & ({ source: "upload" } | { source: "github"; installation_id: number; repo: string; branch: string })) =>
+export const startAdditions = (p: { game_id: string; lang: string; features: ("saves" | "scores" | "multiplayer" | "achievements" | "boards")[] } & ({ source: "upload" } | { source: "github"; installation_id: number; repo: string; branch: string })) =>
   api<{ job: { id: string } }>("/api/connect", { method: "POST", body: JSON.stringify({ action: "start", quick: true, ...p }) });

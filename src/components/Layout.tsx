@@ -231,6 +231,7 @@ export function Layout() {
                 <NavLink to="/my-games">{t("nav.myGames")}</NavLink>
                 <NavLink to="/feedback/inbox">{t("fb.inbox.title")}</NavLink>
                 <NavLink to="/ideas">{t("idea.title")}</NavLink>
+                <NavLink to="/docs">{t("nav.docs")}</NavLink>
                 {(ai.strong || ai.free) && <NavLink to="/connect">{t("nav.connect")}</NavLink>}
                 {profile.role === "admin" && (
                   <NavLink to="/admin" className={() => (ADMIN_PAGE.test(location.pathname) ? "active" : "")}>

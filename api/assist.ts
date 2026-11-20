@@ -435,7 +435,8 @@ async function scan(ctx: Ctx, b: Record<string, unknown>) {
   const tokiFile = files.find((f) => f.path === "toki.json");
   let proposal = basics(files, name);
   let ai = false;
-  if (await featureOn(ctx.db, "describe")) {
+  // "Fill it in myself": the developer asked that no AI reads their game's files.
+  if (b.no_ai !== true && (await featureOn(ctx.db, "describe"))) {
     try {
       proposal = readScan(await ask(ctx, "describe", scanPrompt(files, paths, proposal, name), { schema: SCHEMAS.scan }), proposal);
       ai = true;
