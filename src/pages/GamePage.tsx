@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Reviews } from "../components/Reviews";
 import { Link, Navigate, useParams, useSearchParams } from "react-router-dom";
 import { useTitle } from "../lib/useTitle";
 import { useI18n } from "../lib/i18n";
@@ -330,6 +331,7 @@ export function GamePage() {
 
       <Leaderboard game={game} version={scores.version} last={scores.last} boards={boards} />
       <AchievementList rows={achievements.rows} viewer={!!userId || !!achievements.rows?.some((a) => a.mine)} />
+      <Reviews game={game} />
       <GameUpdates game={game} />
       <GameChat game={game} />
       <GameFeedback game={game} />

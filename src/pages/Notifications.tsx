@@ -120,6 +120,21 @@ export function Notifications() {
         return d.event === "answer"
           ? { line: t("notif.appAnswer", { who }), to: "/applications" }
           : { line: t("notif.appQuestion"), to: "/apply" };
+      case "level_up":
+        return { line: t("notif.levelUp", { n: d.level ?? 0, tokens: d.tokens ?? 0 }), to: "/shop" };
+      case "trade":
+        return {
+          line: t(d.event === "offer" ? "notif.tradeOffer" : d.event === "done" ? "notif.tradeDone" : d.event === "failed" ? "notif.tradeFailed" : "notif.tradeDeclined", { who }),
+          to: "/trades",
+        };
+      case "review": {
+        const g = games?.find((x) => x.id === d.game);
+        return { line: t("notif.review", { who, title: g?.title ?? d.title ?? "", n: d.stars ?? 0 }), to: g ? `/game/${g.slug}#reviews` : "/" };
+      }
+      case "review_reply": {
+        const g = games?.find((x) => x.id === d.game);
+        return { line: t("notif.reviewReply", { who, title: g?.title ?? d.title ?? "" }), to: g ? `/game/${g.slug}#reviews` : "/" };
+      }
       default:
         // A kind this version of Toki doesn't know yet.
         return { line: t("notif.other"), to: "/updates" };

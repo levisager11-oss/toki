@@ -17,9 +17,49 @@ import { InvitePopup } from "./GameInvite";
 import { PartyBar } from "./Party";
 import { AgeGate } from "./AgeGate";
 import { keepPush } from "../lib/push";
+import { LEVEL_UP, refreshProgress, useMyProgress } from "../lib/cosmetics";
+import { levelProgress } from "../lib/progress";
+import { LevelBadge, TokenCoin, Tokens } from "./Looks";
 
 // The admin pages, all reached through "Admin" in the sidebar.
 const ADMIN_PAGE = /^\/(admin|applications|invites|reports)(\/|$)/;
+
+// The developer pages, folded into "Create" in the sidebar.
+const CREATE_PAGE = /^\/(my-games|add|edit|feedback\/inbox|ideas|connect|admin|applications|invites|reports|game\/[^/]+\/stats)(\/|$)/;
+// The shop and what belongs to it.
+const SHOP_PAGE = /^\/(shop|trades)(\/|$)/;
+
+function ChevronIcon() {
+  return (
+    <svg className="chev" viewBox="0 0 10 10" width="10" height="10" aria-hidden="true" shapeRendering="crispEdges">
+      <path d="M2 3h1v1h1v1h2v-1h1v-1h1v2h-1v1h-1v1h-2v-1h-1v-1h-1z" fill="currentColor" />
+    </svg>
+  );
+}
+
+/** Whether the sidebar's "Create" is open: on a developer page always, else as the player left it. */
+function useCreateOpen(path: string): [boolean, (open: boolean) => void] {
+  const [saved, setSaved] = useState(() => {
+    try {
+      return localStorage.getItem("toki.side.create") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [closedHere, setClosedHere] = useState(false);
+  useEffect(() => setClosedHere(false), [path]);
+  const onPage = CREATE_PAGE.test(path);
+  const set = (open: boolean) => {
+    setSaved(open);
+    setClosedHere(!open);
+    try {
+      localStorage.setItem("toki.side.create", open ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  };
+  return [(saved || onPage) && !closedHere, set];
+}
 
 // A game's own page, not e.g. its feedback board.
 const GAME_PAGE = /^\/game\/[^/]+\/?$/;
@@ -62,6 +102,7 @@ export function Layout() {
   // Admins: how many applications for developer accounts wait, shown next to "Applications".
   const [openApps, setOpenApps] = useState(0);
   const isAdmin = profile?.role === "admin";
+  const [createOpen, setCreate] = useCreateOpen(location.pathname);
   useEffect(() => {
     if (!isAdmin) return setOpenApps(0);
     let alive = true;
@@ -96,6 +137,12 @@ export function Layout() {
     // Only a new page counts, not e.g. the search text changing on the home page (navType
     // is read for the change that led here).
   }, [location.pathname, location.hash]);
+  // Level and tokens: asked again now and then while moving around Toki (at most every 20 s).
+  const progress = useMyProgress(myId);
+  useEffect(() => {
+    if (myId) void refreshProgress(myId);
+  }, [myId, location.pathname]);
+  const lv = progress ? levelProgress(progress.xp) : null;
   useEffect(() => {
     // Only game pages can be isolated (the game page checks its own game).
     if (pageIsolated() && !GAME_PAGE.test(location.pathname)) matchIsolation(false);
@@ -159,28 +206,39 @@ export function Layout() {
           <h4>{t("nav.play")}</h4>
           <NavLink to="/" end>{t("nav.discover")}</NavLink>
           <NavLink to="/favorites">{t("nav.favorites")}</NavLink>
+          <NavLink to="/top">{t("nav.top")}</NavLink>
+          <NavLink to="/shop" className={() => (SHOP_PAGE.test(location.pathname) ? "active" : "")}>{t("nav.shop")}</NavLink>
         </nav>
         {profile && (
+          // Notifications are the bell in the top bar; trades are in the shop.
           <nav className="navgroup" aria-label={t("nav.social")}>
             <h4>{t("nav.social")}</h4>
             <NavLink to="/chat">{t("nav.chat")}{badges.chats > 0 && <span className="count-pill">{badges.chats}</span>}</NavLink>
             <NavLink to="/friends">{t("nav.friends")}</NavLink>
-            <NavLink to="/notifications">{t("nav.notifications")}{badges.notifications > 0 && <span className="count-pill">{badges.notifications}</span>}</NavLink>
+            <NavLink to="/feed">{t("nav.feed")}</NavLink>
           </nav>
         )}
         {canCreate(profile) && profile && (
+          // The developer pages fold away; "Add game" is the button in the top bar.
           <nav className="navgroup" aria-label={t("nav.create")}>
-            <h4>{t("nav.create")}</h4>
-            <NavLink to="/my-games">{t("nav.myGames")}</NavLink>
-            <NavLink to="/add">{t("nav.addGame")}</NavLink>
-            <NavLink to="/feedback/inbox">{t("fb.inbox.title")}</NavLink>
-            <NavLink to="/ideas">{t("idea.title")}</NavLink>
-            {(ai.strong || ai.free) && <NavLink to="/connect">{t("nav.connect")}</NavLink>}
-            {profile.role === "admin" && (
-              <NavLink to="/admin" className={() => (ADMIN_PAGE.test(location.pathname) ? "active" : "")}>
-                {t("nav.admin")}
-                {openApps > 0 && <span className="count-pill">{openApps}</span>}
-              </NavLink>
+            <button type="button" className={`navgroup-toggle${createOpen ? " open" : ""}`} aria-expanded={createOpen} onClick={() => setCreate(!createOpen)}>
+              <span className="navgroup-title">{t("nav.create")}</span>
+              {!createOpen && openApps > 0 && <span className="count-pill">{openApps}</span>}
+              <ChevronIcon />
+            </button>
+            {createOpen && (
+              <>
+                <NavLink to="/my-games">{t("nav.myGames")}</NavLink>
+                <NavLink to="/feedback/inbox">{t("fb.inbox.title")}</NavLink>
+                <NavLink to="/ideas">{t("idea.title")}</NavLink>
+                {(ai.strong || ai.free) && <NavLink to="/connect">{t("nav.connect")}</NavLink>}
+                {profile.role === "admin" && (
+                  <NavLink to="/admin" className={() => (ADMIN_PAGE.test(location.pathname) ? "active" : "")}>
+                    {t("nav.admin")}
+                    {openApps > 0 && <span className="count-pill">{openApps}</span>}
+                  </NavLink>
+                )}
+              </>
             )}
           </nav>
         )}
@@ -198,6 +256,13 @@ export function Layout() {
             <NavLink to="/feedback" end>{t("nav.feedback")}</NavLink>
             {profile && !canCreate(profile) && <NavLink to="/ideas">{t("idea.mine")}</NavLink>}
           </nav>
+          {profile && lv && (
+            <Link to="/shop" className="me-level" title={t("lv.toNext", { n: lv.needed - lv.into })}>
+              <LevelBadge level={lv.level} />
+              <span className="lv-bar small" aria-hidden="true"><i style={{ width: `${lv.share * 100}%` }} /></span>
+              <Tokens n={progress?.tokens} />
+            </Link>
+          )}
           {profile ? (
             <div className="me">
               <NavLink to="/account" className="me-link">
@@ -265,6 +330,7 @@ export function Layout() {
       </div>
 
       {profile && <InvitePopup />}
+      {profile && <LevelUpToast />}
 
       <nav ref={tabbarRef} className="tabbar" aria-label="Toki">
         <NavLink to="/" end><HomeIcon /><span>{t("nav.discover")}</span></NavLink>
@@ -286,6 +352,37 @@ export function Layout() {
           <NavLink to="/login"><KeyIcon /><span>{t("nav.login")}</span></NavLink>
         )}
       </nav>
+    </div>
+  );
+}
+
+/** "Level 5!" for a moment, when the player reaches a new level while Toki is open. */
+function LevelUpToast() {
+  const { t } = useI18n();
+  const [up, setUp] = useState<{ level: number; tokens: number } | null>(null);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const on = (e: Event) => {
+      setUp((e as CustomEvent<{ level: number; tokens: number }>).detail);
+      clearTimeout(timer);
+      timer = setTimeout(() => setUp(null), 7000);
+    };
+    window.addEventListener(LEVEL_UP, on);
+    return () => {
+      window.removeEventListener(LEVEL_UP, on);
+      clearTimeout(timer);
+    };
+  }, []);
+  if (!up) return null;
+  return (
+    <div className="levelup" role="status">
+      <LevelBadge level={up.level} big />
+      <span>
+        <b>{t("lv.up", { n: up.level })}</b>
+        <span className="sub"><TokenCoin /> {t("lv.upTokens", { n: up.tokens })}</span>
+      </span>
+      <Link to="/shop" className="btn small" onClick={() => setUp(null)}>{t("nav.shop")}</Link>
+      <button type="button" className="linkish" aria-label={t("invite.close")} onClick={() => setUp(null)}>×</button>
     </div>
   );
 }

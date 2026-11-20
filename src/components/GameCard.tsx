@@ -7,6 +7,8 @@ import { FavButton } from "./FavButton";
 import { PeopleIcon, PlayIcon } from "./icons";
 import { maxPlayers } from "../lib/invites";
 import { recentlyUpdated, useLatestUpdates } from "../lib/releases";
+import { averageStars } from "../lib/reviews";
+import { Stars } from "./Looks";
 
 const by = (g: Game) => (g.author ? `@${g.author.username}` : "Toki");
 
@@ -24,6 +26,21 @@ export function Plays({ game }: { game: Game }) {
       <PlayIcon size={10} />
       <span aria-hidden="true">{compact(n)}</span>
       <span className="sr-only">{t("stats.plays", { n })}</span>
+    </span>
+  );
+}
+
+/** The average stars, small, once a game has reviews. */
+export function Rating({ game }: { game: Game }) {
+  const { t, lang } = useI18n();
+  const avg = averageStars(game.stats);
+  if (avg === null) return null;
+  const label = t("rev.average", { avg: avg.toFixed(1) });
+  return (
+    <span className="plays rating" title={`${label} · ${t("rev.count", { n: game.stats?.reviews ?? 0 })}`}>
+      <Stars value={1} size={10} label="" />
+      <span aria-hidden="true">{avg.toLocaleString(lang === "de" ? "de-CH" : "en-GB", { maximumFractionDigits: 1, minimumFractionDigits: 1 })}</span>
+      <span className="sr-only">{label}</span>
     </span>
   );
 }
@@ -60,7 +77,7 @@ export function GameCard({ game }: { game: Game }) {
             {game.author ? <Link to={`/u/${game.author.username}`} className="author">@{game.author.username}</Link> : "Toki"}
             {game.engine ? ` · ${game.engine}` : ""}
           </span>
-          <Plays game={game} />
+          <span className="card-nums"><Plays game={game} /><Rating game={game} /></span>
         </div>
         <FavButton game={game} />
       </div>

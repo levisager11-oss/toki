@@ -3,6 +3,7 @@
 import { supabase } from "./supabase";
 import type { Role } from "./types";
 import { limitErrorKey, type LimitErrorKey } from "./limitValues";
+import { progressMaybeChanged } from "./cosmetics";
 
 /** An i18n key for what went wrong, from the server's error. */
 export type SocialErrorKey =
@@ -273,7 +274,9 @@ export type NotificationKind =
   /** an admin removed something of yours (with the reason), or handled something you reported */
   | "moderation" | "report_done"
   /** a question from an admin on your developer application (to you), or the applicant's answer (to admins) */
-  | "application";
+  | "application"
+  /** Toki 2.0: a new level, a friend's trade (or what became of yours), a review of your game, the developer's answer to yours */
+  | "level_up" | "trade" | "review" | "review_reply";
 
 export interface Notification {
   id: number;
@@ -291,11 +294,16 @@ export interface Notification {
     board_name_de?: string | null;
     /** game_idea: the idea, and what happened to it */
     idea?: string;
-    event?: "new" | "reply" | "claimed" | "released" | "done" | "question" | "answer";
+    event?: "new" | "reply" | "claimed" | "released" | "done" | "question" | "answer" | "offer" | "declined" | "failed";
+    /** level_up: the level and its tokens. review: the stars */
+    level?: number;
+    tokens?: number;
+    stars?: number;
+    trade?: string;
     /** application: which developer application */
     application?: string;
     /** moderation, report_done: what it was about, the admin's reason, days banned, and what the admin did */
-    what?: "game" | "profile" | "feedback" | "idea" | "message";
+    what?: "game" | "profile" | "feedback" | "idea" | "message" | "review";
     note?: string;
     days?: number | null;
     outcome?: "dismissed" | "removed" | "banned";
@@ -392,9 +400,14 @@ export interface ScoreResult {
  * no such board (the score is ignored).
  */
 export const submitScore = (gameId: string, score: number, board = ""): Promise<ScoreResult | null> =>
-  board
+  (board
     ? rpc<ScoreResult | null>("submit_score", { p_game: gameId, p_score: Math.round(score), p_board: board })
-    : rpc<ScoreResult>("submit_score", { p_game: gameId, p_score: Math.round(score) });
+    : rpc<ScoreResult>("submit_score", { p_game: gameId, p_score: Math.round(score) })
+  ).then((r) => {
+    // A new best gives XP (src/lib/cosmetics.ts).
+    if (r?.new) progressMaybeChanged();
+    return r;
+  });
 
 /** Removes a player's score from one board of a game (the main one: ""). */
 export async function removeScore(gameId: string, userId: string, board = "") {

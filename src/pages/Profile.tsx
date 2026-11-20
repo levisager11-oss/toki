@@ -21,12 +21,18 @@ import { currentStreak, playerStreak, utcDay, type Streak } from "../lib/daily";
 import { playerAchievements, type Badge } from "../lib/achievements";
 import { BadgeRow } from "../components/Achievements";
 import { boardLabel } from "../lib/boardRules";
+import { useCatalog, useLook, tradingOpen, useCollection } from "../lib/cosmetics";
+import { levelProgress } from "../lib/progress";
+import { followDeveloper, followInfo } from "../lib/reviews";
+import { LevelBadge, Name, ThemeBand } from "../components/Looks";
+import { Collection } from "../components/Collection";
+import { AdminTokens } from "../components/AdminTokens";
 
 /** A player's page: /u/:username */
 export function Profile() {
   const { username = "" } = useParams();
   const { t, lang } = useI18n();
-  const { session, ready } = useAuth();
+  const { session, ready, profile: me } = useAuth();
   const { games } = useGames();
   const navigate = useNavigate();
   const location = useLocation();
@@ -40,6 +46,20 @@ export function Profile() {
   const [confirmBlock, setConfirmBlock] = useState(false);
   const [confirmUnfriend, setConfirmUnfriend] = useState(false);
   const userId = session?.user.id;
+  const look = useLook(p?.id);
+  const catalog = useCatalog();
+  const collection = useCollection(p?.id);
+  const [follow, setFollow] = useState<{ followers: number; following: boolean } | null>(null);
+  const isDev = p?.role === "creator" || p?.role === "admin";
+  useEffect(() => {
+    setFollow(null);
+    if (!p?.id || !isDev) return;
+    let alive = true;
+    followInfo(p.id).then((f) => alive && setFollow(f), () => {});
+    return () => {
+      alive = false;
+    };
+  }, [p?.id, isDev, userId]);
 
   // Another player's page: don't show the last one's details while this one loads.
   useEffect(() => {
@@ -103,17 +123,33 @@ export function Profile() {
     }
   };
   const message = () => act(async () => navigate(`/chat/${await openDm(p.id)}`));
+  const toggleFollow = () => act(async () => {
+    if (!follow) return;
+    await followDeveloper(p.id, !follow.following);
+    setFollow({ followers: follow.followers + (follow.following ? -1 : 1), following: !follow.following });
+  });
+  const themeStyle = look?.theme ? catalog?.get(look.theme)?.style : undefined;
+  const lv = look ? levelProgress(look.xp) : null;
 
   return (
     <section className="profile">
+      {themeStyle && <ThemeBand style={themeStyle} className="profile-band" />}
       <div className="profile-head">
         <Avatar person={p} size={96} online={online} />
         <div className="profile-id">
-          <h1 className="h">@{p.username}</h1>
+          <h1 className="h"><Name person={p} /></h1>
+          {lv && (
+            <Link to="/top" className="profile-level" title={t("lv.xp", { xp: look!.xp })}>
+              <LevelBadge level={lv.level} big />
+              <span className="lv-bar" aria-hidden="true"><i style={{ width: `${lv.share * 100}%` }} /></span>
+              <span className="sub">{t("lv.toNext", { n: lv.needed - lv.into })}</span>
+            </Link>
+          )}
           <span className="sub">
             {p.role !== "player" && <b className="role-badge">{t(p.role === "admin" ? "soc.role.admin" : "soc.role.dev")}</b>}
             {t("soc.joined", { date: new Date(p.created_at).toLocaleDateString(lang === "de" ? "de-CH" : "en", { month: "long", year: "numeric" }) })}
             {" · "}{t("soc.friendCount", { n: p.friend_count })}
+            {follow && <>{" · "}{t("fol.count", { n: follow.followers })}</>}
           </span>
           {(p.relation === "friend" || p.relation === "self") && (
             <span className="sub presence">
@@ -138,12 +174,18 @@ export function Profile() {
           {p.relation === "friend" && (
             <>
               <button type="button" className="btn primary" disabled={busy} onClick={message}>{t("soc.message")}</button>
+              {tradingOpen() && <Link to={`/trades/new?with=${encodeURIComponent(p.username)}`} className="btn">{t("trade.offer")}</Link>}
               {confirmUnfriend ? (
                 <button type="button" className="btn danger" disabled={busy} onClick={() => act(async () => { await removeFriend(p.id); setConfirmUnfriend(false); })}>{t("soc.unfriendSure")}</button>
               ) : (
                 <button type="button" className="btn" disabled={busy} onClick={() => setConfirmUnfriend(true)}>{t("soc.unfriend")}</button>
               )}
             </>
+          )}
+          {follow && p.relation !== "self" && (
+            p.relation === "guest"
+              ? <Link to={login} className="btn">{t("fol.follow")}</Link>
+              : <button type="button" className={`btn${follow.following ? "" : " primary"}`} aria-pressed={follow.following} disabled={busy} onClick={toggleFollow}>{t(follow.following ? "fol.following" : "fol.follow")}</button>
           )}
           <ShareButton path={`/u/${p.username}`} title={`@${p.username} · Toki`} />
           {p.relation === "blocked" && <button type="button" className="btn" disabled={busy} onClick={() => act(() => unblockUser(p.id))}>{t("soc.unblock")}</button>}
@@ -180,6 +222,11 @@ export function Profile() {
       )}
 
       <BadgeRow badges={badges.badges} total={badges.total} games={byId} />
+
+      {collection.ids && collection.ids.size > 0 && (
+        <Collection ids={collection.ids} person={p} self={p.relation === "self"} games={byId} />
+      )}
+      {me?.role === "admin" && p.relation !== "self" && <AdminTokens userId={p.id} owned={collection.ids} onChange={collection.reload} />}
 
       {most.length > 0 && (
         <section>

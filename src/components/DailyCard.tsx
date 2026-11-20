@@ -5,6 +5,7 @@ import { currentStreak, formatLeft, msUntilNextDay, playedToday, useDaily, useMi
 import { formatScore } from "../lib/social";
 import type { Game } from "../lib/types";
 import { Avatar } from "./Avatar";
+import { Name } from "./Looks";
 import { Cover } from "./Cover";
 import { PlayIcon } from "./icons";
 
@@ -62,7 +63,7 @@ export function DailyCard({ games }: { games: Game[] }) {
               {top.map((r) => (
                 <li key={r.user_id} className={r.user_id === me ? "me" : ""}>
                   <span className="rank">{r.rank}</span>
-                  <Link to={`/u/${r.username}`} className="person"><Avatar person={r} size={22} /><b>@{r.username}</b></Link>
+                  <Link to={`/u/${r.username}`} className="person"><Avatar person={r} size={22} /><Name person={r} title={false} /></Link>
                   <b className="score">{fmt(r.score)}</b>
                 </li>
               ))}
