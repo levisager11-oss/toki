@@ -48,6 +48,15 @@ const MIN_SESSION_S = 10;
 const FLUSH_EVERY_MS = 10 * 60_000;
 
 /**
+ * The time to count for a stretch on screen. Toki looks at least every 10 minutes while a game
+ * is on screen, so a longer stretch means the computer slept in between (on some systems the
+ * clock runs on while it does): that night isn't playtime, only the time up to the next look.
+ */
+export function onScreen(ms: number): number {
+  return Math.max(0, Math.min(ms, FLUSH_EVERY_MS));
+}
+
+/**
  * Counts how long the game is on screen (not while the tab is hidden) and sends it to Toki
  * when the player leaves, hides the app, or every 10 minutes. Uses a keepalive request so
  * the time also arrives when the tab is closed.
@@ -65,8 +74,9 @@ export function usePlaytime(gameId: string | undefined, accessToken: string | un
     const tick = () => {
       if (since === null) return;
       const now = performance.now();
-      pending += now - since;
-      session += now - since;
+      const ms = onScreen(now - since);
+      pending += ms;
+      session += ms;
       since = now;
     };
     const flush = () => {
@@ -96,12 +106,32 @@ export function usePlaytime(gameId: string | undefined, accessToken: string | un
   }, [gameId]);
 }
 
+/**
+ * Whether a login token can still be used. A login lasts about an hour and is only renewed
+ * while Toki is on screen, so after the computer slept, or a tab stayed in the back for long,
+ * the one at hand may be over. `now` in milliseconds.
+ */
+export function tokenUsable(accessToken: string | undefined, now = Date.now()): boolean {
+  if (!accessToken) return false;
+  try {
+    const part = accessToken.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    const exp = (JSON.parse(atob(part)) as { exp?: unknown }).exp;
+    // A few seconds early: the request still has to get there.
+    return typeof exp === "number" && exp * 1000 > now + 10_000;
+  } catch {
+    return false;
+  }
+}
+
 function send(gameId: string, seconds: number, accessToken: string | undefined) {
   const key = import.meta.env.VITE_SUPABASE_KEY as string;
+  // With a login that is over the server refuses the whole request and the time is lost.
+  // Without one it still counts for the game and this browser, just not for the account.
+  const bearer = tokenUsable(accessToken) ? accessToken : key;
   fetch(`${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/record_playtime`, {
     method: "POST",
     keepalive: true,
-    headers: { "Content-Type": "application/json", apikey: key, Authorization: `Bearer ${accessToken ?? key}` },
+    headers: { "Content-Type": "application/json", apikey: key, Authorization: `Bearer ${bearer}` },
     body: JSON.stringify({ p_game: gameId, p_visitor: visitorId(), p_seconds: Math.min(seconds, 86_400) }),
   }).catch(() => {});
 }
