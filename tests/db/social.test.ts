@@ -36,6 +36,18 @@ const say = (who: Who, chat: string, body = "hi") =>
   t.as<{ id: number }>(who, "insert into messages (chat_id, body) values ($1, $2) returning id", [chat, body]).then((r) => r[0]);
 
 describe("profiles", () => {
+  it("take a picture only from the account's own folder in Toki's storage", async () => {
+    const own = `https://oygszctxhkubofspywzr.supabase.co/storage/v1/object/public/avatars/${a.id}/pic.webp`;
+    const set = (url: string) => t.as(a, "update profiles set avatar_url = $2 where id = $1", [a.id, url]);
+    await set(own);
+    expect((await t.admin("select avatar_url from profiles where id = $1", [a.id]))[0]).toEqual({ avatar_url: own });
+    // Another server would see who looks at this player.
+    await expect(set("https://tracker.example/p.png")).rejects.toThrow(/profiles_avatar_url_check/);
+    await expect(set(own.replace(a.id, b.id))).rejects.toThrow(/profiles_avatar_url_check/);
+    await expect(set(`${own}?x=https://tracker.example`)).rejects.toThrow(/profiles_avatar_url_check/);
+    await t.admin("update profiles set avatar_url = null where id = $1", [a.id]);
+  });
+
   it("let players change only their bio and avatar", async () => {
     await t.as(a, "update profiles set bio = '  Hello  ', avatar_seed = 'abc' where id = $1", [a.id]);
     expect((await t.admin("select bio, avatar_seed from profiles where id = $1", [a.id]))[0]).toEqual({ bio: "Hello", avatar_seed: "abc" });

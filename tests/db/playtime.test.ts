@@ -55,6 +55,14 @@ describe("playtime", () => {
     expect(Number(s.seconds)).toBe(1620);
   });
 
+  it("keeps counting over midnight", async () => {
+    const v = crypto.randomUUID();
+    await play(null, v);
+    // The game was opened yesterday; the last report was 10 minutes ago, before midnight.
+    await t.admin("update game_plays set day = current_date - 1, last_at = now() - interval '10 minutes' where visitor = $1", [v]);
+    expect(await time(null, v, 600)).toBe(600);
+  });
+
   it("counts a play when time comes in first, but only once", async () => {
     const v = crypto.randomUUID();
     expect(await time(null, v, 30)).toBe(30);
