@@ -769,8 +769,10 @@ revoke execute on function public.buy_cosmetic(text), public.equip_cosmetic(text
   public.set_game_cosmetics(uuid, jsonb), public.offer_trade(uuid, integer, text[], integer, text[]),
   public.answer_trade(uuid, boolean), public.cancel_trade(uuid), public.my_trades(),
   public.admin_adjust_tokens(uuid, integer), public.admin_take_cosmetic(uuid, text),
-  public.admin_set_cosmetic(text, integer, boolean), public.admin_progress(uuid), public.has_tradable(uuid, text[])
+  public.admin_set_cosmetic(text, integer, boolean), public.admin_progress(uuid)
   from public, anon;
+-- Only for the trade functions above.
+revoke execute on function public.has_tradable(uuid, text[]) from public, anon, authenticated;
 grant execute on function public.buy_cosmetic(text), public.equip_cosmetic(text, text), public.my_progress(),
   public.set_game_cosmetics(uuid, jsonb), public.offer_trade(uuid, integer, text[], integer, text[]),
   public.answer_trade(uuid, boolean), public.cancel_trade(uuid), public.my_trades(),
