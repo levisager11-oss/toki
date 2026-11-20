@@ -7,7 +7,10 @@ import { slugify } from "../lib/games";
 import { invalidateGames } from "../lib/useGames";
 import { coverFor } from "../pixel/scenes";
 import { CATEGORIES, type Category } from "../lib/types";
-import { siteFor, siteUrl } from "../lib/hostingRules";
+import { JOIN_PARAM, siteFor, siteUrl } from "../lib/hostingRules";
+import { removeGameImages } from "../lib/gameImages";
+import { useAiFeature } from "../lib/assist";
+import { GamePictures, type Pictures } from "./GamePictures";
 import { ApiError, connectError, runJob, type ConnectJob } from "../lib/ai";
 import {
   type BuildSetup,
@@ -22,9 +25,28 @@ type StepState = "wait" | "busy" | "ok" | "skip" | "fail";
 
 /**
  * "Let Toki's AI do it" on Add game: drop the game or pick a GitHub repository, Toki's AI reads it
- * and proposes its page, and one button puts it live. The AI changes the game's code (saves, a
- * leaderboard, friend invites) only for what the developer ticks; each shows the line to add by hand.
+ * and proposes its page, and one button puts it live. The page has everything the full form has
+ * (pictures, address, rooms), and "What Toki found" says what the game has of Toki's features. The
+ * AI changes the game's code (saves, a leaderboard, achievements, more lists, friend invites) only
+ * for what the developer ticks; each missing one shows the line to add by hand.
  */
+
+/** What Toki's AI can add to a game's code (Toki Connect, in one run). */
+type AiFeature = "saves" | "scores" | "achievements" | "boards" | "multiplayer";
+const AI_FEATURES: AiFeature[] = ["saves", "scores", "achievements", "boards", "multiplayer"];
+/** The game has it already (a sure sign in its code). */
+const hasIt = (f: AiFeature, p: Proposal) =>
+  f === "saves" ? !p.saves_elsewhere : f === "scores" ? p.has_scores : f === "achievements" ? !!p.has_achievements : f === "boards" ? !!p.has_boards : !!p.has_rooms;
+/** The ones that apply to this game: more lists only with a score, invites only with rooms. */
+const applies = (f: AiFeature, p: Proposal) => (f === "boards" ? p.leaderboard || p.has_scores : f === "multiplayer" ? p.multiplayer : true);
+/** The line to add by hand, and its part of the developer docs. */
+const BY_HAND: Record<AiFeature, { code: string; anchor: string }> = {
+  saves: { code: 'localStorage.setItem("save", data)', anchor: "saves" },
+  scores: { code: "toki.score(points)", anchor: "scores" },
+  achievements: { code: 'toki.achievement("id")', anchor: "achievements" },
+  boards: { code: 'toki.score(points, "id")', anchor: "scores" },
+  multiplayer: { code: "toki.room(code)", anchor: "rooms" },
+};
 /** What the one-click screen hands to the full form ("Fill it in myself"), so nothing is lost. */
 export interface QuickCarry {
   proposal: Proposal | null;
@@ -32,6 +54,13 @@ export interface QuickCarry {
   git: GitChoice | null;
   /** "link": the game is online elsewhere already, the full form opens with its address field */
   kind: "upload" | "github" | "link";
+  /** The rest of the page, as far as it was filled in here */
+  pictures?: Pictures;
+  /** pictures uploaded here: the full form deletes the ones that aren't saved */
+  uploaded?: string[];
+  slug?: string;
+  maxPlayers?: string;
+  joinParam?: string;
 }
 
 export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManual: (carry: QuickCarry) => void }) {
@@ -44,11 +73,21 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
   const [git, setGit] = useState<GitChoice | null>(null);
   const [scan, setScan] = useState<ScanResult | null>(null);
   const [p, setP] = useState<Proposal | null>(null);
-  const [leaderboard, setLeaderboard] = useState(false);
-  // Friend invites for a game with online rooms, added by the AI in the same run as the leaderboard.
-  const [invites, setInvites] = useState(false);
-  // Saves for a game that keeps its progress outside localStorage: the AI adds a copy there.
-  const [savesAi, setSavesAi] = useState(false);
+  // What the developer ticked for the AI to add to the game's code (nothing at first).
+  const [ai, setAi] = useState<Set<AiFeature>>(new Set());
+  // The page's address: made from the title until the developer types one.
+  const [slug, setSlug] = useState("");
+  const [slugEdited, setSlugEdited] = useState(false);
+  const [maxPlayers, setMaxPlayers] = useState("");
+  const [joinParam, setJoinParam] = useState("room");
+  const [pics, setPics] = useState<Pictures>({ cover: "", image: null, banner: null, shots: [] });
+  const [picBusy, setPicBusy] = useState(false);
+  // Pictures uploaded on this page: the ones that don't end up with the game are deleted again.
+  const uploaded = useRef<string[]>([]);
+  const keepPics = useRef(false);
+  useEffect(() => () => {
+    if (!keepPics.current) removeGameImages(uploaded.current);
+  }, []);
   const [err, setErr] = useState("");
   // The repository holds the source: GitHub Actions builds it, after its build file is merged.
   const [building, setBuilding] = useState<(BuildSetup & { repo: string; branch: string }) | null>(null);
@@ -62,6 +101,7 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
     return () => void (alive.current = false);
   }, []);
   const codeAi = hosting.quickCode ?? "off";
+  const helper = useAiFeature("learn");
 
   // ---------- 1. read the game ----------
 
@@ -74,9 +114,7 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
       setScan(r);
       setP(r.proposal);
       // The AI changes the game's code only when the developer ticks it.
-      setLeaderboard(false);
-      setInvites(false);
-      setSavesAi(false);
+      setAi(new Set());
       if (r.folder !== null && git) setGit({ ...git, folder: r.folder });
       setPhase("review");
     } catch (e) {
@@ -94,36 +132,50 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
   // ---------- 2. publish ----------
 
   const set = (s: Step, v: StepState) => setSteps((all) => ({ ...all, [s]: v }));
+  const effSlug = slugEdited ? slug : slugify(p?.title ?? "");
+  /** Ticked, and still something the game is missing. */
+  const chosen = p ? AI_FEATURES.filter((f) => ai.has(f) && applies(f, p) && !hasIt(f, p)) : [];
 
   const publish = async () => {
     if (!p || !profile || !hosting.domain) return;
     setErr("");
     setPhase("publishing");
-    // The game's page first (a free address: "snake", else "snake-2", …).
+    // The game's page first: the address the developer typed, else a free one ("snake", "snake-2", …).
     set("create", "busy");
     const base = slugify(p.title) || "game";
+    const players = Math.round(Number(maxPlayers));
     let row: { id: string; slug: string } | null = null;
-    for (let n = 1; n <= 9 && !row; n++) {
-      const slug = n === 1 ? base : `${base.slice(0, 37)}-${n}`;
+    let taken = false;
+    for (let n = 1; n <= (slugEdited ? 1 : 9) && !row; n++) {
+      const slug = slugEdited ? effSlug : n === 1 ? base : `${base.slice(0, 37)}-${n}`;
       const { data, error } = await supabase
         .from("games")
         .insert({
           slug, title: p.title, description: p.description, description_de: p.description_de || null, controls: p.controls, controls_de: p.controls_de || null, category: p.category,
-          engine: p.engine || null, cover: coverFor(slug, null), play_url: siteUrl(siteFor(slug), hosting.domain), needs_isolation: p.isolation,
-          score_order: p.score_order, score_format: p.score_format, multiplayer: p.multiplayer, screenshots: [], created_by: profile.id,
+          engine: p.engine || null, cover: pics.cover || coverFor(slug, null), thumbnail_url: pics.image, banner_url: pics.banner, screenshots: pics.shots,
+          play_url: siteUrl(siteFor(slug), hosting.domain), needs_isolation: p.isolation,
+          score_order: p.score_order, score_format: p.score_format, multiplayer: p.multiplayer,
+          max_players: p.multiplayer && players >= 2 && players <= 64 ? players : null,
+          join_param: JOIN_PARAM.test(joinParam.trim()) ? joinParam.trim() : "room",
+          created_by: profile.id,
         })
         .select("id, slug")
         .single();
       if (data) row = data as { id: string; slug: string };
-      else if (error?.code !== "23505") break;
+      else if (error?.code === "23505") taken = true;
+      else break;
     }
     if (!row) {
       set("create", "fail");
-      setErr(t("form.error"));
+      setErr(t(slugEdited && taken ? "form.slugTaken" : "form.error"));
       return setPhase("review");
     }
     set("create", "ok");
     setGame(row);
+    // The pictures stay with the game; the ones taken away again are deleted.
+    keepPics.current = true;
+    const used = new Set([pics.image, pics.banner, ...pics.shots]);
+    removeGameImages(uploaded.current.filter((u) => !used.has(u)));
     invalidateGames();
 
     // The files: uploaded, or the branch's newest version from GitHub.
@@ -148,13 +200,9 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
     }
     invalidateGames();
 
-    // A leaderboard and friend invites: Toki Connect changes the code in one run (a new live
-    // version, or one pull request).
-    const features = [
-      ...(savesAi && p.saves_elsewhere ? (["saves"] as const) : []),
-      ...(leaderboard ? (["scores"] as const) : []),
-      ...(invites && p.multiplayer ? (["multiplayer"] as const) : []),
-    ];
+    // What the developer ticked: Toki Connect changes the code in one run (a new live version, or
+    // one pull request).
+    const features = chosen;
     if (!features.length) {
       set("leaderboard", "skip");
       return setPhase("done");
@@ -184,7 +232,10 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
   };
 
   /** The full form, with everything picked or proposed so far. */
-  const advanced = () => onManual({ proposal: p, picked, git, kind });
+  const advanced = () => {
+    keepPics.current = true;
+    onManual({ proposal: p, picked, git, kind, pictures: pics, uploaded: uploaded.current, slug: slugEdited ? slug : undefined, maxPlayers, joinParam });
+  };
   const byLink = () => onManual({ proposal: null, picked: null, git: null, kind: "link" });
 
   // ---------- screens ----------
@@ -241,9 +292,17 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
       );
     }
     const field = <K extends keyof Proposal>(k: K) => (v: Proposal[K]) => setP({ ...p, [k]: v });
+    const shown = AI_FEATURES.filter((f) => applies(f, p));
+    const missing = shown.filter((f) => !hasIt(f, p));
+    const tick = (f: AiFeature, on: boolean) => setAi((all) => {
+      const next = new Set(all);
+      if (on) next.add(f);
+      else next.delete(f);
+      return next;
+    });
     return (
       <section className="panel quick-add">
-<div className="sechead quick-head">
+        <div className="sechead quick-head">
           <h1 className="h">{t("quick.reviewTitle")}</h1>
           <button type="button" className="btn" onClick={advanced} title={t("quick.advancedHelp")}>{t("quick.advanced")}</button>
         </div>
@@ -271,6 +330,11 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
             <textarea id="q-desc-de" rows={3} maxLength={1000} value={p.description_de} onChange={(e) => field("description_de")(e.target.value)} />
             <label htmlFor="q-controls-de">{t("form.controlsDe")}</label>
             <input id="q-controls-de" maxLength={500} value={p.controls_de} onChange={(e) => field("controls_de")(e.target.value)} />
+            <label htmlFor="q-slug">{t("form.slug")}</label>
+            <div className="prefix">
+              <span>/game/</span>
+              <input id="q-slug" pattern="[a-z0-9]+(-[a-z0-9]+)*" maxLength={40} value={effSlug} onChange={(e) => { setSlugEdited(true); setSlug(e.target.value.toLowerCase()); }} />
+            </div>
             <div className="pair">
               <div>
                 <label htmlFor="q-engine">{t("form.engine")}</label>
@@ -291,9 +355,21 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
               {t("form.isolation")}
             </label>
             <label className="check">
-              <input type="checkbox" checked={p.multiplayer === true} onChange={(e) => { field("multiplayer")(e.target.checked); if (!e.target.checked) setInvites(false); }} />
+              <input type="checkbox" checked={p.multiplayer === true} onChange={(e) => { field("multiplayer")(e.target.checked); if (!e.target.checked) tick("multiplayer", false); }} />
               {t("form.multiplayer")}
             </label>
+            {p.multiplayer && (
+              <div className="pair">
+                <div>
+                  <label htmlFor="q-max">{t("form.maxPlayers")}</label>
+                  <input id="q-max" type="number" inputMode="numeric" min={2} max={64} placeholder="4" value={maxPlayers} onChange={(e) => setMaxPlayers(e.target.value)} />
+                </div>
+                <div>
+                  <label htmlFor="q-join">{t("form.joinParam")}</label>
+                  <input id="q-join" maxLength={20} pattern="[a-z][a-z0-9_\-]{0,19}" placeholder="room" autoCapitalize="none" spellCheck={false} value={joinParam} onChange={(e) => setJoinParam(e.target.value.toLowerCase())} />
+                </div>
+              </div>
+            )}
             {kind === "github" && git && (
               <>
                 <label htmlFor="q-folder">{t("git.folder")}</label>
@@ -301,51 +377,42 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
               </>
             )}
           </details>
+          <details className="quick-more">
+            <summary>{t("quick.pictures")}</summary>
+            <div className="col quick-pics">
+              <GamePictures slug={effSlug} value={{ ...pics, cover: pics.cover || coverFor(effSlug || "game", null) }} onChange={setPics} uploaded={uploaded} onError={setErr} onBusy={setPicBusy} />
+            </div>
+          </details>
 
+          <h2 className="quick-sub">{t("quick.found")}</h2>
           <ul className="quick-features">
-            {!p.saves_elsewhere ? (
-              <li className="check good">{t("quick.saves")}</li>
-            ) : codeAi === "off" ? (
-              <li className="check warn">{t("quick.savesElsewhere")}<Yourself code={'localStorage.setItem("save", data)'} anchor="saves" /></li>
-            ) : (
-              <li className="check">
-                <label className="fb-check">
-                  <input type="checkbox" checked={savesAi} onChange={(e) => setSavesAi(e.target.checked)} />
-                  <span>{kind === "github" ? t("quick.savesGithub") : t("quick.savesUpload")}</span>
-                </label>
-                <Yourself code={'localStorage.setItem("save", data)'} anchor="saves" />
-              </li>
-            )}
-            {p.has_scores ? (
-              <li className="check good">{t("quick.hasScores")}</li>
-            ) : codeAi === "off" ? (
-              <li className="check">{t("quick.noCodeAi")}<Yourself code="toki.score(points)" anchor="scores" /></li>
-            ) : (
-              <li className="check">
-                <label className="fb-check">
-                  <input type="checkbox" checked={leaderboard} onChange={(e) => setLeaderboard(e.target.checked)} />
-                  <span>{kind === "github" ? t("quick.leaderboardGithub") : t("quick.leaderboardUpload")}</span>
-                </label>
-                <Yourself code="toki.score(points)" anchor="scores" />
-              </li>
-            )}
-            {p.multiplayer && (p.has_rooms ? (
-              <li className="check good">{t("quick.hasInvites")}</li>
-            ) : codeAi === "off" ? (
-              <li className="check">{t("quick.noCodeAiInvites")}<Yourself code="toki.room(code)" anchor="rooms" /></li>
-            ) : (
-              <li className="check">
-                <label className="fb-check">
-                  <input type="checkbox" checked={invites} onChange={(e) => setInvites(e.target.checked)} />
-                  <span>{kind === "github" ? t("quick.invitesGithub") : t("quick.invitesUpload")}</span>
-                </label>
-                <Yourself code="toki.room(code)" anchor="rooms" />
+            {shown.map((f) => (
+              <li key={f} className={`check ${hasIt(f, p) ? "good" : ""}`}>
+                <b aria-hidden="true">{hasIt(f, p) ? "✓" : "–"}</b> {t(`quick.found.${f}.${hasIt(f, p) ? "yes" : "no"}`)}
+                {!hasIt(f, p) && <Yourself code={BY_HAND[f].code} anchor={BY_HAND[f].anchor} />}
               </li>
             ))}
           </ul>
+
+          {missing.length > 0 && codeAi !== "off" && (
+            <>
+              <h2 className="quick-sub">{t("quick.aiAdd")}</h2>
+              <p className="sub">{kind === "github" ? t("quick.aiAddGithub") : t("quick.aiAddUpload")}</p>
+              <ul className="quick-features">
+                {missing.map((f) => (
+                  <li key={f} className="check">
+                    <label className="fb-check">
+                      <input type="checkbox" checked={ai.has(f)} onChange={(e) => tick(f, e.target.checked)} />
+                      <span>{t(`quick.ai.${f}`)}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
           {err && <p className="error" role="alert">{err}</p>}
           <div className="actions">
-            <button type="button" className="btn primary" onClick={publish} disabled={!p.title.trim()}>{t("quick.publish")}</button>
+            <button type="button" className="btn primary" onClick={publish} disabled={!p.title.trim() || picBusy}>{t("quick.publish")}</button>
             <button type="button" className="btn" onClick={() => setPhase("pick")}>{t("quick.back")}</button>
           </div>
         </div>
@@ -358,11 +425,7 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
   const question = job?.status === "question";
   const madeChange = job?.status === "done" && (job.pr_url || job.messages.some((m) => m.kind === "done" && m.files.length > 0));
   // What the AI adds: "Saves, leaderboard and friend invites", or some of them.
-  const adding = listOf([
-    ...(savesAi && p?.saves_elsewhere ? [t("quick.what.saves")] : []),
-    ...(leaderboard ? [t("quick.what.scores")] : []),
-    ...(invites && p?.multiplayer ? [t("quick.what.invites")] : []),
-  ], lang);
+  const adding = listOf(chosen.map((f) => t(`quick.what.${f}`)), lang);
   return (
     <section className="panel quick-add">
       <h1 className="h">{phase === "done" && steps.files === "ok" ? t("quick.liveTitle") : t("quick.publishing")}</h1>
@@ -401,7 +464,17 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
           <Link to={`/edit/${game.slug}`} className="btn">{t("quick.edit")}</Link>
         </div>
       )}
-      {phase === "done" && steps.files === "ok" && <p className="sub">{t("quick.coverHint")}</p>}
+      {phase === "done" && game && steps.files === "ok" && (
+        <div className="quick-next">
+          <h2 className="quick-sub">{t("quick.next")}</h2>
+          <ul>
+            <li><Link to={`/edit/${game.slug}#achievements`}>{t("ach.setup.title")}</Link> · {t("quick.next.achievements")}</li>
+            <li><Link to={`/edit/${game.slug}#boards`}>{t("boards.setup.title")}</Link> · {t("quick.next.boards")}</li>
+            <li><Link to={`/edit/${game.slug}#cosmetics`}>{t("gcos.title")}</Link> · {t("quick.next.cosmetics")}</li>
+            {helper && <li><Link to={`/edit/${game.slug}#helper`}>{t("helper.setup.title")}</Link> · {t("quick.next.helper")}</li>}
+          </ul>
+        </div>
+      )}
     </section>
   );
 }

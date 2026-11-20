@@ -298,6 +298,10 @@ export interface Proposal {
   has_rooms?: boolean;
   /** The game keeps progress outside localStorage, so Toki can't keep it without a copy there */
   saves_elsewhere?: boolean;
+  /** The game calls toki.achievement already */
+  has_achievements?: boolean;
+  /** The game sends scores to other lists already (toki.score(points, "id")) */
+  has_boards?: boolean;
 }
 export interface ScanResult {
   proposal: Proposal;
@@ -341,5 +345,5 @@ export const scanRepo = (installation_id: number, repo: string, branch: string) 
  * Starts Toki Connect adding what the developer ticked when adding the game: saves, a
  * leaderboard, friend invites, all in one run (one new live version, or one pull request).
  */
-export const startAdditions = (p: { game_id: string; lang: string; features: ("saves" | "scores" | "multiplayer")[] } & ({ source: "upload" } | { source: "github"; installation_id: number; repo: string; branch: string })) =>
+export const startAdditions = (p: { game_id: string; lang: string; features: ("saves" | "scores" | "multiplayer" | "achievements" | "boards")[] } & ({ source: "upload" } | { source: "github"; installation_id: number; repo: string; branch: string })) =>
   api<{ job: { id: string } }>("/api/connect", { method: "POST", body: JSON.stringify({ action: "start", quick: true, ...p }) });

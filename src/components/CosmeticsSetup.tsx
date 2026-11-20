@@ -79,7 +79,7 @@ export function CosmeticsSetup({ gameId }: { gameId: string }) {
   });
 
   return (
-    <details className="helper-setup cos-setup" open={list.length > 0} onKeyDown={noSubmit}>
+    <details id="cosmetics" className="helper-setup cos-setup" open={list.length > 0 || location.hash === "#cosmetics"} onKeyDown={noSubmit}>
       <summary><b>{t("gcos.title")}</b>{list.length > 0 && <span className="sub"> · {list.length}/{MAX}</span>}</summary>
       <div className="ai-panel">
         <small>{t("gcos.lead")}</small>

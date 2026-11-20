@@ -1015,6 +1015,15 @@ main.content:focus { outline: none; }
 .quick-head { margin-bottom: 0; }
 .quick-link { margin: 4px 0 0; font-size: 14px; color: var(--muted); }
 .quick-features li.check { display: block; }
+.quick-features li.check > b { display: inline-block; width: 1.2em; }
+.quick-features li.check > .quick-diy { margin-left: 1.2em; }
+.quick-sub { font-size: 17px; margin: 22px 0 4px; }
+.quick-pics .cover-preview { max-width: 360px; }
+.quick-pics .cover-pick { max-width: 480px; }
+.quick-form > .sub { margin: 0; font-size: 13px; }
+.quick-next { margin-top: 4px; }
+.quick-next ul { margin: 6px 0 0; padding-left: 20px; font-size: 14px; }
+.quick-next li + li { margin-top: 4px; }
 .quick-diy { display: block; margin: 4px 0 0 28px; color: var(--muted); font-size: 12px; }
 .quick-diy code { font-size: 12px; overflow-wrap: anywhere; }
 

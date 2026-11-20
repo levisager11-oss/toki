@@ -33,7 +33,7 @@ describe("developer docs", () => {
 
   it("have the sections the add-game screen links to", () => {
     const ids = sections(devEn["docs.body"]);
-    const linked = [...readFileSync(join(root, "src", "components", "QuickAdd.tsx"), "utf8").matchAll(/anchor="([a-z0-9-]+)"/g)].map((m) => m[1]);
+    const linked = [...readFileSync(join(root, "src", "components", "QuickAdd.tsx"), "utf8").matchAll(/anchor: "([a-z0-9-]+)"/g)].map((m) => m[1]);
     expect(linked.length).toBeGreaterThan(0);
     expect(linked.filter((id) => !ids.includes(id))).toEqual([]);
   });

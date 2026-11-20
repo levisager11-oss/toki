@@ -36,6 +36,10 @@ export interface Proposal {
    * its saves need a copy in localStorage (step 3 of the guide) before Toki can keep them.
    */
   saves_elsewhere: boolean;
+  /** The game calls toki.achievement already */
+  has_achievements?: boolean;
+  /** The game sends scores to other lists already (toki.score(points, "id")) */
+  has_boards?: boolean;
 }
 
 const text = (v: unknown, max: number) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, max) : "");
@@ -78,6 +82,9 @@ export function basics(files: ScanFile[], name: string): Proposal {
     // Only a sure sign: the game tells Toki its room already. The AI looks closer.
     multiplayer: /toki\??\.room\s*\(/.test(all),
     has_rooms: /toki\??\.room\s*\(/.test(all),
+    has_achievements: /toki\??\.achievement\s*\(/.test(all),
+    // A score sent to one of the game's other lists: toki.score(points, "hard").
+    has_boards: /toki\??\.score\s*\([^()]*(?:\([^()]*\)[^()]*)*,/.test(all),
     saves_elsewhere: savesElsewhere(all),
   };
 }

@@ -6,8 +6,8 @@ import { useI18n } from "../lib/i18n";
 import { getGame, slugify } from "../lib/games";
 import { invalidateGames } from "../lib/useGames";
 import { CATEGORIES, type Category, type Game } from "../lib/types";
-import { COVERS, coverFor } from "../pixel/scenes";
-import { Cover } from "../components/Cover";
+import { coverFor } from "../pixel/scenes";
+import { GamePictures, MAX_SHOTS } from "../components/GamePictures";
 import { NotFound } from "./NotFound";
 import { LinkCheck } from "../components/LinkCheck";
 import { MultiplayerSetup, SaveSupport } from "../components/SaveSupport";
@@ -18,7 +18,7 @@ import { BoardsSetup } from "../components/BoardsSetup";
 import { CosmeticsSetup } from "../components/CosmeticsSetup";
 import { assistError, describeGame, useAiFeature } from "../lib/assist";
 import { useTitle } from "../lib/useTitle";
-import { extFor, removeGameImages, shrinkGameImage } from "../lib/gameImages";
+import { removeGameImages } from "../lib/gameImages";
 import { HostedUpload, type Picked } from "../components/HostedUpload";
 import { ImportFromLink } from "../components/ImportFromLink";
 import { gitConnect, gitDisconnect, hostError, scanSample, scanUpload, unhostGame, uploadGame, uploadName, useHosting, type GitChoice, type GitRow, type Imported } from "../lib/hosting";
@@ -51,9 +51,6 @@ const rememberStart = (c: AddStartChoice | null) => {
 };
 import { isOnToki, JOIN_PARAM, siteFor, siteUrl } from "../lib/hostingRules";
 
-const MAX_IMAGE = 2 * 1024 * 1024;
-const MAX_SHOTS = 4;
-const IMAGE_TYPES = "image/png,image/jpeg,image/webp,image/gif";
 
 export function GameForm() {
   const { slug: editSlug } = useParams();
@@ -79,8 +76,6 @@ export function GameForm() {
   const [cover, setCover] = useState<string>("");
   const [image, setImage] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
-  // Shape of the uploaded banner (width / height), to warn when it isn't wide.
-  const [bannerRatio, setBannerRatio] = useState<number | null>(null);
   const [featured, setFeatured] = useState(false);
   const [isolation, setIsolation] = useState(false);
   const [shots, setShots] = useState<string[]>([]);
@@ -160,6 +155,20 @@ export function GameForm() {
     }, () => setLoadFailed(true));
   }, [editSlug]);
 
+  // Opened as /edit/<game>#achievements (from "Set up next" after adding a game): that part,
+  // once it has loaded.
+  useEffect(() => {
+    const id = location.hash.slice(1);
+    if (!orig || !/^(achievements|boards|cosmetics|helper)$/.test(id)) return;
+    let tries = 0;
+    const timer = setInterval(() => {
+      const el = document.getElementById(id);
+      if (el || ++tries > 20) clearInterval(timer);
+      el?.scrollIntoView({ block: "start" });
+    }, 150);
+    return () => clearInterval(timer);
+  }, [orig, location.hash]);
+
   /** After moving to Toki or back: the game's address changed on the server. */
   const reloadWhere = async (slugNow: string) => {
     invalidateGames();
@@ -197,6 +206,20 @@ export function GameForm() {
       setIsolation(p.isolation);
       setDirty(true);
     }
+    // Pictures uploaded on the AI's screen are this form's now: unsaved ones are deleted with its own.
+    if (c.uploaded) uploaded.current.push(...c.uploaded);
+    if (c.pictures) {
+      setCover(c.pictures.cover);
+      setImage(c.pictures.image);
+      setBanner(c.pictures.banner);
+      setShots(c.pictures.shots);
+    }
+    if (c.slug) {
+      setSlug(c.slug);
+      setSlugEdited(true);
+    }
+    if (c.maxPlayers) setMaxPlayers(c.maxPlayers);
+    if (c.joinParam) setJoinParam(c.joinParam);
     if (c.kind === "link") setMode("link");
     else if (c.kind === "github") {
       setMode("github");
@@ -236,48 +259,6 @@ export function GameForm() {
   const onTitle = (v: string) => {
     setTitle(v);
     if (!slugEdited) setSlug(slugify(v));
-  };
-
-  /**
-   * Shrinks a picture to at most maxSide pixels, uploads it and returns its public link,
-   * or null (with an error shown) if it failed.
-   */
-  const uploadImage = async (file: File, maxSide: number): Promise<string | null> => {
-    setErr("");
-    setBusy(true);
-    try {
-      const blob = await shrinkGameImage(file, maxSide);
-      if (blob.size > MAX_IMAGE) {
-        setErr(t("form.imageTooBig"));
-        return null;
-      }
-      const path = `${profile!.id}/${crypto.randomUUID()}.${extFor(blob.type || file.type)}`;
-      const { error } = await supabase.storage.from("thumbnails").upload(path, blob, { contentType: blob.type || file.type, upsert: false });
-      if (error) {
-        setErr(t("form.error"));
-        return null;
-      }
-      const link = supabase.storage.from("thumbnails").getPublicUrl(path).data.publicUrl;
-      uploaded.current.push(link);
-      return link;
-    } finally {
-      setBusy(false);
-    }
-  };
-  const upload = async (file: File) => {
-    const link = await uploadImage(file, 1200);
-    if (link) setImage(link);
-  };
-  const uploadBanner = async (file: File) => {
-    const link = await uploadImage(file, 2000);
-    if (link) {
-      setBannerRatio(null);
-      setBanner(link);
-    }
-  };
-  const addShot = async (file: File) => {
-    const link = await uploadImage(file, 1920);
-    if (link) setShots((s) => [...s, link].slice(0, MAX_SHOTS));
   };
 
   const submit = async (e: FormEvent) => {
@@ -568,62 +549,14 @@ export function GameForm() {
         </div>
 
         <div className="col">
-          <span className="label-text" id="cover-label">{t("form.cover")}</span>
-          <div className="cover-preview">
-            <Cover slug={effectiveSlug || "game"} cover={previewCover} image={image} />
-          </div>
-          <small>{t("form.coverHelp")}</small>
-          <div className="cover-pick" role="radiogroup" aria-labelledby="cover-label">
-            {COVERS.map((c) => (
-              <button type="button" key={c} role="radio" aria-checked={!image && previewCover === c} aria-label={c} className={!image && previewCover === c ? "on" : ""} onClick={() => { setImage(null); setCover(c); }}>
-                <Cover slug={effectiveSlug || "game"} cover={c} />
-              </button>
-            ))}
-          </div>
-          <div className="actions">
-            <label className="btn file">
-              {t("form.upload")}
-              <input id="image" type="file" accept={IMAGE_TYPES} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) upload(f); }} />
-            </label>
-            {image && <button type="button" className="btn" onClick={() => setImage(null)}>{t("form.removeImage")}</button>}
-          </div>
-
-          <span className="label-text" id="banner-label">{t("form.banner")}</span>
-          <small id="banner-help">{t("form.bannerHelp")}</small>
-          {banner && (
-            <>
-              <div className="banner-preview">
-                <img src={banner} alt="" onLoad={(e) => setBannerRatio(e.currentTarget.naturalWidth / e.currentTarget.naturalHeight)} />
-              </div>
-              {bannerRatio !== null && Math.abs(bannerRatio - 2) > 0.2 && <p className="check warn">{t("form.bannerShape")}</p>}
-            </>
-          )}
-          <div className="actions">
-            <label className="btn file">
-              {t("form.uploadBanner")}
-              <input id="banner" type="file" accept={IMAGE_TYPES} aria-describedby="banner-help" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) uploadBanner(f); }} />
-            </label>
-            {banner && <button type="button" className="btn" onClick={() => setBanner(null)}>{t("form.removeBanner")}</button>}
-          </div>
-
-          <span className="label-text" id="shots-label">{t("form.screenshots")}</span>
-          <small>{t("form.screenshotsHelp")}</small>
-          <ul className="shot-pick" aria-labelledby="shots-label">
-            {shots.map((src, n) => (
-              <li key={src}>
-                <img src={src} alt="" />
-                <button type="button" className="shot-remove" aria-label={t("form.removeScreenshot", { n: n + 1 })} onClick={() => setShots((s) => s.filter((x) => x !== src))}>×</button>
-              </li>
-            ))}
-          </ul>
-          {shots.length < MAX_SHOTS && (
-            <div className="actions">
-              <label className="btn file">
-                {t("form.addScreenshot")}
-                <input type="file" accept={IMAGE_TYPES} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) addShot(f); }} />
-              </label>
-            </div>
-          )}
+          <GamePictures
+            slug={effectiveSlug}
+            value={{ cover: previewCover, image, banner, shots }}
+            onChange={(p) => { setCover(p.cover); setImage(p.image); setBanner(p.banner); setShots(p.shots); setDirty(true); }}
+            uploaded={uploaded}
+            onError={setErr}
+            onBusy={setBusy}
+          />
         </div>
 
         {orig && <HelperSetup gameId={orig.id} />}
