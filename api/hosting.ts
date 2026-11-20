@@ -14,6 +14,7 @@ import { removeSecret, saveSecret, withSecrets } from "../server/secrets.js";
 import { githubConfigured } from "../server/env.js";
 import { deployCommit, openRepo, type GitRow } from "../server/gitDeploy.js";
 import { github, GitHubError } from "../server/github.js";
+import { allows, connections } from "../server/githubAccess.js";
 import { MAX_GAME_BYTES } from "../src/lib/hostingRules.js";
 import { checkMove, moveBack, moveGame, type GitHubAccess } from "../server/migrate.js";
 import { ACTIONS_ISSUER, ActionsAuthError, gameForAction, looksLikeJwt, verifyActionToken, type ActionClaims } from "../server/actionsAuth.js";
@@ -282,9 +283,9 @@ async function unhost(w: Who, store: ReturnType<typeof r2>, b: Record<string, un
 async function gitAccess(w: Who): Promise<GitHubAccess | null> {
   const { env } = await withSecrets(w.db, { ...serverEnv(), serviceKey: w.serviceKey });
   if (!githubConfigured(env.github)) return null;
-  const installs = await w.db.select<{ installation_id: number }>("github_installations", `user_id=eq.${w.user.id}&select=installation_id`);
+  const installs = await connections(w.db, w.user.id);
   if (!installs.length) return null;
-  return { gh: github(env.github), installations: installs.map((i) => Number(i.installation_id)) };
+  return { gh: github(env.github), installations: installs.map((i) => i.installation_id), allows: (id, repo) => allows(installs.find((i) => i.installation_id === id), repo) };
 }
 
 const BRANCH = /^(?!.*\.\.)(?!\/)[\w./-]{1,200}$/;
@@ -293,12 +294,13 @@ async function git(w: Who, b: Record<string, unknown>, origin: string): Promise<
   const { env } = await withSecrets(w.db, { ...serverEnv(), serviceKey: w.serviceKey });
   if (!githubConfigured(env.github)) return json({ error: "github_off" }, 503);
   const gh = github(env.github);
-  const installs = await w.db.select<{ installation_id: number }>("github_installations", `user_id=eq.${w.user.id}&select=installation_id`);
-  const mayUse = (id: unknown) => typeof id === "number" && installs.some((i) => Number(i.installation_id) === id);
+  const installs = await connections(w.db, w.user.id);
+  // The installation must be one of the developer's, and the repository one they may use there.
+  const mayUse = (id: unknown, repo: string) => typeof id === "number" && allows(installs.find((i) => i.installation_id === id), repo);
 
   if (b.action === "git_branches") {
     const repoName = typeof b.repo === "string" ? b.repo : "";
-    if (!mayUse(b.installation_id) || !/^[\w.-]+\/[\w.-]+$/.test(repoName)) return json({ error: "not_allowed" }, 403);
+    if (!/^[\w.-]+\/[\w.-]+$/.test(repoName) || !mayUse(b.installation_id, repoName)) return json({ error: "not_allowed" }, 403);
     const repo = await gh.repo(b.installation_id as number, repoName);
     const [branches, main] = await Promise.all([repo.branches(), repo.defaultBranch()]);
     return json({ branches, default: main });
@@ -333,7 +335,7 @@ async function git(w: Who, b: Record<string, unknown>, origin: string): Promise<
     const repo = typeof b.repo === "string" ? b.repo.trim() : "";
     const branch = typeof b.branch === "string" ? b.branch.trim() : "";
     const folder = typeof b.folder === "string" ? b.folder.trim().replace(/^\.?\/+|\/+$/g, "") : "";
-    if (!mayUse(b.installation_id)) return json({ error: "not_allowed" }, 403);
+    if (!mayUse(b.installation_id, repo)) return json({ error: "not_allowed" }, 403);
     if (!/^[\w.-]+\/[\w.-]+$/.test(repo) || !BRANCH.test(branch) || folder.length > 200 || folder.split("/").includes("..")) return json({ error: "bad_request" }, 400);
     // The installation must really reach this repository, and the branch must exist.
     const repos = await gh.repos(b.installation_id as number);

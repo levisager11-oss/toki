@@ -510,6 +510,8 @@ export const devDe: Record<GroupKey["dev"], string> = {
   "connect.githubConnect": "Mit GitHub verbinden",
   "connect.githubHelp": "Du wählst, welche Repos Toki nutzen darf. Toki öffnet nur Pull Requests; was gemergt wird, entscheidest du.",
   "connect.githubMore": "Repos oder Konten hinzufügen",
+  "connect.hiddenRepos": "Einige Repos dieses Kontos werden nicht angezeigt: Toki listet nur die auf, die du laut GitHub nutzen darfst. Hast du gerade Zugriff auf eins bekommen?",
+  "connect.githubAgain": "Nochmal mit GitHub verbinden",
   "connect.githubAccount": "Verbunden: {name}",
   "connect.disconnect": "Trennen",
   "connect.disconnectSure": "Wirklich trennen?",

@@ -27,6 +27,7 @@ import { errorDetail } from "../server/connect/agent.js";
 import { DbError, userDb, type Db } from "../server/db.js";
 import { githubConfigured } from "../server/env.js";
 import { github, GitHubError } from "../server/github.js";
+import { mayUseRepo } from "../server/githubAccess.js";
 import { body, context, isUuid, json, type Ctx } from "../server/http.js";
 import type { ChatMessage } from "../server/ai/provider.js";
 import { SCHEMAS } from "../server/assist/schemas.js";
@@ -306,8 +307,7 @@ async function release(ctx: Ctx, b: Record<string, unknown>, lang: Lang) {
   const repo = typeof b.repo === "string" ? b.repo : "";
   if (repo && Number.isSafeInteger(installation) && /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo) && githubConfigured(ctx.env.github)) {
     try {
-      const [owned] = await ctx.db.select("github_installations", `user_id=eq.${ctx.user.id}&installation_id=eq.${installation}&select=installation_id`);
-      if (!owned) return json({ error: "not_allowed" }, 403);
+      if (!(await mayUseRepo(ctx.db, ctx.user.id, installation, repo))) return json({ error: "not_allowed" }, 403);
       const gh = github(ctx.env.github);
       if (!(await gh.repos(installation)).some((r) => r.repo.toLowerCase() === repo.toLowerCase())) return json({ error: "not_allowed" }, 403);
       const client = await gh.repo(installation, repo);
@@ -395,8 +395,7 @@ async function scan(ctx: Ctx, b: Record<string, unknown>) {
     const installation = Number(b.installation_id);
     const repoName = str(b.repo, 140);
     const branch = str(b.branch, 200);
-    const [owned] = await ctx.db.select("github_installations", `user_id=eq.${ctx.user.id}&installation_id=eq.${installation}&select=installation_id`);
-    if (!owned || !/^[\w.-]+\/[\w.-]+$/.test(repoName) || !branch) return json({ error: "not_allowed" }, 403);
+    if (!/^[\w.-]+\/[\w.-]+$/.test(repoName) || !branch || !(await mayUseRepo(ctx.db, ctx.user.id, installation, repoName))) return json({ error: "not_allowed" }, 403);
     const gh = github(ctx.env.github);
     if (!(await gh.repos(installation)).some((r) => r.repo.toLowerCase() === repoName.toLowerCase())) return json({ error: "not_allowed" }, 403);
     const repo = await gh.repo(installation, repoName);
@@ -676,8 +675,7 @@ async function helpSetup(ctx: Ctx, b: Record<string, unknown>) {
   } else {
     if (!Number.isSafeInteger(installation) || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo)) return json({ error: "bad_request" }, 400);
     if (!githubConfigured(ctx.env.github)) return json({ error: "github_error" }, 503);
-    const [owned] = await ctx.db.select("github_installations", `user_id=eq.${ctx.user.id}&installation_id=eq.${installation}&select=installation_id`);
-    if (!owned) return json({ error: "not_allowed" }, 403);
+    if (!(await mayUseRepo(ctx.db, ctx.user.id, installation, repo))) return json({ error: "not_allowed" }, 403);
     const gh = github(ctx.env.github);
     if (!(await gh.repos(installation)).some((r) => r.repo.toLowerCase() === repo.toLowerCase())) return json({ error: "not_allowed" }, 403);
     const [g] = await ctx.db.select<{ title: string; description: string; controls: string }>("games", `id=eq.${b.game_id}&select=title,description,controls`);

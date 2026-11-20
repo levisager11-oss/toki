@@ -11,6 +11,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { DbError, type Db } from "../server/db.js";
 import { githubConfigured } from "../server/env.js";
 import { github } from "../server/github.js";
+import { mayUseRepo } from "../server/githubAccess.js";
 import { body, context, isUuid, json, type Ctx } from "../server/http.js";
 import { buildRepo } from "../server/connect/buildRepo.js";
 import { hostingDeps, r2Config } from "../server/hosting.js";
@@ -125,8 +126,7 @@ async function start(ctx: Ctx, b: Record<string, unknown>) {
   const engine = ai === "strong" && settings?.agent_enabled ? "agent" : "steps";
 
   // The installation must be one GitHub confirmed for this account, and the repository one it can use.
-  const [owned] = await ctx.db.select("github_installations", `user_id=eq.${ctx.user.id}&installation_id=eq.${installation}&select=installation_id`);
-  if (!owned) return json({ error: "not_allowed" }, 403);
+  if (!(await mayUseRepo(ctx.db, ctx.user.id, installation, repo))) return json({ error: "not_allowed" }, 403);
   const repos = await github(ctx.env.github).repos(installation);
   if (!repos.some((r) => r.repo.toLowerCase() === repo.toLowerCase())) return json({ error: "not_allowed" }, 403);
   if (gameId) {
@@ -210,8 +210,7 @@ async function run(ctx: Ctx, b: Record<string, unknown>, origin: string) {
         return buildRepo(hostingDeps(ctx.db, config), { id: ctx.user.id, role: ctx.user.role }, job.game_id);
       }
       // Still connected? (The developer may have disconnected GitHub since.)
-      const [owned] = await ctx.db.select("github_installations", `user_id=eq.${ctx.user.id}&installation_id=eq.${job.installation_id}&select=installation_id`);
-      if (!owned || job.installation_id === null) throw new DbError("not_allowed", 403);
+      if (job.installation_id === null || !(await mayUseRepo(ctx.db, ctx.user.id, Number(job.installation_id), job.repo))) throw new DbError("not_allowed", 403);
       return gh.repo(job.installation_id, job.repo);
     },
     async ai(messages, maxTokens, opts) {
@@ -330,8 +329,7 @@ async function runAgent(ctx: Ctx, row: Row, job: Job, origin: string): Promise<S
         return res.text();
       },
       async start(text) {
-        const [owned] = await ctx.db.select("github_installations", `user_id=eq.${ctx.user.id}&installation_id=eq.${row.installation_id!}&select=installation_id`);
-        if (!owned) throw new DbError("not_allowed", 403);
+        if (!(await mayUseRepo(ctx.db, ctx.user.id, Number(row.installation_id), row.repo))) throw new DbError("not_allowed", 403);
         const a = await ensureAgent(client, ctx.db, s);
         const branch = row.state?.branch ?? (await (await gh.repo(row.installation_id!, row.repo)).defaultBranch());
         const token = await gh.readOnlyToken(row.installation_id!, row.repo);
