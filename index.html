@@ -24,6 +24,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="format-detection" content="telephone=no" />
 
+    <!-- The games list comes from Toki's database: open the connection while the app loads. -->
+    <link rel="preconnect" href="%VITE_SUPABASE_URL%" crossorigin />
+
     <!-- Toki's fonts come from Toki itself (public/fonts), so no other company sees who visits.
          System fonts show until they arrive. -->
     <link rel="preload" as="font" type="font/woff2" href="/fonts/schibsted-grotesk-latin-wght-normal.woff2" crossorigin />

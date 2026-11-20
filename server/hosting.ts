@@ -7,7 +7,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { Db } from "./db.js";
 import { decrypt } from "./secrets.js";
-import { r2, r2Configured, type R2, type R2Config } from "./r2.js";
+import { r2, r2Configured, UPLOAD_LINK_S, type R2, type R2Config } from "./r2.js";
 import {
   isHostedUrl, isSmallVersion, KEEP_PREVIOUS_DAYS, MAX_GAME_BYTES, planFiles, readTokiJson, siteFor, siteUrl, type PlanError, type TokiJson,
 } from "../src/lib/hostingRules.js";
@@ -253,7 +253,11 @@ export async function finishUpload(deps: Deps, user: HostUser, b: Record<string,
   const keepUntil = new Date(now.getTime() + KEEP_PREVIOUS_DAYS * 86400_000).toISOString();
   await db.update("game_builds", `game_id=eq.${game.id}&status=eq.previous`, { status: "deleting", delete_after: now.toISOString() });
   await db.update("game_builds", `game_id=eq.${game.id}&status=eq.live`, { status: "previous", delete_after: keepUntil });
-  await db.update("game_builds", `id=eq.${build.id}`, { status: "live", live_at: now.toISOString(), files: objects.length, bytes, delete_after: null });
+  await db.update("game_builds", `id=eq.${build.id}`, {
+    // At least what was planned: its upload links still work for the rest of their hour, so
+    // files sent after this count against the storage limits too.
+    status: "live", live_at: now.toISOString(), files: objects.length, bytes: Math.max(bytes, Number(build.bytes) || 0), delete_after: null,
+  });
 
   const playUrl = siteUrl(build.site, config.domain, build.entry);
   const base = siteUrl(build.site, config.domain);
@@ -337,9 +341,12 @@ export async function sweep(deps: Deps, limit = 100): Promise<{ deleted: number 
   const now = deps.now?.() ?? new Date();
   const dayAgo = new Date(now.getTime() - 86400_000).toISOString();
   await db.update("game_builds", `status=eq.uploading&created_at=lt.${dayAgo}`, { status: "deleting", delete_after: now.toISOString() });
+  // A version's upload links work for an hour: until then its row stays, so files sent late are
+  // still found and deleted with it, and the uploads per hour can be counted (startUpload).
+  const linksOver = new Date(now.getTime() - UPLOAD_LINK_S * 1000).toISOString();
   const due = await db.select<{ id: string; site: string; status: string }>(
     "game_builds",
-    `delete_after=lte.${now.toISOString()}&status=neq.live&select=id,site,status&order=delete_after&limit=${limit}`,
+    `delete_after=lte.${now.toISOString()}&created_at=lt.${linksOver}&status=neq.live&select=id,site,status&order=delete_after&limit=${limit}`,
   );
   let deleted = 0;
   for (const d of due) {

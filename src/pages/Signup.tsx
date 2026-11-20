@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useI18n } from "../lib/i18n";
@@ -29,10 +29,11 @@ export function Signup() {
   const [err, setErr] = useState("");
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
+  const after = useRef<string | null>(null);
   const { session, ready } = useAuth();
   const captcha = useCaptcha();
   // Already logged in: nothing to do here.
-  if (ready && session && !busy && !done) return <Navigate to={safeNext(params.get("next"))} replace />;
+  if (ready && session && !busy && !done) return <Navigate to={after.current ?? safeNext(params.get("next"))} replace />;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -73,6 +74,8 @@ export function Signup() {
         return setErr(takenNow || !code ? t("signup.usernameTaken") : t("signup.badInvite"));
       }
       const next = code ? "/my-games" : safeNext(params.get("next"));
+      // "Already logged in" above can run before the step to `next` does: it goes there too.
+      after.current = next;
       if (data.session) return navigate(next);
       // Accounts are confirmed on creation, so log straight in.
       const { error: loginError } = await supabase.auth.signInWithPassword({ email: email.trim(), password, options: { captchaToken: await captcha.getToken() } });

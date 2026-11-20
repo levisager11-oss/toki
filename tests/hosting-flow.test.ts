@@ -152,7 +152,11 @@ describe("hosting a game", () => {
     const three = await startUpload(deps, DEV, { game_id: "11111111-1111-4111-8111-111111111111", files: FILES });
     uploadAll(three);
     await finishUpload(deps, DEV, { build_id: three.build_id });
-    // Only one earlier version is kept: the oldest went at once.
+    // Only one earlier version is kept: the oldest goes, once its upload links are over.
+    expect(byId(two.build_id).status).toBe("deleting");
+    for (const b of tables.game_builds) b.created_at = now.toISOString(); // the stand-in database stamps rows with the real time
+    now = new Date("2026-11-15T11:00:01Z");
+    await sweep(deps);
     expect(tables.game_builds.map((b) => b.id)).not.toContain(two.build_id);
     expect([...files.keys()].some((k) => k.startsWith(`b/${two.build_id}/`))).toBe(false);
 
@@ -175,10 +179,39 @@ describe("hosting a game", () => {
     await finishUpload(deps, DEV, { build_id: s.build_id });
     // What the database trigger does when the game is deleted:
     tables.games = [];
-    for (const b of tables.game_builds) Object.assign(b, { status: "deleting", delete_after: now.toISOString() });
+    for (const b of tables.game_builds) Object.assign(b, { status: "deleting", delete_after: now.toISOString(), created_at: "2026-11-15T08:00:00.000Z" });
     await sweep(deps);
     expect(files.size).toBe(0);
     expect(pointers.has("sites/snake.json")).toBe(false);
+  });
+
+  it("keeps an upload that was started over until its links are over, so late files go with it", async () => {
+    const one = await startUpload(deps, DEV, { game_id: "11111111-1111-4111-8111-111111111111", files: FILES });
+    const two = await startUpload(deps, DEV, { game_id: "11111111-1111-4111-8111-111111111111", files: FILES });
+    for (const b of tables.game_builds) b.created_at = now.toISOString();
+    const byId = (id: string) => tables.game_builds.find((b) => b.id === id);
+    expect(byId(one.build_id)).toMatchObject({ status: "deleting" });
+    // The clean-up anyone can ask for doesn't take the row away while its links still work…
+    await sweep(deps);
+    expect(byId(one.build_id)).toBeDefined();
+    // …so files sent with them afterwards are found,
+    uploadAll(one);
+    uploadAll(two);
+    await finishUpload(deps, DEV, { build_id: two.build_id });
+    expect(byId(one.build_id)).toBeDefined();
+    // and deleted once the hour is over.
+    now = new Date("2026-11-15T11:00:01Z");
+    await sweep(deps);
+    expect(byId(one.build_id)).toBeUndefined();
+    expect([...files.keys()].every((k) => k.startsWith(`b/${two.build_id}/`))).toBe(true);
+  });
+
+  it("counts what was planned when an upload is finished with files still missing", async () => {
+    const s = await startUpload(deps, DEV, { game_id: "11111111-1111-4111-8111-111111111111", files: FILES });
+    files.set(`b/${s.build_id}/index.html`, 100); // the rest could follow with links that still work
+    const f = await finishUpload(deps, DEV, { build_id: s.build_id });
+    expect(f.bytes).toBe(100);
+    expect(tables.game_builds[0]).toMatchObject({ status: "live", bytes: 300 });
   });
 
   it("deletes uploads that were never finished after a day", async () => {

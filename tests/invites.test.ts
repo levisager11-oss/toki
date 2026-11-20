@@ -185,7 +185,7 @@ describe("Toki Connect", () => {
 
 describe("the game script", () => {
   /** Runs public/toki-save.js in a page that is (or isn't) shown inside Toki. */
-  async function load(inToki: boolean) {
+  async function load(inToki: boolean, page: { referrer?: string; origin?: string; session?: Map<string, string> } = {}) {
     const { readFile } = await import("node:fs/promises");
     const src = await readFile(new URL("../public/toki-save.js", import.meta.url), "utf8");
     const sent: unknown[] = [];
@@ -194,13 +194,28 @@ describe("the game script", () => {
     const listeners: ((e: unknown) => void)[] = [];
     const win: Record<string, unknown> = { localStorage: store, addEventListener: (type: string, fn: (e: unknown) => void) => type === "message" && listeners.push(fn) };
     win.parent = inToki ? top : win;
-    const doc = { referrer: "https://www.playtoki.app/game/apex", hidden: false, addEventListener() {} };
+    const kept = page.session;
+    if (kept) win.sessionStorage = { getItem: (k: string) => kept.get(k) ?? null, setItem: (k: string, v: string) => void kept.set(k, v) };
+    const doc = { referrer: page.referrer ?? "https://www.playtoki.app/game/apex", hidden: false, addEventListener() {} };
     const Storage = { prototype: { setItem() {}, removeItem() {}, clear() {} } };
-    new Function("window", "location", "document", "Storage", "setTimeout", src)(win, { ancestorOrigins: [] }, doc, Storage, () => 0);
+    new Function("window", "location", "document", "Storage", "setTimeout", src)(win, { ancestorOrigins: [], origin: page.origin }, doc, Storage, () => 0);
     /** A message to the game's page: from Toki, or from anyone else. */
     const tell = (data: unknown, fromToki = true) => listeners.forEach((fn) => fn({ data, source: fromToki ? top : {} }));
     return { toki: win.toki as { room(code: unknown): void; onHost(fn: unknown): void; onName(fn: unknown): void; name: string | null }, sent, tell };
   }
+
+  it("still reaches Toki after the game went to another of its own pages", async () => {
+    // Browsers without location.ancestorOrigins: the page before is then the game itself.
+    const game = "https://apex.playtoki.app";
+    const session = new Map<string, string>();
+    const first = await load(true, { origin: game, session });
+    expect(first.sent[0]).toEqual([{ toki: 1, type: "hello", data: undefined }, "https://www.playtoki.app"]);
+    const second = await load(true, { origin: game, referrer: `${game}/index.html`, session });
+    expect(second.sent[0]).toEqual([{ toki: 1, type: "hello", data: undefined }, "https://www.playtoki.app"]);
+    // Nothing kept (storage blocked): to whoever shows the game, never to the game's own address.
+    const blocked = await load(true, { origin: game, referrer: `${game}/index.html` });
+    expect(blocked.sent[0]).toEqual([{ toki: 1, type: "hello", data: undefined }, "*"]);
+  });
 
   it("tells Toki the room, and that it closed", async () => {
     const { toki, sent } = await load(true);

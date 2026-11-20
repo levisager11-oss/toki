@@ -20,6 +20,16 @@ function isolation(): Plugin {
   };
 }
 
+// The libraries change far less often than Toki itself. In files of their own they stay in the
+// browser's cache across Toki's updates (a returning visitor only loads Toki's own code again),
+// and the browser loads them next to it, not as one big file.
+function libraries(id: string): string | undefined {
+  if (!id.includes("/node_modules/")) return;
+  if (/\/node_modules\/(react|react-dom|scheduler|react-router|react-router-dom|@remix-run\/router)\//.test(id)) return "react";
+  if (/\/node_modules\/(@supabase\/[^/]+|tslib)\//.test(id)) return "supabase";
+}
+
 export default defineConfig({
   plugins: [react(), isolation()],
+  build: { rollupOptions: { output: { manualChunks: libraries } } },
 });

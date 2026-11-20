@@ -19,6 +19,6 @@ describe("newest", () => {
 
 describe("safeNext", () => {
   it("allows pages on this site", () => expect(safeNext("/game/deepsub")).toBe("/game/deepsub"));
-  it.each([null, "https://evil.example", "//evil.example", "javascript:alert(1)"])("falls back to home for %s", (v) =>
+  it.each([null, "https://evil.example", "//evil.example", "/\\evil.example/login", "javascript:alert(1)"])("falls back to home for %s", (v) =>
     expect(safeNext(v)).toBe("/"));
 });

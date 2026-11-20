@@ -59,6 +59,7 @@ export function GameForm() {
   const [orig, setOrig] = useState<Game | null>(null);
   useTitle(editSlug ? t("form.editTitle") : t("form.addTitle"));
   const [missing, setMissing] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [slugEdited, setSlugEdited] = useState(false);
@@ -151,7 +152,7 @@ export function GameForm() {
       setMultiplayer(g.multiplayer === true);
       setMaxPlayers(g.max_players ? String(g.max_players) : "");
       setJoinParam(g.join_param || "room");
-    });
+    }, () => setLoadFailed(true));
   }, [editSlug]);
 
   /** After moving to Toki or back: the game's address changed on the server. */
@@ -199,6 +200,7 @@ export function GameForm() {
   };
 
   if (missing) return <NotFound />;
+  if (loadFailed) return <p className="msg">{t("error")}</p>;
   if (!editSlug && !manual) {
     if (hosting === null) return <p className="msg" aria-busy="true">{t("loading")}</p>;
     if (hosting.enabled && hosting.domain) return <QuickAdd hosting={hosting} onManual={toAdvanced} />;

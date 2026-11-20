@@ -64,7 +64,9 @@ export function useRoomBridge(frame: RefObject<HTMLIFrameElement>, game: Game | 
       if (host !== undefined) setCanHost(host);
       const names = namesFromMessage(e.data);
       if (names !== undefined) setUsesName(names);
-      if ((e.data as { type?: string } | null)?.type === "hello" && nameNow.current) win.postMessage(nameMessage(nameNow.current), origin);
+      // With "hello", and when the game says it uses names: a game whose storage is blocked
+      // never says hello.
+      if (((e.data as { type?: string } | null)?.type === "hello" || names === true) && nameNow.current) win.postMessage(nameMessage(nameNow.current), origin);
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);

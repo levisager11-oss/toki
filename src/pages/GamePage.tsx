@@ -30,7 +30,7 @@ import { CloseIcon, FullscreenIcon, PeopleIcon } from "../components/icons";
 import { ShareButton } from "../components/ShareButton";
 import { ReportButton } from "../components/ReportButton";
 import { GameNameField, InviteFriends, InviteStatus, useGameInvites, useRoomBridge } from "../components/GameInvite";
-import { PartyChat, usePartyOnGame } from "../components/Party";
+import { PartyChat, usePartyChatHidden, usePartyOnGame } from "../components/Party";
 import { isParty } from "../lib/party";
 import { useBadges } from "../lib/useBadges";
 import { maxPlayers, partyId, playUrl, roomCode } from "../lib/invites";
@@ -103,6 +103,8 @@ export function GamePage() {
     },
   });
   const inParty = isParty(useBadges().party);
+  // With the party's chat put away the game has the whole width again.
+  const chatBeside = !usePartyChatHidden() && inParty;
   // A friend's link, opened without an account: they play in the room, and are told once
   // what an account would keep. After signing up they are back in the same room.
   const [guestTold, setGuestTold] = useState(false);
@@ -215,7 +217,7 @@ export function GamePage() {
 
   return (
     <>
-      <section className={`player ${inParty ? "has-party" : ""}`}>
+      <section className={`player ${chatBeside ? "has-party" : ""}`}>
         {guestInRoom && (
           <div className="check warn guest-note" role="status">
             <p><b>{t("guest.title")}</b> {t("guest.body")}</p>
