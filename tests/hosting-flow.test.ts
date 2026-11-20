@@ -184,7 +184,8 @@ describe("hosting a game", () => {
   it("deletes uploads that were never finished after a day", async () => {
     const s = await startUpload(deps, DEV, { game_id: "11111111-1111-4111-8111-111111111111", files: FILES });
     uploadAll(s);
-    now = new Date("2026-11-17T10:00:00Z");
+    // two days after the upload (the stand-in database stamps rows with the real time)
+    now = new Date(Date.now() + 2 * 86400_000);
     await sweep(deps);
     expect(files.size).toBe(0);
     expect(tables.game_builds).toHaveLength(0);
