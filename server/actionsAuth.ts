@@ -92,9 +92,11 @@ export interface ActionGame {
 export async function gameForAction(db: Db, c: ActionClaims): Promise<ActionGame | null> {
   if (!c.ref.startsWith("refs/heads/")) return null;
   const branch = c.ref.slice("refs/heads/".length);
+  // The name is letters, digits, ".", "-" and "_" (readClaims). "_" stands for any one character
+  // in this search, so the exact comparison below decides.
   const rows = await db.select<{ game_id: string; repo: string }>(
     "game_git",
-    `branch=eq.${encodeURIComponent(branch)}&build=eq.action&repo=ilike.${encodeURIComponent(c.repository.replace(/[%_*]/g, ""))}&select=game_id,repo`,
+    `branch=eq.${encodeURIComponent(branch)}&build=eq.action&repo=ilike.${encodeURIComponent(c.repository)}&select=game_id,repo`,
   );
   const row = rows.find((r) => r.repo.toLowerCase() === c.repository.toLowerCase());
   if (!row) return null;

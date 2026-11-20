@@ -265,10 +265,11 @@ async function testConfig(w: Who) {
 
 /** The game moved to a link elsewhere: its hosted versions are deleted at the next clean-up. */
 async function unhost(w: Who, store: ReturnType<typeof r2>, b: Record<string, unknown>) {
-  if (!isUuid(b.game_id)) return json({ error: "bad_request" }, 400);
+  // Thrown, not returned: the caller wraps the answer, and a refusal would go out as "200 {}".
+  if (!isUuid(b.game_id)) throw new HostingError("bad_request");
   const [g] = await w.db.select<{ id: string; created_by: string | null; hosted_site: string | null }>("games", `id=eq.${b.game_id}&select=id,created_by,hosted_site`);
-  if (!g) return json({ error: "no_game" }, 404);
-  if (g.created_by !== w.user.id && w.user.role !== "admin") return json({ error: "not_allowed" }, 403);
+  if (!g) throw new HostingError("no_game", 404);
+  if (g.created_by !== w.user.id && w.user.role !== "admin") throw new HostingError("not_allowed", 403);
   await w.db.update("game_builds", `game_id=eq.${g.id}`, { status: "deleting", delete_after: new Date().toISOString() });
   if (g.hosted_site) await store.remove(`sites/${g.hosted_site}.json`);
   await w.db.remove("game_git", `game_id=eq.${g.id}`);

@@ -15,6 +15,9 @@ export interface R2Config {
 export const r2Configured = (c: Partial<R2Config> | null | undefined): c is R2Config =>
   !!(c?.accountId && c.accessKeyId && c.secretAccessKey && c.bucket && c.domain);
 
+/** How long a link to upload a file works, in seconds. */
+export const UPLOAD_LINK_S = 3600;
+
 const sha256 = (data: string | Uint8Array) => createHash("sha256").update(data).digest("hex");
 const hmac = (key: string | Buffer, data: string) => createHmac("sha256", key).update(data).digest();
 
@@ -117,7 +120,7 @@ export function r2(config: R2Config, fetchImpl: typeof fetch = fetch) {
   return {
     /** A link the browser may PUT exactly this many bytes to, for an hour. */
     uploadUrl: (key: string, size: number, now?: Date) =>
-      presign({ method: "PUT", host, path: keyPath(key), headers: { "content-length": String(size) }, expires: 3600, now, ...creds }),
+      presign({ method: "PUT", host, path: keyPath(key), headers: { "content-length": String(size) }, expires: UPLOAD_LINK_S, now, ...creds }),
 
     put: (key: string, body: string, contentType = "application/json") =>
       call("PUT", keyPath(key), { body, headers: { "content-type": contentType } }).then(() => undefined),

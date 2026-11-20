@@ -101,6 +101,27 @@ describe("deleting an account", () => {
     expect(await exists(other.id)).toBe(true);
   });
 
+  it("takes the account's favorites along, and leaves its party to the others", async () => {
+    const dev = await t.user("creator");
+    const game = await t.game(dev);
+    await t.admin("update games set multiplayer = true where id = $1", [game.id]);
+    const a = await t.user();
+    const b = await t.user();
+    await t.as(a, "select set_like($1, $2, true)", [game.id, a.id]);
+    await t.as(b, "select set_like($1, $2, true)", [game.id, b.id]);
+    await t.as(a, "select send_friend_request($1)", [b.id]);
+    await t.as(b, "select answer_friend_request($1, true)", [a.id]);
+    await t.as(a, "select invite_to_game($1, $2, 'ABCD')", [b.id, game.id]);
+    const [{ party }] = await t.admin<{ party: string }>("select party_id as party from party_members where user_id = $1", [a.id]);
+    await t.as(b, "select join_party($1)", [party]);
+
+    await rpc(a, "delete_account");
+    expect(await t.admin("select 1 from game_likes where visitor = $1", [a.id])).toHaveLength(0);
+    expect((await t.admin<{ likes: number }>("select likes from game_stats where game_id = $1", [game.id]))[0].likes).toBe(1);
+    // b leads the party now.
+    expect(await t.admin("select leader_id from parties where id = $1", [party])).toEqual([{ leader_id: b.id }]);
+  });
+
   it("needs a login, and keeps the last admin", async () => {
     await expect(rpc(null, "delete_account")).rejects.toThrow(/permission denied/);
     await expect(rpc(admin, "delete_account")).rejects.toThrow(/last_admin/);
@@ -127,6 +148,22 @@ describe("a copy of your data", () => {
     expect((data.feedback_posts as { title: string }[]).map((p) => p.title)).toEqual(["Mine"]);
     expect(data.messages).toEqual([]);
     await expect(rpc(null, "export_my_data")).rejects.toThrow(/permission denied/);
+  });
+
+  it("has the favorites, and not what admins noted on a report", async () => {
+    const dev = await t.user("creator");
+    const game = await t.game(dev);
+    const a = await t.user();
+    await t.as(a, "select set_like($1, $2, true)", [game.id, a.id]);
+    await t.as(a, "select report_content('game', $1, 'other', 'broken')", [game.id]);
+    await t.admin("update content_reports set note = 'for the owner', ai_verdict = 'keep', ai_reason = 'seems fine', ai_checked_at = now() where reporter_id = $1", [a.id]);
+    const data = await rpc<Record<string, Record<string, unknown>[]>>(a, "export_my_data");
+    expect(data.favorites.map((f) => f.game_id)).toEqual([game.id]);
+    expect(data.other_reports).toHaveLength(1);
+    expect(data.other_reports[0]).toMatchObject({ reason: "broken" });
+    for (const key of ["note", "ai_verdict", "ai_reason", "ai_checked_at"]) expect(data.other_reports[0]).not.toHaveProperty(key);
+    expect(data).toHaveProperty("upload_keys", []);
+    expect(data).toHaveProperty("suggested_games", []);
   });
 
   it("leaves out keys only a device or the server should know", async () => {

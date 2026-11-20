@@ -85,7 +85,11 @@ export function refreshBadges(): Promise<void> {
 export function setPlaying(gameId: string | null) {
   if (playing === gameId) return;
   playing = gameId;
-  refreshBadges();
+  // A request on its way still names the game before (or none): ask again right after it, or
+  // friends see "not playing" until the next look, two minutes later.
+  const before = running;
+  if (before) void before.then(refreshBadges);
+  else refreshBadges();
 }
 
 /** The pop-up was answered (joined, or "not now"): it goes away at once, not with the next request. */

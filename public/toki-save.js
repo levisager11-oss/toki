@@ -1,4 +1,4 @@
-/* Toki save support v10. Put this in the game's HTML <head>, before the game's own scripts.
+/* Toki save support v11. Put this in the game's HTML <head>, before the game's own scripts.
    Inside Toki, it keeps a copy of everything the game stores in localStorage, so progress
    survives closing the app (iPhone deletes storage of games shown inside other sites) and
    follows logged-in players to other devices. Outside Toki it does nothing.
@@ -21,8 +21,20 @@
   window.__tokiSave = 1;
   var top = window.parent;
   var inToki = top !== window;
-  var origin = (location.ancestorOrigins && location.ancestorOrigins[0]) ||
-    (document.referrer ? new URL(document.referrer).origin : "*");
+  var origin = location.ancestorOrigins && location.ancestorOrigins[0];
+  if (!origin) {
+    // Browsers that don't name the page around the game: where the game was opened from. Once
+    // the game goes to another of its own pages that is the game itself, so the first answer
+    // is kept for the visit; messages to the game's own address would reach nobody.
+    var from = "", KEEP = "__toki_from";
+    try { from = document.referrer ? new URL(document.referrer).origin : ""; } catch (e) { /* not an address */ }
+    if (from && from === location.origin) from = "";
+    try {
+      if (from) window.sessionStorage.setItem(KEEP, from);
+      else from = window.sessionStorage.getItem(KEEP) || "";
+    } catch (e) { /* no storage */ }
+    origin = from || "*";
+  }
   window.toki = window.toki || {};
   window.toki.score = function (n, board) {
     if (!inToki || typeof n !== "number" || !isFinite(n)) return;

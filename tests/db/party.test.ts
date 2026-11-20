@@ -177,6 +177,26 @@ describe("a party", () => {
     expect(await t.admin("select 1 from parties")).toHaveLength(0);
   });
 
+  it("takes one player's requests one after the other", async () => {
+    // Several invites and the link to share leave at the same moment; without the lock each
+    // made a party of its own and the second one failed on party_members' key.
+    await befriend(a, b);
+    const locks = () => t.admin<{ n: number }>("select count(*)::int as n from pg_locks where locktype = 'advisory' and granted");
+    await t.db.exec("begin");
+    try {
+      await invite(a, b);
+      expect((await locks())[0].n).toBe(1);
+      await rpc(a, "open_party", [multi.id, "ABCD"], ["uuid", "text"]);
+      expect((await locks())[0].n).toBe(1); // the same lock again
+      await join(b, (await ping(b)).invite!.party);
+      expect((await locks())[0].n).toBe(2); // b's own
+    } finally {
+      await t.db.exec("rollback");
+    }
+    expect((await locks())[0].n).toBe(0);
+    await expect(rpc(a, "party_lock", [a.id], ["uuid"])).rejects.toThrow(/permission denied/);
+  });
+
   it("can be made for a link to share", async () => {
     const mine = await rpc<Party>(a, "open_party", [multi.id, "ABCD"], ["uuid", "text"]);
     expect(mine).toMatchObject({ leader: a.id, code: "ABCD" });

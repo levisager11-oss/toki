@@ -107,6 +107,20 @@ describe("invites", () => {
   });
 });
 
+describe("an invite code", () => {
+  it("makes a developer an admin, and stays unused when it would change nothing", async () => {
+    await t.admin("insert into invites (code, role) values ('TOKI-CCCCCC-DDDDDD', 'creator'), ('TOKI-EEEEEE-FFFFFF', 'admin')");
+    const dev = await t.user("creator");
+    const redeem = (code: string) => t.as<{ r: string }>(dev, "select redeem_invite($1) as r", [code]);
+    await expect(redeem("TOKI-CCCCCC-DDDDDD")).rejects.toThrow(/no_change/);
+    expect((await t.admin<{ used_at: string | null }>("select used_at from invites where code = 'TOKI-CCCCCC-DDDDDD'"))[0].used_at).toBeNull();
+    expect((await redeem("TOKI-EEEEEE-FFFFFF"))[0].r).toBe("admin");
+    expect((await t.admin<{ role: string }>("select role from profiles where id = $1", [dev.id]))[0].role).toBe("admin");
+    await expect(redeem("TOKI-CCCCCC-DDDDDD")).rejects.toThrow(/no_change/);
+    await t.admin("delete from auth.users where id = $1", [dev.id]);
+  });
+});
+
 describe("reviewing applications", () => {
   it("makes the account a developer when an admin approves", async () => {
     const a = await apply(player);

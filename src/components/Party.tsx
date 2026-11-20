@@ -1,7 +1,7 @@
 // Parties: friends who play together stay together (src/lib/party.ts).
 // The bar under the top bar says who is in the party; the notice takes a member along when the
 // leader opens another room; the chat sits next to the game.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
 import { useGames } from "../lib/useGames";
@@ -216,18 +216,61 @@ export function usePartyOnGame({ game, room, me, joinPartyId, joinCode, onJoined
   }, [leads, gameId, me]);
 }
 
-/** The party's chat, next to the game. Nothing while the player is in no party. */
+// Whether the player put the party's chat away. Kept in this browser, so it stays that way
+// from game to game and the next time they play.
+const CHAT_HIDDEN = "toki.party.chatHidden";
+const hiddenListeners = new Set<() => void>();
+let chatHidden: boolean | null = null;
+function readChatHidden(): boolean {
+  if (chatHidden === null) {
+    try {
+      chatHidden = localStorage.getItem(CHAT_HIDDEN) === "1";
+    } catch {
+      chatHidden = false;
+    }
+  }
+  return chatHidden;
+}
+function setChatHidden(hidden: boolean) {
+  chatHidden = hidden;
+  try {
+    if (hidden) localStorage.setItem(CHAT_HIDDEN, "1");
+    else localStorage.removeItem(CHAT_HIDDEN);
+  } catch {
+    /* no storage: this visit remembers it */
+  }
+  hiddenListeners.forEach((l) => l());
+}
+function watchChatHidden(listener: () => void) {
+  hiddenListeners.add(listener);
+  return () => {
+    hiddenListeners.delete(listener);
+  };
+}
+/** True while the party's chat is put away: the game then has the whole width. */
+export const usePartyChatHidden = () => useSyncExternalStore(watchChatHidden, readChatHidden, () => false);
+
+/**
+ * The party's chat, next to the game. Nothing while the player is in no party. The player can
+ * put it away: only its head stays, under the game, and messages aren't loaded meanwhile.
+ */
 export function PartyChat() {
   const { t } = useI18n();
   const { party } = useBadges();
+  const hidden = usePartyChatHidden();
   if (!isParty(party) || !party.chat) return null;
   return (
-    <aside className="party-chat" aria-label={t("party.chat")}>
+    <aside className={`party-chat ${hidden ? "is-hidden" : ""}`} aria-label={t("party.chat")}>
       <div className="party-chat-head">
         <b>{t("party.chat")}</b>
         <span className="sub">{party.members.map((m) => `@${m.username}`).join(", ")}</span>
+        <button type="button" className="linkish" aria-expanded={!hidden} aria-controls="party-chat-body" onClick={() => setChatHidden(!hidden)}>
+          {t(hidden ? "party.chat.show" : "party.chat.hide")}
+        </button>
       </div>
-      <ChatView key={party.chat} chatId={party.chat} kind="party" compact />
+      <div id="party-chat-body" className="party-chat-body" hidden={hidden}>
+        {!hidden && <ChatView key={party.chat} chatId={party.chat} kind="party" compact />}
+      </div>
     </aside>
   );
 }

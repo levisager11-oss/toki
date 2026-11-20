@@ -51,14 +51,22 @@ describe("which game a run may upload to", () => {
       game_git: [
         { game_id: "g1", repo: "lu/debt-drifter", branch: "main", build: "action" },
         { game_id: "g2", repo: "lu/moon-hop", branch: "main", build: "none" },
+        { game_id: "g3", repo: "lu/space_shooter", branch: "main", build: "action" },
       ],
-      games: [{ id: "g1", created_by: "dev" }, { id: "g2", created_by: "dev" }],
+      games: [{ id: "g1", created_by: "dev" }, { id: "g2", created_by: "dev" }, { id: "g3", created_by: "dev" }],
       profiles: [{ id: "dev", username: "lu", role: "creator" }],
     });
   const claims = (c: Partial<{ repository: string; ref: string }>) => ({ repository: "lu/Debt-Drifter", ref: "refs/heads/main", sha: "a".repeat(40), ...c });
 
   it("is the game that follows the run's repository and branch and is built by GitHub Actions", async () => {
     expect(await gameForAction(db(), claims({}))).toEqual({ game_id: "g1", user: { id: "dev", username: "lu", role: "creator" } });
+  });
+
+  it("also finds a repository with an underscore in its name", async () => {
+    expect(await gameForAction(db(), claims({ repository: "lu/space_shooter" }))).toMatchObject({ game_id: "g3" });
+    // "_" stands for any character in the search, never in the answer.
+    expect(await gameForAction(db(), claims({ repository: "lu/space-shooter" }))).toBeNull();
+    expect(await gameForAction(db(), claims({ repository: "lu/debt_drifter" }))).toBeNull();
   });
 
   it("is none for other branches, pull requests, other repositories, or games Toki reads as they are", async () => {

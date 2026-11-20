@@ -1099,7 +1099,11 @@ main.content:focus { outline: none; }
 .invite-pop.party-follow { bottom: auto; top: calc(var(--top-h, 75px) + var(--party-h, 0px) + 12px); }
 .party-chat { order: 1; display: flex; flex-direction: column; min-width: 0; }
 .party-chat-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; padding: 8px 12px; border: 1px solid var(--line); border-bottom: 0; background: var(--surface); }
-.party-chat-head .sub { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.party-chat-head .sub { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1 1 0; }
+.party-chat-head .linkish { margin-left: auto; flex: none; font-size: 13px; padding: 4px 0; }
+.party-chat.is-hidden .party-chat-head { border-bottom: 1px solid var(--line); }
+.party-chat-body { display: flex; flex-direction: column; min-width: 0; }
+.party-chat-body[hidden] { display: none; }
 .party-chat .chat-view.compact .messages { height: 220px; }
 @media (min-width: 1180px) {
   /* Wide screens: the chat stands next to the game and is as tall as it. */
@@ -1107,6 +1111,7 @@ main.content:focus { outline: none; }
   .player.has-party > * { grid-column: 1 / -1; }
   .player.has-party > .frame:not(.is-full):not(.pseudo-full) { grid-column: 1; }
   .player.has-party > .party-chat { grid-column: 2; grid-row: 1; contain: size; }
+  .player.has-party > .party-chat .party-chat-body { flex: 1; min-height: 0; }
   .player.has-party > .party-chat .chat-view { flex: 1; min-height: 0; }
   .player.has-party > .party-chat .chat-view.compact .messages { height: auto; flex: 1 1 0; }
 }

@@ -126,12 +126,23 @@ export function useDaily(userId: string | undefined): Daily | null | undefined {
 export function useMinuteClock(): Date {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
-    const id = setInterval(() => {
+    // The day is compared, not the minute after midnight: a phone that was locked, or a computer
+    // that slept, over midnight (UTC) looks again much later.
+    let day = utcDay(new Date());
+    const look = () => {
       const next = new Date();
       setNow(next);
-      if (msUntilNextDay(next) > DAY_MS - 60_000) refreshDaily();
-    }, 60_000);
-    return () => clearInterval(id);
+      if (utcDay(next) === day) return;
+      day = utcDay(next);
+      refreshDaily();
+    };
+    const id = setInterval(look, 60_000);
+    const onShow = () => document.visibilityState === "visible" && look();
+    document.addEventListener("visibilitychange", onShow);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onShow);
+    };
   }, []);
   return now;
 }

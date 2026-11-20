@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useI18n, type Key } from "../lib/i18n";
 import { gameUpdate, updateKeys } from "../lib/gameUpdates";
@@ -18,6 +18,8 @@ export function Notifications() {
   const [list, setList] = useState<Notification[] | null>(null);
   const [err, setErr] = useState(false);
   const hasNew = unread > 0;
+  // The ones that were new when the page opened stay marked, also after the list loads again.
+  const fresh = useRef(new Set<number>());
 
   // Loads again when a new one arrives while the page is open.
   useEffect(() => {
@@ -25,6 +27,7 @@ export function Notifications() {
     listNotifications().then(
       (n) => {
         if (!alive) return;
+        n.forEach((x) => !x.read_at && fresh.current.add(x.id));
         setList(n);
         // Seen now: the bell goes back to 0, the list still shows which ones are new.
         if (n.some((x) => !x.read_at)) markNotificationsRead().then(refreshBadges, () => {});
@@ -141,7 +144,7 @@ export function Notifications() {
           {list.map((n) => {
             const { line, to } = text(n);
             return (
-              <li key={n.id} className={n.read_at ? "" : "new"}>
+              <li key={n.id} className={n.read_at && !fresh.current.has(n.id) ? "" : "new"}>
                 <Link to={to}>
                   {n.actor ? <Avatar person={n.actor} /> : <span className="avatar room-icon" aria-hidden="true">!</span>}
                   <span>
