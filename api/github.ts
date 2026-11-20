@@ -5,6 +5,7 @@ import { serviceDb } from "../server/db.js";
 import { githubConfigured, serverEnv } from "../server/env.js";
 import { deployCommit, gamesForPush, validSignature, type PushEvent } from "../server/gitDeploy.js";
 import { github, GitHubError } from "../server/github.js";
+import { allows } from "../server/githubAccess.js";
 import { hostingDeps, r2Config } from "../server/hosting.js";
 import { body, context, json } from "../server/http.js";
 import { withSecrets } from "../server/secrets.js";
@@ -20,17 +21,23 @@ export async function GET(request: Request) {
   const authUrl = `https://github.com/login/oauth/authorize?client_id=${encodeURIComponent(ctx.env.github.clientId)}`;
   if (new URL(request.url).searchParams.get("action") !== "repos") return json({ configured: true, installUrl, authUrl });
 
-  const installs = await ctx.db.select<{ installation_id: number; account_login: string }>(
+  const installs = await ctx.db.select<{ installation_id: number; account_login: string; repos: string[] | null }>(
     "github_installations",
-    `user_id=eq.${ctx.user.id}&select=installation_id,account_login&order=created_at`,
+    `user_id=eq.${ctx.user.id}&select=installation_id,account_login,repos&order=created_at`,
   );
   const repos: { installation_id: number; account: string; repo: string; private: boolean }[] = [];
   const gone: number[] = [];
   let unreachable = false;
+  // Repositories the app reaches that this developer's connection doesn't list: not theirs to
+  // use, or added on GitHub since they connected (connecting again reads the list anew).
+  let hidden = 0;
   await Promise.all(
     installs.map(async (i) => {
       try {
-        for (const r of await gh.repos(i.installation_id)) repos.push({ installation_id: i.installation_id, account: i.account_login, repo: r.repo, private: r.private });
+        for (const r of await gh.repos(i.installation_id)) {
+          if (allows(i, r.repo)) repos.push({ installation_id: i.installation_id, account: i.account_login, repo: r.repo, private: r.private });
+          else hidden++;
+        }
       } catch (e) {
         // The app was uninstalled on GitHub (404): forget the installation. A 401 is about Toki's own
         // app key (a clock difference, a key being changed), not this installation: forgetting then
@@ -43,7 +50,8 @@ export async function GET(request: Request) {
   );
   if (gone.length) await ctx.db.remove("github_installations", `user_id=eq.${ctx.user.id}&installation_id=in.(${gone.join(",")})`);
   repos.sort((a, b) => a.repo.localeCompare(b.repo));
-  return json({ configured: true, installUrl, authUrl, installations: installs.filter((i) => !gone.includes(i.installation_id)), repos, unreachable });
+  const installations = installs.filter((i) => !gone.includes(i.installation_id)).map((i) => ({ installation_id: i.installation_id, account_login: i.account_login }));
+  return json({ configured: true, installUrl, authUrl, installations, repos, unreachable, hidden });
 }
 
 /** A push to a repository: games that follow its branch get the new version (in the background). */
@@ -85,7 +93,7 @@ export async function POST(request: Request) {
     const installs = await github(ctx.env.github).userInstallations(b.code);
     await ctx.db.remove("github_installations", `user_id=eq.${ctx.user.id}`);
     if (installs.length)
-      await ctx.db.insert("github_installations", installs.map((i) => ({ user_id: ctx.user.id, installation_id: i.id, account_login: i.account.slice(0, 100) })), "return=minimal");
+      await ctx.db.insert("github_installations", installs.map((i) => ({ user_id: ctx.user.id, installation_id: i.id, account_login: i.account.slice(0, 100), repos: i.repos ? i.repos.slice(0, 2000) : null })), "return=minimal");
     return json({ installations: installs.map((i) => ({ installation_id: i.id, account_login: i.account })) });
   } catch (e) {
     return json({ error: e instanceof GitHubError ? "github_error" : "error" }, 502);

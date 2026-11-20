@@ -185,11 +185,11 @@ describe("a party", () => {
     await t.db.exec("begin");
     try {
       await invite(a, b);
-      expect((await locks())[0].n).toBe(1);
+      expect((await locks())[0].n).toBe(2); // a's party, and a's limits (invites per 10 minutes)
       await rpc(a, "open_party", [multi.id, "ABCD"], ["uuid", "text"]);
-      expect((await locks())[0].n).toBe(1); // the same lock again
+      expect((await locks())[0].n).toBe(2); // the same party lock again
       await join(b, (await ping(b)).invite!.party);
-      expect((await locks())[0].n).toBe(2); // b's own
+      expect((await locks())[0].n).toBe(3); // b's own party
     } finally {
       await t.db.exec("rollback");
     }

@@ -205,6 +205,12 @@ export function GitHubFollow({ gameId, row, choice, onChoice, onChanged }: {
               {" · "}
               <button type="button" className="linkish" onClick={loadRepos}>{t("git.refreshRepos")}</button>
             </small>
+            {!!info.hidden && (
+              <small>
+                {t("connect.hiddenRepos")}{" "}
+                <button type="button" className="linkish" onClick={connectGitHub}>{t("connect.githubAgain")}</button>
+              </small>
+            )}
             {choice && (
               <div className="pair">
                 <div>

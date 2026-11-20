@@ -457,11 +457,12 @@ export async function findRepo(
   installations: number[],
   game: { play_url: string; slug?: string },
   picked?: { installation_id: number; repo: string } | null,
+  allows: (installation: number, repo: string) => boolean = () => true,
 ): Promise<RepoLook> {
   const pages = pagesRepos(game.play_url);
   const names = [...new Set([siteName(game.play_url), plain(game.slug ?? "")].filter((n) => n.length >= 3))];
   const reachable: { id: number; repo: string; defaultBranch: string }[] = [];
-  for (const id of installations) for (const r of await gh.repos(id).catch(() => [])) reachable.push({ id, ...r });
+  for (const id of installations) for (const r of await gh.repos(id).catch(() => [])) if (allows(id, r.repo)) reachable.push({ id, ...r });
 
   const targets: { id: number; repo: string; defaultBranch: string; sub: string }[] = [];
   const add = (r: (typeof reachable)[number] | undefined, sub = "") => {
@@ -525,6 +526,8 @@ export interface MoveResult {
 export interface GitHubAccess {
   gh: GitHubClient;
   installations: number[];
+  /** Whether the developer may use this repository of this installation (server/githubAccess.ts). */
+  allows?: (installation: number, repo: string) => boolean;
 }
 
 const hostOf = (u: string) => {
@@ -578,7 +581,7 @@ export interface MoveCheck extends SavesVerdict {
 export async function checkMove(deps: Deps, user: HostUser, gameId: string, git: GitHubAccess | null, o: CrawlOptions = {}): Promise<MoveCheck> {
   const g = await movable(deps, user, gameId);
   const { verdict } = await look(deps, g, o);
-  const repo = git ? await findRepo(git.gh, git.installations, g) : noRepo(g.play_url);
+  const repo = git ? await findRepo(git.gh, git.installations, g, null, git.allows) : noRepo(g.play_url);
   return { ...verdict, github: repo.found, suggestRepo: repo.found ? null : repo.repo };
 }
 
@@ -613,7 +616,7 @@ export async function moveGame(deps: Deps, user: HostUser, gameId: string, o: Mo
   const g = await movable(deps, user, gameId);
   const from = g.play_url;
   if (!o.git) throw new HostingError("github_required", 409);
-  const repo = await findRepo(o.git.gh, o.git.installations, g, o.repo);
+  const repo = await findRepo(o.git.gh, o.git.installations, g, o.repo, o.git.allows);
   if (!repo.reached) throw new HostingError("repo_required", 409, repo.repo ?? "");
   // Loading from GitHub takes time too: then the old address only gets a shorter look.
   const { got, verdict } = await look(deps, g, { ...o, extra: repo.candidates, ...(repo.found ? { deadline: Math.min(o.deadline ?? CRAWL_MS, 120_000) } : {}) });

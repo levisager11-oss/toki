@@ -7,6 +7,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { gunzipSync } from "node:zlib";
 import type { Db } from "./db.js";
 import { GitHubError, type GitHubClient, type RepoClient } from "./github.js";
+import { allows } from "./githubAccess.js";
 import { finishUpload, HostingError, startUpload, type Deps, type HostUser } from "./hosting.js";
 import { cleanPath, MAX_GAME_BYTES, readTokiJson } from "../src/lib/hostingRules.js";
 import { isSourcePage } from "./assist/scan.js";
@@ -133,8 +134,11 @@ export async function openRepo(db: Db, gh: GitHubClient, row: GitRow, ownerId?: 
     if (!lost(e)) throw e;
   }
   const users = [...new Set([ownerId, row.created_by].filter((u): u is string => !!u))];
-  const mine = users.length ? await db.select<{ installation_id: number }>("github_installations", `user_id=in.(${users.join(",")})&select=installation_id`) : [];
-  for (const id of new Set(mine.map((i) => Number(i.installation_id)))) {
+  const mine = users.length
+    ? await db.select<{ installation_id: number; repos: string[] | null }>("github_installations", `user_id=in.(${users.join(",")})&select=installation_id,repos`)
+    : [];
+  // Only connections that let their developer use this repository (githubAccess.ts).
+  for (const id of new Set(mine.filter((i) => allows(i, row.repo)).map((i) => Number(i.installation_id)))) {
     if (tried.has(id)) continue;
     try {
       return await reach(id);
@@ -249,7 +253,11 @@ export async function gamesForPush(db: Db, ev: PushEvent): Promise<{ rows: GitRo
   // gives it a new id) follows this push too, when this connection is one of its developer's.
   const others = rows.filter((r) => Number(r.installation_id) !== from && r.created_by);
   const owners = others.length
-    ? new Set((await db.select<{ user_id: string }>("github_installations", `installation_id=eq.${from}&select=user_id`)).map((i) => i.user_id))
+    ? new Set(
+        (await db.select<{ user_id: string; repos: string[] | null }>("github_installations", `installation_id=eq.${from}&select=user_id,repos`))
+          .filter((i) => allows(i, repo))
+          .map((i) => i.user_id),
+      )
     : new Set<string>();
   const mine: GitRow[] = [];
   for (const r of rows) {

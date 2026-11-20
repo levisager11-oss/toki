@@ -232,6 +232,8 @@ export interface GitHubInfo {
   authUrl?: string | null;
   /** Some connected account didn't answer just now: its repositories are missing from the list */
   unreachable?: boolean;
+  /** Repositories the app reaches that this connection doesn't list (added on GitHub since, or not this developer's to use) */
+  hidden?: number;
   installations?: { installation_id: number; account_login: string }[];
   repos?: { installation_id: number; account: string; repo: string; private: boolean }[];
 }

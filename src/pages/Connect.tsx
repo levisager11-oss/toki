@@ -128,6 +128,12 @@ export function Connect() {
             </ul>
             {!gh.repos?.length && <p className="hint">{t("connect.noRepos")}</p>}
             {gh.unreachable && <p className="check warn">{t("connect.githubLoadError")}</p>}
+            {!!gh.hidden && (
+              <p className="hint">
+                {t("connect.hiddenRepos")}{" "}
+                <button type="button" className="linkish" onClick={() => window.location.assign(githubConnectLink(gh))}>{t("connect.githubAgain")}</button>
+              </p>
+            )}
             {/* GitHub's page for this never comes back to Toki: it opens in a new tab, and the list is read again on return. */}
             <button type="button" className="linkish" onClick={() => githubManage(gh.installUrl!, () => setReload((n) => n + 1))}>{t("connect.githubMore")}</button>
           </>

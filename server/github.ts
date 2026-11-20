@@ -40,6 +40,8 @@ export interface MergedPull {
 export interface Installation {
   id: number;
   account: string;
+  /** The repositories this person can reach there; null: all of them (their own account). See githubAccess.ts. */
+  repos: string[] | null;
 }
 
 export function github(cfg: ServerEnv["github"], fetchImpl: typeof fetch = fetch) {
@@ -94,10 +96,26 @@ export function github(cfg: ServerEnv["github"], fetchImpl: typeof fetch = fetch
       });
       const auth = (await res.json()) as { access_token?: string; error?: string };
       if (!auth.access_token) throw new GitHubError(`GitHub login: ${auth.error ?? res.status}`, 401);
-      const list = await call<{ installations: { id: number; app_id?: number; account: { login: string } }[] }>("/user/installations?per_page=100", auth.access_token);
-      return list.installations
-        .filter((i) => i.app_id === undefined || String(i.app_id) === cfg.appId)
-        .map((i) => ({ id: i.id, account: i.account.login }));
+      const token = auth.access_token;
+      const [me, list] = await Promise.all([
+        call<{ id: number }>("/user", token),
+        call<{ installations: { id: number; app_id?: number; account: { login: string; id?: number } }[] }>("/user/installations?per_page=100", token),
+      ]);
+      const mine = list.installations.filter((i) => i.app_id === undefined || String(i.app_id) === cfg.appId);
+      return Promise.all(
+        mine.map(async (i) => {
+          // Their own account: everything the installation reaches, also what is made later.
+          if (typeof me?.id === "number" && i.account.id === me.id) return { id: i.id, account: i.account.login, repos: null };
+          // Someone else's (an organisation): only what this person can reach there.
+          const repos: string[] = [];
+          for (let page = 1; page <= 20; page++) {
+            const r = await call<{ total_count: number; repositories: { full_name: string }[] }>(`/user/installations/${i.id}/repositories?per_page=100&page=${page}`, token);
+            repos.push(...r.repositories.map((x) => x.full_name));
+            if (r.repositories.length < 100 || repos.length >= r.total_count) break;
+          }
+          return { id: i.id, account: i.account.login, repos };
+        }),
+      );
     },
 
     async repos(installationId: number): Promise<{ repo: string; private: boolean; defaultBranch: string }[]> {

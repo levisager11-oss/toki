@@ -19,6 +19,8 @@ export interface ActionClaims {
   ref: string;
   sha: string;
   event_name?: string;
+  /** GitHub's number for the repository: it stays when the repository is renamed, and is never given out twice. */
+  repository_id?: string;
 }
 
 export class ActionsAuthError extends Error {}
@@ -76,7 +78,12 @@ export async function verifyActionToken(token: string, o: { fetch?: typeof fetch
   const ref = typeof body.ref === "string" ? body.ref : "";
   const sha = typeof body.sha === "string" ? body.sha : "";
   if (!/^[\w.-]+\/[\w.-]+$/.test(repository) || !ref || !/^[0-9a-f]{40}$/.test(sha)) throw new ActionsAuthError("incomplete token");
-  return { repository, ref, sha, event_name: typeof body.event_name === "string" ? body.event_name : undefined };
+  const id = typeof body.repository_id === "string" || typeof body.repository_id === "number" ? String(body.repository_id) : "";
+  return {
+    repository, ref, sha,
+    event_name: typeof body.event_name === "string" ? body.event_name : undefined,
+    repository_id: /^[1-9]\d{0,18}$/.test(id) ? id : undefined,
+  };
 }
 
 export interface ActionGame {
@@ -94,15 +101,22 @@ export async function gameForAction(db: Db, c: ActionClaims): Promise<ActionGame
   const branch = c.ref.slice("refs/heads/".length);
   // The name is letters, digits, ".", "-" and "_" (readClaims). "_" stands for any one character
   // in this search, so the exact comparison below decides.
-  const rows = await db.select<{ game_id: string; repo: string }>(
+  const rows = await db.select<{ game_id: string; repo: string; repo_id: number | string | null }>(
     "game_git",
-    `branch=eq.${encodeURIComponent(branch)}&build=eq.action&repo=ilike.${encodeURIComponent(c.repository)}&select=game_id,repo`,
+    `branch=eq.${encodeURIComponent(branch)}&build=eq.action&repo=ilike.${encodeURIComponent(c.repository)}&select=game_id,repo,repo_id`,
   );
   const row = rows.find((r) => r.repo.toLowerCase() === c.repository.toLowerCase());
   if (!row) return null;
+  // The same name isn't enough: a name can be registered again by someone else. The game keeps
+  // the number of the repository that first uploaded to it; another repository is refused.
+  const known = row.repo_id === null || row.repo_id === undefined ? "" : String(row.repo_id);
+  if (known && known !== c.repository_id) return null;
   const [g] = await db.select<{ created_by: string | null }>("games", `id=eq.${row.game_id}&select=created_by`);
   if (!g?.created_by) return null;
   const [p] = await db.select<ActionGame["user"]>("profiles", `id=eq.${g.created_by}&select=id,username,role`);
   if (!p || p.role === "player") return null;
+  if (!known && c.repository_id) {
+    await db.update("game_git", `game_id=eq.${row.game_id}&repo_id=is.null`, { repo_id: Number(c.repository_id) }).catch(() => {});
+  }
   return { game_id: row.game_id, user: p };
 }

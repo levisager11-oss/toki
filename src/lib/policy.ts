@@ -19,6 +19,8 @@ export interface PolicyFacts {
 
 /** The day the texts in src/lib/texts/legal*.ts were last changed. Change it with them. */
 export const LEGAL_DATE = "2026-11-13";
+/** The same for the privacy policy alone, when only it changed (the terms keep their date). */
+export const PRIVACY_DATE = "2026-11-20";
 
 /**
  * AI services by the host an admin enters on the AI page, as the policy names them: the company
@@ -39,7 +41,7 @@ export const ANTHROPIC_HOST = "api.anthropic.com";
 export const aiServiceName = (host: string): string | null => AI_SERVICES[host] ?? null;
 
 /** The later of the texts' date and the settings' date, as "YYYY-MM-DD". */
-export function policyDate(facts: PolicyFacts | null, textDate = LEGAL_DATE): string {
+export function policyDate(facts: PolicyFacts | null, textDate = PRIVACY_DATE): string {
   const changed = facts?.changed_at?.slice(0, 10) ?? "";
   return changed > textDate ? changed : textDate;
 }

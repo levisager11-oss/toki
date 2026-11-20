@@ -508,6 +508,8 @@ export const devEn = {
   "connect.githubConnect": "Connect GitHub",
   "connect.githubHelp": "You choose which repositories Toki can use. Toki only opens pull requests; you decide what gets merged.",
   "connect.githubMore": "Add repositories or accounts",
+  "connect.hiddenRepos": "Some repositories of this account aren't shown: Toki only lists the ones GitHub says you can use. Just got access to one?",
+  "connect.githubAgain": "Connect GitHub again",
   "connect.githubAccount": "Connected: {name}",
   "connect.disconnect": "Disconnect",
   "connect.disconnectSure": "Really disconnect?",
