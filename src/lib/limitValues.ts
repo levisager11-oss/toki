@@ -9,14 +9,14 @@ export const DEFAULT_LIMITS = {
   ideas_day: 3, ideas_month: 10, idea_replies_hour: 30,
   feedback_posts_hour: 5, feedback_posts_day: 20, feedback_replies_hour: 30,
   messages_20s: 8, messages_hour: 200, groups_day: 10, group_size: 20, reports_day: 30,
-  friend_requests_day: 30, game_invites_10min: 30, party_size: 8,
+  friend_requests_day: 30, game_invites_10min: 30, party_size: 8, trades_day: 20, reviews_day: 10,
   applications_month: 3,
   ai_translate: 120, ai_similar: 30, ai_suggest: 10, ai_help: 40, ai_release: 30, ai_describe: 30, ai_summary: 30, ai_learn: 10, ai_connect: 60, ai_moderate: 30,
   uploads_hour: 30, storage_mb: 1024,
 } as const;
 export const DEFAULT_KEEP = {
   chat_public: 7, chat_private: 30, notifications: 30, notifications_count: 100,
-  reports_handled: 30, reports_all: 60, ideas: 180, translations: 30, suggestions: 7, connect_runs: 90,
+  reports_handled: 30, reports_all: 60, ideas: 180, translations: 30, suggestions: 7, connect_runs: 90, trades: 30, activity: 30,
 } as const;
 
 export type LimitKey = keyof typeof DEFAULT_LIMITS;
@@ -26,6 +26,7 @@ export type KeepKey = keyof typeof DEFAULT_KEEP;
 export const RATE_ERRORS = [
   "ideas_day", "ideas_month", "idea_replies_hour", "feedback_posts_hour", "feedback_posts_day", "feedback_replies_hour",
   "messages_20s", "messages_hour", "groups_day", "reports_day", "friend_requests_day", "game_invites_10min", "applications_month",
+  "trades_day", "reviews_day",
 ] as const satisfies readonly LimitKey[];
 export type LimitErrorKey = `limit.err.${(typeof RATE_ERRORS)[number]}`;
 

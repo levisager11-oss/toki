@@ -55,7 +55,8 @@ export interface Game {
   moved_from?: string | null;
   moved_at?: string | null;
   author?: { username: string } | null;
-  stats?: { plays: number; likes: number } | null;
+  /** reviews: how many; stars: all their stars together (the average is stars / reviews) */
+  stats?: { plays: number; likes: number; reviews?: number; stars?: number } | null;
 }
 
 export const CATEGORIES = [

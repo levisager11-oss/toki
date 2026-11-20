@@ -1,7 +1,7 @@
 import { supabase } from "./supabase";
 import type { Game } from "./types";
 
-const SELECT = "*, author:profiles!games_created_by_fkey(username), stats:game_stats(plays, likes)";
+const SELECT = "*, author:profiles!games_created_by_fkey(username), stats:game_stats(plays, likes, reviews, stars)";
 
 export async function listGames(): Promise<Game[]> {
   const { data, error } = await supabase.from("games").select(SELECT).order("created_at", { ascending: false });

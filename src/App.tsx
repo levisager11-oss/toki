@@ -47,6 +47,11 @@ const ResetPassword = page(() => import("./pages/ResetPassword").then((m) => ({ 
 const Ideas = page(() => import("./pages/Ideas").then((m) => ({ default: m.Ideas })), "player");
 const Idea = page(() => import("./pages/Idea").then((m) => ({ default: m.Idea })), "player");
 const Invites = page(() => import("./pages/Invites").then((m) => ({ default: m.Invites })), "player", "dev");
+const Shop = page(() => import("./pages/Shop").then((m) => ({ default: m.Shop })), "player");
+const TopPlayers = page(() => import("./pages/TopPlayers").then((m) => ({ default: m.TopPlayers })), "player");
+const Feed = page(() => import("./pages/Feed").then((m) => ({ default: m.Feed })), "player");
+const Trades = page(() => import("./pages/Trades").then((m) => ({ default: m.Trades })), "player");
+const NewTrade = page(() => import("./pages/Trades").then((m) => ({ default: m.NewTrade })), "player");
 const Legal = page(() => import("./pages/Legal").then((m) => ({ default: m.Legal })), "legal");
 
 /** Shown while a page's code is still downloading (slow connections); after a short wait, so fast loads don't flash. */
@@ -98,6 +103,11 @@ export function App() {
           <Route path="friends" element={<RequireMember player><Later><Friends /></Later></RequireMember>} />
           <Route path="chat" element={<RequireMember player><Later><Chat /></Later></RequireMember>} />
           <Route path="chat/:id" element={<RequireMember player><Later><Chat /></Later></RequireMember>} />
+          <Route path="shop" element={<Later><Shop /></Later>} />
+          <Route path="top" element={<Later><TopPlayers /></Later>} />
+          <Route path="feed" element={<RequireMember player><Later><Feed /></Later></RequireMember>} />
+          <Route path="trades" element={<RequireMember player><Later><Trades /></Later></RequireMember>} />
+          <Route path="trades/new" element={<RequireMember player><Later><NewTrade /></Later></RequireMember>} />
           <Route path="notifications" element={<RequireMember player><Later><Notifications /></Later></RequireMember>} />
           <Route path="ideas" element={<RequireMember player><Later><Ideas /></Later></RequireMember>} />
           <Route path="ideas/:id" element={<RequireMember player><Later><Idea /></Later></RequireMember>} />

@@ -9,6 +9,7 @@ import {
 } from "../lib/social";
 import { useAuth } from "../lib/auth";
 import { Avatar } from "../components/Avatar";
+import { Name, PlayerLevel } from "../components/Looks";
 import { useTitle } from "../lib/useTitle";
 import { InviteToGame } from "../components/GameInvite";
 
@@ -87,7 +88,7 @@ export function Friends() {
             const status = known.get(p.id);
             return (
               <li key={p.id}>
-                <Link to={`/u/${p.username}`} className="person"><Avatar person={p} /><b>@{p.username}</b></Link>
+                <Link to={`/u/${p.username}`} className="person"><Avatar person={p} /><Name person={p} /></Link>
                 {status === "friend" ? <span className="sub">{t("soc.isFriend")}</span>
                   : status === "sent" ? <span className="sub">{t("soc.requestSent")}</span>
                   : status === "received" ? <button type="button" className="btn" disabled={busy === p.id} onClick={() => act(p.id, () => answerFriendRequest(p.id, true))}>{t("soc.accept")}</button>
@@ -104,7 +105,7 @@ export function Friends() {
           <ul className="people">
             {received.map((p) => (
               <li key={p.id}>
-                <Link to={`/u/${p.username}`} className="person"><Avatar person={p} /><b>@{p.username}</b></Link>
+                <Link to={`/u/${p.username}`} className="person"><Avatar person={p} /><Name person={p} /></Link>
                 <div className="actions">
                   <button type="button" className="btn primary" disabled={busy === p.id} onClick={() => act(p.id, () => answerFriendRequest(p.id, true))}>{t("soc.accept")}</button>
                   <button type="button" className="btn" disabled={busy === p.id} onClick={() => act(p.id, () => answerFriendRequest(p.id, false))}>{t("soc.decline")}</button>
@@ -130,7 +131,7 @@ export function Friends() {
                 <Link to={`/u/${f.username}`} className="person">
                   <Avatar person={f} online={on} />
                   <span>
-                    <b>@{f.username}</b>
+                    <span><Name person={f} /><PlayerLevel id={f.id} /></span>
                     <span className="sub">
                       {g ? <>{t("soc.playingNow")} {g.title}</> : on ? t("soc.online") : f.last_seen ? t("soc.lastSeen", { when: ago(f.last_seen, lang) }) : t("soc.offline")}
                     </span>
@@ -153,7 +154,7 @@ export function Friends() {
           <ul className="people">
             {sent.map((p) => (
               <li key={p.id}>
-                <Link to={`/u/${p.username}`} className="person"><Avatar person={p} /><b>@{p.username}</b></Link>
+                <Link to={`/u/${p.username}`} className="person"><Avatar person={p} /><Name person={p} /></Link>
                 <button type="button" className="btn" disabled={busy === p.id} onClick={() => act(p.id, () => removeFriend(p.id))}>{t("soc.cancelRequest")}</button>
               </li>
             ))}
@@ -167,7 +168,7 @@ export function Friends() {
           <ul className="people">
             {blocked.map((p) => (
               <li key={p.id}>
-                <span className="person"><Avatar person={p} /><b>@{p.username}</b></span>
+                <span className="person"><Avatar person={p} /><Name person={p} /></span>
                 <button type="button" className="btn" disabled={busy === p.id} onClick={() => act(p.id, () => unblockUser(p.id))}>{t("soc.unblock")}</button>
               </li>
             ))}

@@ -3,6 +3,7 @@
 // supabase/migrations/20261128090000_achievements.sql; the list's own rules: ./achievementRules.ts.
 // Players without an account keep their unlocks in this browser until they log in.
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { progressMaybeChanged } from "./cosmetics";
 import { supabase } from "./supabase";
 import { addGuestUnlock, readGuestUnlocks, sentId, type Achievement, type GuestUnlock } from "./achievementRules";
 import type { Game } from "./types";
@@ -40,7 +41,12 @@ export async function playerAchievements(userId: string, limit = 24): Promise<{ 
 export const saveAchievements = (gameId: string, list: Achievement[]) =>
   rpc<number>("set_achievements", { p_game: gameId, p_list: list, p_mode: "replace" });
 
-const unlock = (gameId: string, id: string) => rpc<{ new: boolean; at?: string } | null>("unlock_achievement", { p_game: gameId, p_id: id });
+const unlock = (gameId: string, id: string) =>
+  rpc<{ new: boolean; at?: string } | null>("unlock_achievement", { p_game: gameId, p_id: id }).then((r) => {
+    // A new achievement gives XP and tokens (src/lib/cosmetics.ts).
+    if (r?.new) progressMaybeChanged();
+    return r;
+  });
 
 // ---------- without an account ----------
 

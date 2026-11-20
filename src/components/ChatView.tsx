@@ -11,6 +11,9 @@ import {
 } from "../lib/social";
 import { TranslateToggle, useTranslate } from "./AiBits";
 import { Avatar } from "./Avatar";
+import { Name, Sticker } from "./Looks";
+import { parseSticker, STICKER_PACKS, stickerMessage } from "../lib/stickers";
+import { useCatalog, useCollection } from "../lib/cosmetics";
 import { Linkify } from "./Linkify";
 import { useDraft } from "../lib/useDraft";
 
@@ -47,6 +50,11 @@ export function ChatView({ chatId, kind, compact, unread }: {
   const stick = useRef(true); // keep showing the newest message while the list is scrolled to the bottom
   const people = useRef(new Map<string, Person>());
   const me = session?.user.id;
+  // Sticker packs the player has (bought in the shop).
+  const catalog = useCatalog();
+  const owned = useCollection(me);
+  const packs = [...(owned.ids ?? [])].map((id) => catalog?.get(id)).filter((c) => c?.kind === "stickers" && c.style.pack).map((c) => c!.style.pack!);
+  const [picking, setPicking] = useState(false);
   const isAdmin = profile?.role === "admin";
   const remember = (ms: Message[]) => ms.forEach((m) => m.author && people.current.set(m.author_id, m.author));
 
@@ -163,9 +171,9 @@ export function ChatView({ chatId, kind, compact, unread }: {
     });
   };
 
-  const send = async (e?: FormEvent) => {
+  const send = async (e?: FormEvent, sticker?: string) => {
     e?.preventDefault();
-    const body = text.trim();
+    const body = sticker ?? text.trim();
     if (!body || sending) return;
     setErr("");
     setSending(true);
@@ -174,7 +182,8 @@ export function ChatView({ chatId, kind, compact, unread }: {
       remember([m]);
       stick.current = true;
       setMessages((list) => (list && !list.some((x) => x.id === m.id) ? [...list, m] : list));
-      setText("");
+      if (sticker) setPicking(false);
+      else setText("");
     } catch (e) {
       setErr(t(e instanceof SocialError ? e.key : "error"));
     } finally {
@@ -236,7 +245,7 @@ export function ChatView({ chatId, kind, compact, unread }: {
             <div className={`msg-row ${mine ? "mine" : ""} ${grouped ? "grouped" : ""}`} tabIndex={-1}>
               {!grouped && (
                 <div className="msg-head">
-                  <Link to={`/u/${who?.username ?? ""}`} className="person"><Avatar person={who} size={24} /><b>@{who?.username ?? "…"}</b></Link>
+                  <Link to={`/u/${who?.username ?? ""}`} className="person"><Avatar person={who} size={24} /><Name person={who} /></Link>
                   {who?.role && who.role !== "player" && <span className="role-badge">{t(who.role === "admin" ? "soc.role.admin" : "soc.role.dev")}</span>}
                   <time dateTime={m.created_at} title={new Date(m.created_at).toLocaleString(lang === "de" ? "de-CH" : "en")}>{ago(m.created_at, lang)}</time>
                 </div>
@@ -270,7 +279,25 @@ export function ChatView({ chatId, kind, compact, unread }: {
         })}
       </div>
       {err && <p className="error" role="alert">{err}</p>}
+      {picking && packs.length > 0 && (
+        <div className="sticker-pick" role="group" aria-label={t("chat.stickers")}>
+          {packs.map((pack) => (
+            <Fragment key={pack}>
+              {Object.keys(STICKER_PACKS[pack] ?? {}).map((name) => (
+                <button key={name} type="button" disabled={sending} aria-label={t("chat.sendSticker", { name })} title={name} onClick={() => send(undefined, stickerMessage(pack, name))}>
+                  <Sticker pack={pack} name={name} size={40} label="" />
+                </button>
+              ))}
+            </Fragment>
+          ))}
+        </div>
+      )}
       <form className="composer" onSubmit={send}>
+        {packs.length > 0 && (
+          <button type="button" className={`btn sticker-btn${picking ? " on" : ""}`} aria-expanded={picking} aria-label={t("chat.stickers")} title={t("chat.stickers")} onClick={() => setPicking((x) => !x)}>
+            <Sticker pack={packs[0]} name={Object.keys(STICKER_PACKS[packs[0]] ?? {})[0] ?? "heart"} size={20} label="" />
+          </button>
+        )}
         <textarea ref={box} rows={1} maxLength={LIMITS.message} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={onKey}
           placeholder={t("chat.placeholder")} aria-label={t("chat.placeholder")} enterKeyHint="send" />
         <button className="btn primary" disabled={sending || !text.trim()}>{t("chat.send")}</button>
@@ -281,6 +308,12 @@ export function ChatView({ chatId, kind, compact, unread }: {
 }
 
 function MessageText({ id, body }: { id: number; body: string }) {
+  const sticker = parseSticker(body);
+  if (sticker) return <div className="msg-sticker"><Sticker pack={sticker.pack} name={sticker.name} size={72} /></div>;
+  return <MessageWords id={id} body={body} />;
+}
+
+function MessageWords({ id, body }: { id: number; body: string }) {
   const tr = useTranslate("message", id, body);
   return (
     <>

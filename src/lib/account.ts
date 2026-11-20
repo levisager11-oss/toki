@@ -99,7 +99,7 @@ export async function deleteAccount(profile: { id: string; avatar_url?: string |
 
 // ---------- reports ----------
 
-export type ReportKind = "game" | "profile" | "feedback" | "idea";
+export type ReportKind = "game" | "profile" | "feedback" | "idea" | "review";
 export const REPORT_CATEGORIES = ["illegal", "copyright", "harassment", "sexual", "spam", "other"] as const;
 export type ReportCategory = (typeof REPORT_CATEGORIES)[number];
 export const REPORT_REASON_MAX = 1000;

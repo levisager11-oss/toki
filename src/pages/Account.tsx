@@ -11,6 +11,10 @@ import { EditProfile } from "../components/EditProfile";
 import { useTitle } from "../lib/useTitle";
 import { PasswordForm } from "../components/PasswordForm";
 import { AccountData } from "../components/AccountData";
+import { ShareActivity } from "../components/ShareActivity";
+import { useMyProgress } from "../lib/cosmetics";
+import { levelProgress } from "../lib/progress";
+import { LevelBadge, Tokens } from "../components/Looks";
 
 export function Account() {
   const { t } = useI18n();
@@ -24,7 +28,9 @@ export function Account() {
   // Just set a new password (from a reset email, or below).
   const [pwSaved, setPwSaved] = useState(params.get("pw") === "1");
   const [pwOpen, setPwOpen] = useState(false);
+  const progress = useMyProgress(profile?.id);
   if (!profile) return null;
+  const lv = progress ? levelProgress(progress.xp) : null;
 
   const redeem = async (e: FormEvent) => {
     e.preventDefault();
@@ -41,6 +47,13 @@ export function Account() {
     <section className="panel narrow">
       <h1 className="h">@{profile.username}</h1>
       <p className="lead">{t(`account.role.${profile.role}`)}</p>
+      {lv && (
+        <Link to="/shop" className="me-level account-level" title={t("lv.toNext", { n: lv.needed - lv.into })}>
+          <LevelBadge level={lv.level} big />
+          <span className="lv-bar" aria-hidden="true"><i style={{ width: `${lv.share * 100}%` }} /></span>
+          <Tokens n={progress?.tokens} />
+        </Link>
+      )}
       {pwSaved && <p className="check good" role="status">{t("pw.saved")}</p>}
       <p>{t("account.saves")}</p>
       <div className="actions">
@@ -49,8 +62,15 @@ export function Account() {
         <Link to="/chat" className="btn">{t("nav.chat")}</Link>
         {profile.role === "admin" && <Link to="/reports" className="btn">{t("nav.reports")}</Link>}
       </div>
+      <div className="actions" style={{ marginTop: 8 }}>
+        <Link to="/shop" className="btn">{t("nav.shop")}</Link>
+        <Link to="/feed" className="btn">{t("nav.feed")}</Link>
+        <Link to="/trades" className="btn">{t("nav.trades")}</Link>
+        <Link to="/top" className="btn">{t("nav.top")}</Link>
+      </div>
 
       <EditProfile />
+      <ShareActivity userId={profile.id} />
 
       {canCreate(profile) ? (
         <div className="actions" style={{ marginTop: 24 }}>

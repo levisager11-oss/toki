@@ -8,6 +8,7 @@ import { dailyChanged, formatLeft, msUntilNextDay, msUntilNextWeek, periodLeader
 import type { Game } from "../lib/types";
 import { allBoards, boardLabel, MAIN, sentBoard, type Board } from "../lib/boardRules";
 import { Avatar } from "./Avatar";
+import { Name } from "./Looks";
 import { ShareButton } from "./ShareButton";
 
 export type ScoreEvent = {
@@ -224,7 +225,7 @@ export function Leaderboard({ game, version, last, boards }: { game: Game; versi
           {[...top, ...(mine ? [mine] : [])].map((r) => (
             <li key={r.user_id} className={r.user_id === me ? "me" : ""}>
               <span className="rank">{r.rank}</span>
-              <Link to={`/u/${r.username}`} className="person"><Avatar person={r} size={24} /><b>@{r.username}</b></Link>
+              <Link to={`/u/${r.username}`} className="person"><Avatar person={r} size={24} /><Name person={r} /></Link>
               <b className="score">{fmt(r.score)}</b>
               {manager && r.user_id !== me && (
                 <button
