@@ -103,6 +103,43 @@ describe("changing", () => {
   });
 });
 
+describe("requests of one account at the same moment", () => {
+  // Counting and writing must not overlap, or every one of them passes the limit. Two requests
+  // can't run at once in this test database, so this checks the lock each of them takes.
+  const locks = async () => (await t.admin<{ n: number }>("select count(*)::int as n from pg_locks where locktype = 'advisory' and granted"))[0].n;
+  const inOneRequest = async (fn: () => Promise<unknown>) => {
+    await t.db.exec("begin");
+    try {
+      await fn();
+      return await locks();
+    } finally {
+      await t.db.exec("rollback");
+    }
+  };
+
+  it("take the account's lock before a limit is counted", async () => {
+    const a = await t.user();
+    const b = await t.user();
+    expect(await inOneRequest(() => propose(a))).toBe(1);
+    expect(await inOneRequest(() => t.as(a, "insert into feedback_posts (kind, title) values ('idea', 'More levels')"))).toBe(1);
+    expect(await inOneRequest(() => t.as(a, "select send_friend_request($1)", [b.id]))).toBe(1);
+    // Two accounts: a lock each, so neither waits for the other.
+    expect(await inOneRequest(async () => {
+      await propose(a);
+      await propose(b);
+    })).toBe(2);
+    expect(await locks()).toBe(0);
+  });
+
+  it("is nothing an account can take by itself", async () => {
+    const a = await t.user();
+    await expect(t.as(a, "select limit_lock($1)", [a.id])).rejects.toThrow(/permission denied/);
+    // The server writes without an account: no lock, no error.
+    await t.service("select 1");
+    expect(await t.admin("select limit_lock(null)")).toHaveLength(1);
+  });
+});
+
 describe("every limit in the table is used", () => {
   it("has a value for each key the database checks", async () => {
     const keys = (await t.admin<{ key: string }>("select key from limits")).map((r) => r.key);
