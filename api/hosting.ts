@@ -345,7 +345,8 @@ async function git(w: Who, b: Record<string, unknown>, origin: string): Promise<
     row = { game_id: g.id, installation_id: b.installation_id as number, repo: exact, branch, folder, created_by: w.user.id };
     await w.db.insert(
       "game_git?on_conflict=game_id",
-      { ...row, status: "waiting", error: null, build: "none", build_pr: null, updated_at: new Date().toISOString() },
+      // repo_id: which repository uploads from GitHub Actions must come from is learned anew (server/actionsAuth.ts).
+      { ...row, status: "waiting", error: null, build: "none", build_pr: null, repo_id: null, updated_at: new Date().toISOString() },
       "resolution=merge-duplicates,return=minimal",
     );
   } else if (b.action === "git_deploy") {

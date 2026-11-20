@@ -62,6 +62,24 @@ describe("which game a run may upload to", () => {
     expect(await gameForAction(db(), claims({}))).toEqual({ game_id: "g1", user: { id: "dev", username: "lu", role: "creator" } });
   });
 
+  it("is tied to the repository that first uploaded, not to whoever has its name later", async () => {
+    const d = db();
+    const first = claims({});
+    expect(await gameForAction(d, { ...first, repository_id: "501" })).toMatchObject({ game_id: "g1" });
+    // The same repository, renamed back and forth or not: still its number.
+    expect(await gameForAction(d, { ...first, repository_id: "501" })).toMatchObject({ game_id: "g1" });
+    // Someone registered the name again: another repository, another number.
+    expect(await gameForAction(d, { ...first, repository_id: "777" })).toBeNull();
+    expect(await gameForAction(d, first)).toBeNull();
+  });
+
+  it("reads the repository's number from GitHub's token", async () => {
+    const check = (t: string) => verifyActionToken(t, { jwks: JWKS, now: NOW });
+    expect((await check(token({ repository_id: "501" }))).repository_id).toBe("501");
+    expect((await check(token({}))).repository_id).toBeUndefined();
+    expect((await check(token({ repository_id: "5 or 1" }))).repository_id).toBeUndefined();
+  });
+
   it("also finds a repository with an underscore in its name", async () => {
     expect(await gameForAction(db(), claims({ repository: "lu/space_shooter" }))).toMatchObject({ game_id: "g3" });
     // "_" stands for any character in the search, never in the answer.
