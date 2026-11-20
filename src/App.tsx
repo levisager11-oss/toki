@@ -53,6 +53,7 @@ const Feed = page(() => import("./pages/Feed").then((m) => ({ default: m.Feed })
 const Trades = page(() => import("./pages/Trades").then((m) => ({ default: m.Trades })), "player");
 const NewTrade = page(() => import("./pages/Trades").then((m) => ({ default: m.NewTrade })), "player");
 const Legal = page(() => import("./pages/Legal").then((m) => ({ default: m.Legal })), "legal");
+const Docs = page(() => import("./pages/Docs").then((m) => ({ default: m.Docs })), "player", "dev");
 
 /** Shown while a page's code is still downloading (slow connections); after a short wait, so fast loads don't flash. */
 function PageLoading() {
@@ -92,6 +93,7 @@ export function App() {
           <Route path="terms" element={<Later><Legal page="terms" /></Later>} />
           <Route path="privacy" element={<Later><Legal page="privacy" /></Later>} />
           <Route path="imprint" element={<Later><Legal page="imprint" /></Later>} />
+          <Route path="docs" element={<Later><Docs /></Later>} />
           <Route path="login" element={<Later><Login /></Later>} />
           <Route path="signup" element={<Later><Signup /></Later>} />
           <Route path="reset-password" element={<Later><ResetPassword /></Later>} />

@@ -21,24 +21,30 @@ import { useTitle } from "../lib/useTitle";
 import { extFor, removeGameImages, shrinkGameImage } from "../lib/gameImages";
 import { HostedUpload, type Picked } from "../components/HostedUpload";
 import { ImportFromLink } from "../components/ImportFromLink";
-import { gitConnect, gitDisconnect, hostError, unhostGame, uploadGame, useHosting, type GitChoice, type GitRow, type Imported } from "../lib/hosting";
+import { gitConnect, gitDisconnect, hostError, scanSample, scanUpload, unhostGame, uploadGame, uploadName, useHosting, type GitChoice, type GitRow, type Imported } from "../lib/hosting";
 import { GitHubFollow, gitFailed } from "../components/GitHubFollow";
 import { QuickAdd, type QuickCarry } from "../components/QuickAdd";
+import { AddStart, type AddStartChoice } from "../components/AddStart";
 import { MovedNotice, MoveSavesCheck, MoveToToki, type Moved } from "../components/MoveToToki";
 
-// Developers who chose "Advanced" get the full form straight away next time (this browser only).
-const ADVANCED_KEY = "toki.addAdvanced";
-const prefersAdvanced = () => {
+// The way in a developer picked on Add game's first screen opens straight away next time (this
+// browser only); "Other ways to add" shows the choice again. (toki.addAdvanced: the older "Advanced".)
+const START_KEY = "toki.addStart";
+const OLD_ADVANCED_KEY = "toki.addAdvanced";
+const rememberedStart = (): AddStartChoice | null => {
   try {
-    return localStorage.getItem(ADVANCED_KEY) === "1";
+    const v = localStorage.getItem(START_KEY);
+    if (v === "manual" || v === "ai" || v === "link") return v;
+    return localStorage.getItem(OLD_ADVANCED_KEY) === "1" ? "manual" : null;
   } catch {
-    return false;
+    return null;
   }
 };
-const rememberAdvanced = (on: boolean) => {
+const rememberStart = (c: AddStartChoice | null) => {
   try {
-    if (on) localStorage.setItem(ADVANCED_KEY, "1");
-    else localStorage.removeItem(ADVANCED_KEY);
+    localStorage.removeItem(OLD_ADVANCED_KEY);
+    if (c) localStorage.setItem(START_KEY, c);
+    else localStorage.removeItem(START_KEY);
   } catch {
     /* only a convenience */
   }
@@ -56,7 +62,6 @@ export function GameForm() {
   const navigate = useNavigate();
   const location = useLocation();
   const hosting = useHosting();
-  const freeAi = useAiFeature("describe");
   const [orig, setOrig] = useState<Game | null>(null);
   useTitle(editSlug ? t("form.editTitle") : t("form.addTitle"));
   const [missing, setMissing] = useState(false);
@@ -87,13 +92,12 @@ export function GameForm() {
   const [joinParam, setJoinParam] = useState("room");
   const [err, setErr] = useState<string>((location.state as { uploadError?: string } | null)?.uploadError ?? "");
   // Where the game runs: uploaded to Toki, from a GitHub branch, or a link to elsewhere (null: not picked yet).
-  const [mode, setMode] = useState<"upload" | "github" | "link" | null>(null);
+  const [start, setStart] = useState<AddStartChoice | null>(rememberedStart);
+  const [mode, setMode] = useState<"upload" | "github" | "link" | null>(() => (start === "link" ? "link" : null));
   const [git, setGit] = useState<GitRow | null>(null);
   const [gitChoice, setGitChoice] = useState<GitChoice | null>(null);
   const [picked, setPicked] = useState<Picked | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
-  // New games: the one-click way first; "fill in everything yourself" shows this form.
-  const [manual, setManual] = useState(prefersAdvanced);
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   // Just moved from its link onto Toki (MoveToToki): shown with the way back.
@@ -167,10 +171,16 @@ export function GameForm() {
     setMode(null);
   };
 
-  /** "Advanced": the full form, filled in with what the one-click screen had so far. */
+  /** Picked on the first screen: the full form (by itself, or with its address field), or the AI's way. */
+  const pick = (c: AddStartChoice) => {
+    rememberStart(c);
+    setStart(c);
+    setMode(c === "link" ? "link" : null);
+  };
+  /** "Fill it in myself" on the AI's screen: the full form, filled in with what it had so far. */
   const toAdvanced = (c: QuickCarry) => {
-    rememberAdvanced(true);
-    setManual(true);
+    rememberStart(c.kind === "link" ? "link" : "manual");
+    setStart(c.kind === "link" ? "link" : "manual");
     const p = c.proposal;
     if (p) {
       setTitle(p.title);
@@ -187,7 +197,8 @@ export function GameForm() {
       setIsolation(p.isolation);
       setDirty(true);
     }
-    if (c.kind === "github") {
+    if (c.kind === "link") setMode("link");
+    else if (c.kind === "github") {
       setMode("github");
       if (c.git) setGitChoice(c.git);
     } else {
@@ -195,16 +206,18 @@ export function GameForm() {
       if (c.picked) setPicked(c.picked);
     }
   };
-  const toQuick = () => {
-    rememberAdvanced(false);
-    setManual(false);
+  /** "Other ways to add": the first screen again. */
+  const toStart = () => {
+    rememberStart(null);
+    setStart(null);
   };
 
   if (missing) return <NotFound />;
   if (loadFailed) return <p className="msg">{t("error")}</p>;
-  if (!editSlug && !manual) {
+  // A new game: the three ways in first. Without uploads to Toki, only a link is possible: the form.
+  if (!editSlug && start !== "manual" && start !== "link") {
     if (hosting === null) return <p className="msg" aria-busy="true">{t("loading")}</p>;
-    if (hosting.enabled && hosting.domain) return <QuickAdd hosting={hosting} onManual={toAdvanced} />;
+    if (hosting.enabled && hosting.domain) return start === "ai" ? <QuickAdd hosting={hosting} onManual={toAdvanced} /> : <AddStart onPick={pick} />;
   }
   // Editing waits for the hosting settings too: whether the game is on Toki depends on Toki's games domain.
   if (editSlug && (!orig || hosting === null)) return <p className="msg">{t("loading")}</p>;
@@ -358,8 +371,32 @@ export function GameForm() {
     navigate(`/game/${row.slug}`);
   };
 
-  /** "Fill in from a link": fills the fields that are still empty, then lets the AI write both descriptions. */
-  const applyImport = async (d: Imported) => {
+  /**
+   * A new game's files were picked: fill in the fields that are still empty from what simple checks
+   * and the game's toki.json say. No AI reads the files here.
+   */
+  const fillFromFiles = async (p: Picked) => {
+    if (orig) return;
+    try {
+      const { proposal: q } = await scanUpload(uploadName(p), p.files, await scanSample(p.files, p.entry), true);
+      setTitle((v) => v.trim() ? v : q.title);
+      setDescription((v) => v.trim() ? v : q.description);
+      setDescriptionDe((v) => v.trim() ? v : q.description_de);
+      setControls((v) => v.trim() ? v : q.controls);
+      setControlsDe((v) => v.trim() ? v : q.controls_de);
+      setEngine((v) => v.trim() ? v : q.engine);
+      if (q.category !== "other") setCategory(q.category);
+      if (q.isolation) setIsolation(true);
+      if (q.multiplayer) setMultiplayer(true);
+      setScoreOrder(q.score_order);
+      setScoreFormat(q.score_format);
+    } catch {
+      /* only a help: the developer fills in the form */
+    }
+  };
+
+  /** "Fill in from a link": fills the fields that are still empty from the game's page (no AI). */
+  const applyImport = (d: Imported) => {
     setDirty(true);
     if (d.title && !title.trim()) onTitle(d.title);
     if (d.description && !description.trim()) setDescription(d.description);
@@ -380,19 +417,7 @@ export function GameForm() {
       setUrl(d.play_url);
       setMode("link");
     }
-    const theTitle = title.trim() || d.title;
-    if (freeAi && theTitle && !descriptionDe.trim() && !d.toki?.description_de) {
-      try {
-        const out = await describeGame({
-          title: theTitle, category: d.category ?? category, engine: engine.trim() || d.engine || "", controls: controls.trim() || d.controls,
-          description: description.trim() || d.description, description_de: "", play_url: d.play_url ?? "",
-        });
-        if (!description.trim() && !d.description) setDescription(out.en);
-        setDescriptionDe(out.de);
-      } catch {
-        /* the AI is optional here */
-      }
-    }
+    // Descriptions by AI only when asked for ("Write with AI").
   };
 
   const remove = async () => {
@@ -411,7 +436,7 @@ export function GameForm() {
     <section className="panel">
       <div className="sechead quick-head">
         <h1 className="h">{orig ? t("form.editTitle") : t("form.addTitle")}</h1>
-        {!orig && canHost && <button type="button" className="btn" onClick={toQuick}>{t("quick.backToQuick")}</button>}
+        {!orig && canHost && <button type="button" className="btn" onClick={toStart}>{t("start.other")}</button>}
       </div>
       <form className="form two" onSubmit={submit} onChange={() => setDirty(true)}>
         <div className="col">
@@ -439,7 +464,7 @@ export function GameForm() {
               {fromGit ? (
                 <GitHubFollow gameId={orig?.id} row={git} choice={gitChoice} onChoice={(c) => { setGitChoice(c); setDirty(true); }} onChanged={() => orig && loadGit(orig.id)} />
               ) : (
-                <HostedUpload picked={picked} onPick={(p) => { setPicked(p); setDirty(true); }} gameId={orig?.id} hosted={wasHosted ? orig!.play_url : null} progress={progress} />
+                <HostedUpload picked={picked} onPick={(p) => { setPicked(p); setDirty(true); if (p) fillFromFiles(p); }} gameId={orig?.id} hosted={wasHosted ? orig!.play_url : null} progress={progress} />
               )}
               {fromGit && git && wasHosted && <p className="sub"><a href={orig!.play_url} target="_blank" rel="noreferrer">{orig!.play_url.replace(/^https:\/\//, "")}</a></p>}
             </>

@@ -100,7 +100,11 @@ function CopyHelp() {
   const { t } = useI18n();
   // Toki Connect writes code with the strong AI: without it, the instructions are the way.
   const connect = useAiStatus().strong;
-  return <p className="sub">{t(connect ? "devup.copyHelp" : "devup.copyOnly")}</p>;
+  return (
+    <p className="sub">
+      {t(connect ? "devup.copyHelp" : "devup.copyOnly")} <Link to="/docs">{t("devup.docs")}</Link>
+    </p>
+  );
 }
 
 /** One game: what it is missing, and one button that adds all of it. */

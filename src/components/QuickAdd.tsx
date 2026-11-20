@@ -11,7 +11,7 @@ import { siteFor, siteUrl } from "../lib/hostingRules";
 import { ApiError, connectError, runJob, type ConnectJob } from "../lib/ai";
 import {
   type BuildSetup,
-  gitConnect, hostError, scanRepo, scanSample, scanUpload, startAdditions, uploadGame, type GitChoice, type HostingStatus, type Proposal, type ScanResult,
+  gitConnect, hostError, scanRepo, scanSample, scanUpload, startAdditions, uploadGame, uploadName, type GitChoice, type HostingStatus, type Proposal, type ScanResult,
 } from "../lib/hosting";
 import { HostedUpload, type Picked } from "./HostedUpload";
 import { BuildInfo, GitHubFollow, gitFailed } from "./GitHubFollow";
@@ -21,15 +21,17 @@ type Step = "create" | "files" | "leaderboard";
 type StepState = "wait" | "busy" | "ok" | "skip" | "fail";
 
 /**
- * "Add your game" in one go: drop the game or pick a GitHub repository, Toki's AI reads it and
- * proposes its page, and one button puts it live (and lets the AI add leaderboard support).
+ * "Let Toki's AI do it" on Add game: drop the game or pick a GitHub repository, Toki's AI reads it
+ * and proposes its page, and one button puts it live. The AI changes the game's code (saves, a
+ * leaderboard, friend invites) only for what the developer ticks; each shows the line to add by hand.
  */
-/** What the one-click screen hands to the full form ("Advanced"), so nothing is lost. */
+/** What the one-click screen hands to the full form ("Fill it in myself"), so nothing is lost. */
 export interface QuickCarry {
   proposal: Proposal | null;
   picked: Picked | null;
   git: GitChoice | null;
-  kind: "upload" | "github";
+  /** "link": the game is online elsewhere already, the full form opens with its address field */
+  kind: "upload" | "github" | "link";
 }
 
 export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManual: (carry: QuickCarry) => void }) {
@@ -71,9 +73,10 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
       if (!alive.current) return;
       setScan(r);
       setP(r.proposal);
-      setLeaderboard(r.proposal.leaderboard && !r.proposal.has_scores && codeAi !== "off");
-      setInvites(r.proposal.multiplayer && !r.proposal.has_rooms && codeAi !== "off");
-      setSavesAi(!!r.proposal.saves_elsewhere && codeAi !== "off");
+      // The AI changes the game's code only when the developer ticks it.
+      setLeaderboard(false);
+      setInvites(false);
+      setSavesAi(false);
       if (r.folder !== null && git) setGit({ ...git, folder: r.folder });
       setPhase("review");
     } catch (e) {
@@ -85,9 +88,7 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
   const onPick = async (x: Picked | null) => {
     setPicked(x);
     if (!x) return;
-    const top = x.files[0]?.path.split("/")[0] ?? "";
-    const label = x.files.every((f) => f.path.startsWith(`${top}/`)) ? top : x.entry;
-    read(scanSample(x.files, x.entry).then((sample) => scanUpload(label, x.files, sample)));
+    read(scanSample(x.files, x.entry).then((sample) => scanUpload(uploadName(x), x.files, sample)));
   };
 
   // ---------- 2. publish ----------
@@ -184,6 +185,7 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
 
   /** The full form, with everything picked or proposed so far. */
   const advanced = () => onManual({ proposal: p, picked, git, kind });
+  const byLink = () => onManual({ proposal: null, picked: null, git: null, kind: "link" });
 
   // ---------- screens ----------
 
@@ -216,6 +218,11 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
           </>
         )}
         {err && <p className="error" role="alert">{err}</p>}
+        {phase === "pick" && (
+          <p className="quick-link">
+            {t("quick.byLinkLead")} <button type="button" className="linkish" onClick={byLink}>{t("quick.byLink")}</button>
+          </p>
+        )}
       </section>
     );
   }
@@ -284,7 +291,7 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
               {t("form.isolation")}
             </label>
             <label className="check">
-              <input type="checkbox" checked={p.multiplayer === true} onChange={(e) => { field("multiplayer")(e.target.checked); setInvites(e.target.checked && !p.has_rooms && codeAi !== "off"); }} />
+              <input type="checkbox" checked={p.multiplayer === true} onChange={(e) => { field("multiplayer")(e.target.checked); if (!e.target.checked) setInvites(false); }} />
               {t("form.multiplayer")}
             </label>
             {kind === "github" && git && (
@@ -299,37 +306,40 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
             {!p.saves_elsewhere ? (
               <li className="check good">{t("quick.saves")}</li>
             ) : codeAi === "off" ? (
-              <li className="check warn">{t("quick.savesElsewhere")}</li>
+              <li className="check warn">{t("quick.savesElsewhere")}<Yourself code={'localStorage.setItem("save", data)'} anchor="saves" /></li>
             ) : (
               <li className="check">
                 <label className="fb-check">
                   <input type="checkbox" checked={savesAi} onChange={(e) => setSavesAi(e.target.checked)} />
                   <span>{kind === "github" ? t("quick.savesGithub") : t("quick.savesUpload")}</span>
                 </label>
+                <Yourself code={'localStorage.setItem("save", data)'} anchor="saves" />
               </li>
             )}
             {p.has_scores ? (
               <li className="check good">{t("quick.hasScores")}</li>
             ) : codeAi === "off" ? (
-              <li className="check">{t("quick.noCodeAi")}</li>
+              <li className="check">{t("quick.noCodeAi")}<Yourself code="toki.score(points)" anchor="scores" /></li>
             ) : (
               <li className="check">
                 <label className="fb-check">
                   <input type="checkbox" checked={leaderboard} onChange={(e) => setLeaderboard(e.target.checked)} />
                   <span>{kind === "github" ? t("quick.leaderboardGithub") : t("quick.leaderboardUpload")}</span>
                 </label>
+                <Yourself code="toki.score(points)" anchor="scores" />
               </li>
             )}
             {p.multiplayer && (p.has_rooms ? (
               <li className="check good">{t("quick.hasInvites")}</li>
             ) : codeAi === "off" ? (
-              <li className="check">{t("quick.noCodeAiInvites")}</li>
+              <li className="check">{t("quick.noCodeAiInvites")}<Yourself code="toki.room(code)" anchor="rooms" /></li>
             ) : (
               <li className="check">
                 <label className="fb-check">
                   <input type="checkbox" checked={invites} onChange={(e) => setInvites(e.target.checked)} />
                   <span>{kind === "github" ? t("quick.invitesGithub") : t("quick.invitesUpload")}</span>
                 </label>
+                <Yourself code="toki.room(code)" anchor="rooms" />
               </li>
             ))}
           </ul>
@@ -396,3 +406,12 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
   );
 }
 
+/** "Or add it yourself": the line of code, and where the developer docs explain it. */
+function Yourself({ code, anchor }: { code: string; anchor: string }) {
+  const { t } = useI18n();
+  return (
+    <small className="quick-diy">
+      {t("quick.diy")} <code>{code}</code> · <Link to={`/docs#${anchor}`} target="_blank" rel="noopener">{t("quick.diyDocs")}</Link>
+    </small>
+  );
+}

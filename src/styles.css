@@ -1013,6 +1013,20 @@ main.content:focus { outline: none; }
 .quick-steps li.fail { border-left-color: var(--danger); }
 .quick-steps li.busy { border-left-color: var(--accent); }
 .quick-head { margin-bottom: 0; }
+.quick-link { margin: 4px 0 0; font-size: 14px; color: var(--muted); }
+.quick-features li.check { display: block; }
+.quick-diy { display: block; margin: 4px 0 0 28px; color: var(--muted); font-size: 12px; }
+.quick-diy code { font-size: 12px; overflow-wrap: anywhere; }
+
+/* Add game's first screen: three equal ways in */
+.add-start { max-width: 860px; }
+.add-start .lead { margin-bottom: 16px; }
+.start-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.start-card { display: flex; flex-direction: column; gap: 6px; text-align: left; font: inherit; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--accent); padding: 14px 16px; cursor: pointer; }
+.start-card b { font-size: 16px; }
+.start-card span { font-size: 14px; color: var(--muted); line-height: 1.45; }
+.start-card:hover { border-color: var(--fg); border-left-color: var(--accent); }
+.start-card:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
 .quick-head .h { margin: 0; }
 
 /* admin: game hosting */
@@ -1212,6 +1226,21 @@ main.content:focus { outline: none; }
 .legal p, .legal ul { margin: 0 0 10px; }
 .legal ul { padding-left: 22px; }
 .legal li + li { margin-top: 4px; }
+/* The developer docs (/docs): the legal pages' layout, with code */
+.docs { max-width: 80ch; }
+.docs h2 { scroll-margin-top: 130px; }
+.docs h3 { font-size: 16px; margin: 18px 0 6px; }
+.docs p code, .docs li code { font-size: .9em; background: var(--surface); border: 1px solid var(--line); padding: 0 4px; overflow-wrap: anywhere; }
+.doc-toc ol { columns: 2 220px; margin: 14px 0 0; padding-left: 22px; font-size: 14px; }
+.doc-code { position: relative; margin: 0 0 14px; }
+.doc-code pre { margin: 0; background: var(--surface); border: 1px solid var(--line); padding: 12px 14px; padding-right: 84px; overflow: auto; font-size: 13px; line-height: 1.5; tab-size: 4; }
+.doc-code.tall pre { max-height: 220px; }
+.doc-code .btn { position: absolute; top: 6px; right: 6px; padding: 4px 10px; font-size: 13px; }
+@media (max-width: 600px) {
+  .doc-code { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .doc-code .btn { position: static; }
+  .doc-code pre { width: 100%; padding-right: 14px; }
+}
 
 /* Today's game (top of the home page) and the high score lists by week and day */
 .daily { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); border: 1px solid var(--fg); border-left: 6px solid var(--accent); background: var(--surface); }

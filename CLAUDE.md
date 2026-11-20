@@ -15,6 +15,7 @@ When the script games use (`public/toki-save.js`) or the integration guide (`src
 
 - Make sure Toki Connect can add it (a feature in `server/connect/agent.ts`) and the instructions to copy explain it.
 - Add an entry for it in `src/lib/gameUpdates.ts` (a topic, the Toki Connect feature, which games it is for, and one short sentence for the AI on what exactly to add), with its texts `devup.<topic>.title`, `.short`, `.text` and `.notif` in `src/lib/i18n.tsx`. That puts it on the card on *My games*, where each game gets one "Update with Toki Connect" that adds everything the game is missing in one run, and "Copy instructions" with all of it, plus the text of their notification. All updates together must fit in a run's 1000 characters of notes (`tests/game-updates.test.ts` checks).
+- Explain it for developers who write the code themselves on the developer docs page (`/docs`: code in `src/pages/Docs.tsx`, text `docs.body` in `src/lib/texts/dev*.ts`; `tests/docs.test.ts` checks every `toki.…` call is there). Adding a game has to keep working without AI ("Fill it in myself", "Add a link"); the AI only changes a game's code when the developer ticks it.
 - Tell the developers once the app that knows the topic is live: run `select public.notify_developers('<topic>')` with the Supabase connector. It sends one notification per developer and topic, which leads to the card.
 
 ## Stay on Supabase's free plan

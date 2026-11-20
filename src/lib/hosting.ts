@@ -326,8 +326,14 @@ export async function scanSample(files: PickedFile[], entry: string): Promise<{ 
   return out;
 }
 
-export const scanUpload = (name: string, files: PickedFile[], sample: { path: string; text: string }[]) =>
-  api<ScanResult>("/api/assist", { method: "POST", body: JSON.stringify({ action: "scan", source: "upload", name, paths: files.map((f) => f.path), files: sample }) });
+/** noAi: only the simple checks and toki.json, no AI reads the files ("Fill it in myself"). */
+export const scanUpload = (name: string, files: PickedFile[], sample: { path: string; text: string }[], noAi = false) =>
+  api<ScanResult>("/api/assist", { method: "POST", body: JSON.stringify({ action: "scan", source: "upload", name, paths: files.map((f) => f.path), files: sample, no_ai: noAi }) });
+/** The name Toki guesses a title from: the folder the files are in, else the start page. */
+export const uploadName = (x: { files: PickedFile[]; entry: string }) => {
+  const top = x.files[0]?.path.split("/")[0] ?? "";
+  return x.files.every((f) => f.path.startsWith(`${top}/`)) ? top : x.entry;
+};
 export const scanRepo = (installation_id: number, repo: string, branch: string) =>
   api<ScanResult>("/api/assist", { method: "POST", body: JSON.stringify({ action: "scan", source: "github", installation_id, repo, branch }) });
 
