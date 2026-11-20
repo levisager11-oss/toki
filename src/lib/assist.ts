@@ -84,9 +84,33 @@ export interface ReleaseDraftInput {
   installation_id?: number;
   repo?: string;
   lang: Lang;
+  /** the developer's answers to the AI's questions */
+  answers?: { q: string; a: string }[];
+  /** false: write the draft without asking first */
+  ask?: boolean;
 }
-export const draftRelease = (r: ReleaseDraftInput) =>
-  assist<{ title: string; notes: string; commits: number; commitsError: boolean }>({ action: "release", ...r });
+/** What the draft was based on. */
+interface ReleaseBasis {
+  commits: number;
+  pulls: number;
+  commitsError: boolean;
+}
+export type ReleaseDraft = ReleaseBasis &
+  (
+    | { questions: string[] }
+    | {
+        title: string;
+        notes: string;
+        /** whether it reads like a small update; null: no idea */
+        small: boolean | null;
+        /** open feedback posts it seems to take care of */
+        fixes: string[];
+      }
+  );
+export const draftRelease = (r: ReleaseDraftInput) => assist<ReleaseDraft>({ action: "release", ...r });
+/** The draft changed the way the developer asks ("shorter", "leave out the menu"). */
+export const reviseRelease = (r: { game_id: string | null; lang: Lang; title: string; notes: string; change: string }) =>
+  assist<{ title: string; notes: string }>({ action: "release", game_id: r.game_id, lang: r.lang, change: r.change, revise: { title: r.title, notes: r.notes } });
 
 export const describeGame = (g: { title: string; category: string; engine: string; controls: string; description: string; description_de: string; play_url: string }) =>
   assist<{ en: string; de: string }>({ action: "describe", ...g });

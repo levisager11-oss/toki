@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  improvePrompt, improveText, MAX_TASKS, plain, readDescribe, readImprove, readRelease, readSimilar, readSuggest, readTranslation, releasePrompt,
+  improvePrompt, improveText, MAX_TASKS, plain, readDescribe, readImprove, readRelease, readSimilar, readSuggest, readTranslation, releasePrompt, reviseReleasePrompt, codeChanges, pullBody, recentPulls,
   similarPrompt, suggestPrompt, translatePrompt, type ImprovePost,
 } from "../server/assist/prompts";
 import { linksIn, pageText, readPage } from "../server/assist/pages";
@@ -61,8 +61,74 @@ describe("release note drafts", () => {
     expect(readRelease('{"title":"Level 4 is here","notes":"* New level\\n• Fixed: jumping\\nThanks!"}')).toEqual({
       title: "Level 4 is here",
       notes: "- New level\n- Fixed: jumping\nThanks!",
+      small: null,
+      fixes: [],
     });
     expect(readRelease('{"title":"x","notes":""}')).toBeNull();
+  });
+
+  it("read the small-update guess and only feedback numbers from the list", () => {
+    expect(readRelease('{"title":"t","notes":"- Fixed: jump","small":true,"fixes":[2,2,"1",9,0,"x"]}', 3)).toMatchObject({ small: true, fixes: [1, 0] });
+  });
+
+  it("may ask a few questions first, but only when it's allowed to", () => {
+    const answer = '{"questions":["Is the new map live for everyone?","","What does \\"tune physics\\" change?","a","b"]}';
+    expect(readRelease(answer, 0, true)).toEqual({ questions: ["Is the new map live for everyone?", 'What does "tune physics" change?', "a"] });
+    expect(readRelease(answer, 0, false)).toBeNull();
+    const ask = releasePrompt({ game: "Run", lang: "en", notes: "x", fixes: [], commits: [], lastVersion: null });
+    expect(ask[0].content).toContain('{"questions"');
+    const answered = releasePrompt({ game: "Run", lang: "en", notes: "x", fixes: [], commits: [], lastVersion: null, answers: [{ q: "Live?", a: "yes, for all" }] });
+    expect(answered[0].content).toContain("Don't ask questions");
+    expect(answered[1].content).toContain("A: yes, for all");
+  });
+
+  it("see the last updates, the merged pull requests and the open feedback", () => {
+    const [, user] = releasePrompt({
+      game: "Run",
+      lang: "en",
+      notes: "",
+      fixes: [],
+      open: [{ kind: "idea", title: "Dark mode" }],
+      pulls: [{ number: 80, title: "Add dark theme", body: "Adds a dark theme toggle", beforeLast: true }],
+      commits: [],
+      lastVersion: "1.2",
+      earlier: [{ version: "1.2", small: false, title: "Winter", notes: "- Snow" }],
+    });
+    expect(user.content).toContain('<update version="1.2">');
+    expect(user.content).toContain("- Snow");
+    expect(user.content).toContain('<pr number="80" note="merged shortly before the last update');
+    expect(user.content).toContain("Adds a dark theme toggle");
+    expect(user.content).toContain("1. [idea] Dark mode");
+  });
+
+  it("leave out merge commits and commits of pull requests it already has", () => {
+    const pulls = [{ number: 76, title: "Faster loading", body: "", beforeLast: false }];
+    expect(
+      codeChanges(pulls, ["Merge pull request #76 from me/branch", "Faster loading (#76)", "Merge branch 'main' into x", "New level (#77)", "Fix sound"]).commits,
+    ).toEqual(["New level (#77)", "Fix sound"]);
+  });
+
+  it("clean what only matters on GitHub out of pull request descriptions", () => {
+    const body = "## Summary\n<!-- template -->\nNew boss fight\n![shot](https://x/y.png)\n\n---\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nhttps://claude.ai/code/session_1";
+    expect(pullBody(body)).toBe("## Summary\n\nNew boss fight");
+  });
+
+  it("take the pull requests since the last update, a day of overlap, or else the newest one", () => {
+    const merged = [
+      { number: 3, title: "c", body: "", mergedAt: "2026-11-17T12:00:00Z" },
+      { number: 2, title: "b", body: "", mergedAt: "2026-11-16T12:00:00Z" },
+      { number: 1, title: "a", body: "", mergedAt: "2026-11-10T12:00:00Z" },
+    ];
+    expect(recentPulls(merged, "2026-11-17T08:00:00.123+00:00").map((p) => [p.number, p.beforeLast])).toEqual([[3, false], [2, true]]);
+    expect(recentPulls(merged, "2026-11-20T08:00:00Z").map((p) => [p.number, p.beforeLast])).toEqual([[3, true]]);
+    expect(recentPulls(merged, undefined).map((p) => p.number)).toEqual([3, 2, 1]);
+  });
+
+  it("rewrite a draft the way the developer asks", () => {
+    const [system, user] = reviseReleasePrompt({ game: null, lang: "de", title: "Neu", notes: "- Schnee", change: "kürzer" });
+    expect(system.content).toContain("German");
+    expect(user.content).toContain("- Schnee");
+    expect(user.content).toContain("wish: kürzer");
   });
 });
 

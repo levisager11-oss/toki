@@ -14,8 +14,9 @@ import { AiError } from "../server/ai/provider.js";
 import { AI_FEATURES, budgetedCompletion, featureOn, type AiFeature } from "../server/ai/budget.js";
 import { budgetedBatch, collectBatch } from "../server/ai/batch.js";
 import {
-  applicationPrompt, describePrompt, moderatePrompt, readModerate, type ReportItem, improvePrompt, improveText, inboxPrompt, plain, readDescribe, readImprove, readRelease, readSimilar, readSuggest,
-  readTranslation, releasePrompt, similarPrompt, suggestPrompt, translatePrompt, type CatalogGame, type ImprovePost, type InboxPost, type Lang,
+  applicationPrompt, codeChanges, recentPulls, describePrompt, moderatePrompt, readModerate, type ReportItem, improvePrompt, improveText, inboxPrompt, plain, readDescribe, readImprove,
+  readRelease, readSimilar, readSuggest, readTranslation, releasePrompt, reviseReleasePrompt, similarPrompt, suggestPrompt, translatePrompt, type CatalogGame, type ImprovePost,
+  type InboxPost, type Lang, type ReleasePull,
 } from "../server/assist/prompts.js";
 import { linksIn, readPage } from "../server/assist/pages.js";
 import { cleanTurns, guideFiles, helpPrompt, learnPrompt, scoreText, type HelpGame, type HelpPlayer } from "../server/assist/help.js";
@@ -265,14 +266,40 @@ async function release(ctx: Ctx, b: Record<string, unknown>, lang: Lang) {
   const gameId = isUuid(b.game_id) ? b.game_id : null;
   const game = await manages(ctx, gameId);
   if (game === false) return json({ error: "not_allowed" }, 403);
+
+  // "Shorter", "leave out the menu": a change to a draft, without reading everything again.
+  const revise = b.revise && typeof b.revise === "object" ? (b.revise as Record<string, unknown>) : null;
+  if (revise) {
+    const change = str(b.change, 300);
+    const draft = { title: str(revise.title, 80), notes: str(revise.notes, 5000) };
+    if (!change || !draft.notes) return json({ error: "bad_request" }, 400);
+    const out = readRelease(await ask(ctx, "release", reviseReleasePrompt({ game: game?.title ?? null, lang, ...draft, change }), { schema: SCHEMAS.releaseRevise }));
+    if (!out || "questions" in out) return json({ error: "ai_bad_answer" }, 502);
+    return json({ title: out.title, notes: out.notes });
+  }
+
   const gameFilter = gameId ? `game_id=eq.${gameId}` : "game_id=is.null";
-  const [last] = await ctx.db.select<{ version: string; published_at: string }>("game_releases", `${gameFilter}&select=version,published_at&order=published_at.desc&limit=1`);
+  const earlier = await ctx.db.select<{ version: string; small: boolean; title: string | null; notes: string; published_at: string }>(
+    "game_releases",
+    `${gameFilter}&select=version,small,title,notes,published_at&order=published_at.desc&limit=3`,
+  );
+  const last = earlier[0];
   const fixIds = (Array.isArray(b.fixes) ? b.fixes : []).filter(isUuid).slice(0, 30);
   const fixes = fixIds.length
     ? await ctx.db.select<{ kind: string; title: string }>("feedback_posts", `id=in.(${fixIds.join(",")})&${gameFilter}&select=kind,title`)
     : [];
+  // Open posts the update might take care of, so the AI can suggest ticking them.
+  const open = (
+    await ctx.db.select<{ id: string; kind: string; title: string }>(
+      "feedback_posts",
+      `${gameFilter}&fixed_in=is.null&hidden=is.false&status=not.in.(declined,done)&select=id,kind,title&order=vote_count.desc&limit=50`,
+    )
+  )
+    .filter((p) => !fixIds.includes(p.id))
+    .slice(0, 40);
 
   // The code's changes since the last update, from a repository the account connected on Toki.
+  let pulls: ReleasePull[] = [];
   let commits: string[] = [];
   let commitsError = false;
   const installation = Number(b.installation_id);
@@ -283,18 +310,42 @@ async function release(ctx: Ctx, b: Record<string, unknown>, lang: Lang) {
       if (!owned) return json({ error: "not_allowed" }, 403);
       const gh = github(ctx.env.github);
       if (!(await gh.repos(installation)).some((r) => r.repo.toLowerCase() === repo.toLowerCase())) return json({ error: "not_allowed" }, 403);
-      commits = await (await gh.repo(installation, repo)).commits(last?.published_at);
+      const client = await gh.repo(installation, repo);
+      const [merged, lines] = await Promise.all([client.mergedPulls(), client.commits(last?.published_at)]);
+      pulls = recentPulls(merged, last?.published_at);
+      ({ pulls, commits } = codeChanges(pulls, lines));
     } catch (e) {
       if (!(e instanceof GitHubError)) throw e;
       commitsError = true;
     }
   }
+
   const notes = str(b.notes, 1500);
-  if (!notes && !fixes.length && !commits.length) return json({ error: "nothing_to_write", commitsError }, 400);
-  const answer = await ask(ctx, "release", releasePrompt({ game: game?.title ?? null, lang, notes, fixes, commits, lastVersion: last?.version ?? null }), { schema: SCHEMAS.release });
-  const draft = readRelease(answer);
-  if (!draft) return json({ error: "ai_bad_answer" }, 502);
-  return json({ ...draft, commits: commits.length, commitsError });
+  if (!notes && !fixes.length && !pulls.length && !commits.length) return json({ error: "nothing_to_write", commitsError }, 400);
+  const answers = (Array.isArray(b.answers) ? b.answers : [])
+    .slice(0, 3)
+    .map((x) => (x && typeof x === "object" ? { q: str((x as Record<string, unknown>).q, 200), a: str((x as Record<string, unknown>).a, 500) } : null))
+    .filter((x): x is { q: string; a: string } => !!x && !!x.q);
+  const mayAsk = b.ask !== false && !answers.some((x) => x.a);
+  const prompt = releasePrompt({
+    game: game?.title ?? null,
+    lang,
+    notes,
+    fixes,
+    open,
+    pulls,
+    commits,
+    lastVersion: last?.version ?? null,
+    earlier,
+    answers,
+    mayAsk,
+  });
+  // With questions allowed the answer has one of two shapes, so only a draft is held to its schema.
+  const out = readRelease(await ask(ctx, "release", prompt, mayAsk ? {} : { schema: SCHEMAS.release }), open.length, mayAsk);
+  if (!out) return json({ error: "ai_bad_answer" }, 502);
+  const based = { commits: commits.length, pulls: pulls.length, commitsError };
+  if ("questions" in out) return json({ questions: out.questions, ...based });
+  return json({ title: out.title, notes: out.notes, small: out.small, fixes: out.fixes.map((i) => open[i].id), ...based });
 }
 
 // ---------- game descriptions ----------

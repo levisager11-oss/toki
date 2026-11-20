@@ -77,7 +77,7 @@ feature** tries them all at once.
 | `suggest`: "You might like" on the home page (saved for a day per account) | players | Haiku |
 | `help`: "Ask AI" on a game's page | players | Haiku |
 | `learn`: learns a game from its GitHub repository for "Ask AI" | developers | Haiku |
-| `release`: release note drafts (from a few words, ticked feedback and commits) | developers | Haiku |
+| `release`: release note drafts (from a few words, ticked feedback, the last updates, merged pull requests and commits; may ask questions first, suggests a small update and feedback it fixes, rewrites on request) | developers | Haiku |
 | `describe`: game descriptions in both languages, and reading new games in one-click adding | developers | Haiku |
 | `summary`: summaries of the feedback inbox and of applications, prompts for a coding AI | developers | Haiku |
 | `connect`: the Toki Connect steps that write code (also Managed Agents) | developers | Sonnet |

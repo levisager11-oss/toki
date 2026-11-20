@@ -21,7 +21,8 @@ const obj = (properties: Record<string, Schema>): Schema => ({
 export const SCHEMAS = {
   translate: obj({ t: list(str) }),
   similar: obj({ same: list(int) }),
-  release: obj({ title: str, notes: str }),
+  release: obj({ title: str, notes: str, small: bool, fixes: list(int) }),
+  releaseRevise: obj({ title: str, notes: str }),
   describe: obj({ en: str, de: str }),
   suggest: obj({ picks: list(obj({ n: int, why: str })) }),
   improve: obj({

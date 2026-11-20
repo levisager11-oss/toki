@@ -153,9 +153,13 @@ h1, h2 { text-wrap: balance; }
 .pickup p { margin: 0; font-size: 14px; }
 .frame iframe.pickup-frame { inset: auto; left: 0; top: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .frame.is-full, .frame:fullscreen { max-height: none; aspect-ratio: auto; border: 0; }
-/* Game covers the whole screen edge to edge, including behind the notch and home bar. */
+/* Game covers the whole screen edge to edge, including behind the notch and home bar (but see top-gap below). */
 .frame.pseudo-full { position: fixed; inset: 0; z-index: 100; width: 100vw; height: 100vh; height: 100dvh; max-height: none; aspect-ratio: auto; border: 0; margin: 0; padding: 0; }
-.close-full { position: absolute; z-index: 2; top: calc(env(safe-area-inset-top, 0px) + 10px); right: calc(env(safe-area-inset-right, 0px) + 10px);
+/* The way out sits in its own strip above the game (GamePage.tsx). */
+.frame.pseudo-full.with-close iframe { top: calc(env(safe-area-inset-top, 0px) + 52px); height: calc(100% - env(safe-area-inset-top, 0px) - 52px); }
+/* iPhone sideways: the top edge of the screen doesn't pass taps on, so the game starts below it. */
+.frame.pseudo-full.top-gap iframe { top: max(20px, env(safe-area-inset-top, 0px)); height: calc(100% - max(20px, env(safe-area-inset-top, 0px))); }
+.close-full { position: absolute; z-index: 2; top: calc(env(safe-area-inset-top, 0px) + 6px); right: calc(env(safe-area-inset-right, 0px) + 10px);
   width: 40px; height: 40px; display: grid; place-items: center; border: 1px solid #fff; background: rgba(16,19,23,.75); color: #fff; cursor: pointer; }
 .player-bar { display: flex; justify-content: space-between; align-items: center; gap: 12px 20px; flex-wrap: wrap; }
 .player-bar h1 { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -.01em; line-height: 1.1; }
@@ -894,6 +898,7 @@ a.author:hover { text-decoration: underline; color: var(--fg); }
 .msg-row .ai-translate { margin: 0 0 2px; }
 .ai-start { align-self: flex-start; }
 .ai-inline { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 8px; }
+.rel-change > input { flex: 1 1 200px; min-width: 0; }
 .ai-panel { display: flex; flex-direction: column; gap: 6px; border-left: 3px solid var(--accent); background: var(--bg); padding: 10px 12px; }
 .ai-box { border: 1px solid var(--line); border-left: 3px solid var(--accent); background: var(--surface); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .ai-box-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
