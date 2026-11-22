@@ -204,17 +204,22 @@ describe("the game script", () => {
     return { toki: win.toki as { room(code: unknown): void; onHost(fn: unknown): void; onName(fn: unknown): void; name: string | null }, sent, tell };
   }
 
+  const hello = (sent: unknown[]) => sent.find((x) => ((x as unknown[])[0] as { type?: string }).type === "hello");
+  it("says it reports input, so idle time doesn't count as playtime", async () => {
+    const { sent } = await load(true);
+    expect(sent).toContainEqual([{ toki: 1, type: "inputs" }, "https://www.playtoki.app"]);
+  });
   it("still reaches Toki after the game went to another of its own pages", async () => {
     // Browsers without location.ancestorOrigins: the page before is then the game itself.
     const game = "https://apex.playtoki.app";
     const session = new Map<string, string>();
     const first = await load(true, { origin: game, session });
-    expect(first.sent[0]).toEqual([{ toki: 1, type: "hello", data: undefined }, "https://www.playtoki.app"]);
+    expect(hello(first.sent)).toEqual([{ toki: 1, type: "hello", data: undefined }, "https://www.playtoki.app"]);
     const second = await load(true, { origin: game, referrer: `${game}/index.html`, session });
-    expect(second.sent[0]).toEqual([{ toki: 1, type: "hello", data: undefined }, "https://www.playtoki.app"]);
+    expect(hello(second.sent)).toEqual([{ toki: 1, type: "hello", data: undefined }, "https://www.playtoki.app"]);
     // Nothing kept (storage blocked): to whoever shows the game, never to the game's own address.
     const blocked = await load(true, { origin: game, referrer: `${game}/index.html` });
-    expect(blocked.sent[0]).toEqual([{ toki: 1, type: "hello", data: undefined }, "*"]);
+    expect(hello(blocked.sent)).toEqual([{ toki: 1, type: "hello", data: undefined }, "*"]);
   });
 
   it("tells Toki the room, and that it closed", async () => {

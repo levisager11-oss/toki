@@ -1,4 +1,4 @@
-/* Toki save support v11. Put this in the game's HTML <head>, before the game's own scripts.
+/* Toki save support v12. Put this in the game's HTML <head>, before the game's own scripts.
    Inside Toki, it keeps a copy of everything the game stores in localStorage, so progress
    survives closing the app (iPhone deletes storage of games shown inside other sites) and
    follows logged-in players to other devices. Outside Toki it does nothing.
@@ -14,7 +14,9 @@
    toki.name has it too (null until Toki said).
    On phones inside Toki, swipes and quick taps in the game don't scroll or zoom the Toki page
    around it (only where the game itself has nothing to scroll). While the game fills the
-   screen, Toki's page can't move anyway, so taps are left alone there. */
+   screen, Toki's page can't move anyway, so taps are left alone there.
+   Playtime: Toki only counts time while someone plays, so this tells it (now and then) that
+   there were keys, clicks, touches or a controller in the game. Nothing to call. */
 (function () {
   // Games hosted on Toki get this script added for them; a second copy in the game does nothing.
   if (window.__tokiSave) return;
@@ -62,6 +64,35 @@
     if (window.toki.name) try { fn(window.toki.name); } catch (err) { /* the game's own error */ }
   };
   if (!inToki) return;
+  // Playtime only counts while someone plays: say that this game reports input, then that
+  // there was some (at most every 20 seconds). A game left open with nobody at it stops counting.
+  var seen = 0;
+  function active() {
+    var t = Date.now();
+    if (t - seen < 20000) return;
+    seen = t;
+    top.postMessage({ toki: 1, type: "active" }, origin);
+  }
+  top.postMessage({ toki: 1, type: "inputs" }, origin);
+  ["keydown", "pointerdown", "pointermove", "touchstart", "wheel"].forEach(function (name) {
+    window.addEventListener(name, active, { passive: true, capture: true });
+  });
+  // Controllers send no events while held: once one is there, look at it every 2 seconds.
+  var pads = null;
+  window.addEventListener("gamepadconnected", function () {
+    active();
+    if (pads) return;
+    pads = setInterval(function () {
+      var list = [];
+      try { list = navigator.getGamepads() || []; } catch (e) { /* not allowed here */ }
+      for (var i = 0; i < list.length; i++) {
+        var pad = list[i];
+        if (!pad) continue;
+        for (var b = 0; b < pad.buttons.length; b++) if (pad.buttons[b].pressed) return active();
+        for (var a = 0; a < pad.axes.length; a++) if (Math.abs(pad.axes[a]) > 0.3) return active();
+      }
+    }, 2000);
+  });
   // Toki says when the game fills the screen (real fullscreen, or filling it on phones).
   var filled = false;
   // Phones (iPhone above all) pass a swipe or a fast double tap in a game up to the Toki page,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { onScreen, tokenUsable } from "../src/lib/analytics";
+import { IDLE_MS, IDLE_UNSEEN_MS, onScreen, playedIn, tokenUsable } from "../src/lib/analytics";
+import { readFileSync } from "node:fs";
 
 const token = (payload: object) => {
   const part = (o: object) => btoa(JSON.stringify(o)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -34,5 +35,31 @@ describe("time on screen", () => {
   it("doesn't count a night the computer slept through", () => {
     expect(onScreen(8 * 3_600_000)).toBe(10 * 60_000);
     expect(onScreen(-5)).toBe(0);
+  });
+});
+
+describe("time with nobody playing", () => {
+  const MIN = 60_000;
+  it("counts while there is input", () => {
+    expect(playedIn(0, 4 * MIN, 3 * MIN, IDLE_MS)).toBe(4 * MIN);
+  });
+  it("stops a few minutes after the last input", () => {
+    // Last input at 1 min: counts up to 6 min, not the 10 since.
+    expect(playedIn(0, 10 * MIN, 1 * MIN, IDLE_MS)).toBe(6 * MIN);
+    // Nothing at all after that.
+    expect(playedIn(10 * MIN, 20 * MIN, 1 * MIN, IDLE_MS)).toBe(0);
+  });
+  it("waits longer for games that don't say when there was input", () => {
+    expect(IDLE_UNSEEN_MS).toBeGreaterThan(IDLE_MS);
+    expect(playedIn(0, 10 * MIN, 1 * MIN, IDLE_UNSEEN_MS)).toBe(10 * MIN);
+    expect(playedIn(40 * MIN, 50 * MIN, 1 * MIN, IDLE_UNSEEN_MS)).toBe(0);
+  });
+  it("still doesn't count a night the computer slept through", () => {
+    expect(playedIn(0, 8 * 3_600_000, 8 * 3_600_000, IDLE_MS)).toBe(10 * MIN);
+  });
+  it("is told by the save script when there was input in the game", () => {
+    const script = readFileSync("public/toki-save.js", "utf8");
+    expect(script).toContain('type: "inputs"');
+    expect(script).toContain('type: "active"');
   });
 });

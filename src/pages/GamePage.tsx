@@ -129,7 +129,7 @@ export function GamePage() {
     return () => clearTimeout(id);
   }, [gameId]);
 
-  usePlaytime(gameId, session?.access_token);
+  usePlaytime(gameId, session?.access_token, gameFrame);
 
   useEffect(() => {
     if (game) markPlayed(game.slug);
