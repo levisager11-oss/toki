@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import { supabase } from "./supabase";
 import { visitorId } from "./local";
 
@@ -46,6 +46,16 @@ export function formatDuration(seconds: number, lang: "en" | "de"): string {
 const MIN_SESSION_S = 10;
 // While a game stays open, the time so far goes up this often (otherwise when leaving).
 const FLUSH_EVERY_MS = 10 * 60_000;
+/**
+ * Time only counts while someone plays: up to this long after the last key, click, touch or
+ * controller input. Games with Toki's script (v12 and newer) say when there was input in them.
+ */
+export const IDLE_MS = 5 * 60_000;
+/**
+ * Games that don't say so (no script, or an older copy): the page around them only sees the
+ * click into the game, input next to it and coming back to the tab, so it waits longer.
+ */
+export const IDLE_UNSEEN_MS = 30 * 60_000;
 
 /**
  * The time to count for a stretch on screen. Toki looks at least every 10 minutes while a game
@@ -57,27 +67,45 @@ export function onScreen(ms: number): number {
 }
 
 /**
- * Counts how long the game is on screen (not while the tab is hidden) and sends it to Toki
- * when the player leaves, hides the app, or every 10 minutes. Uses a keepalive request so
- * the time also arrives when the tab is closed.
+ * The part of the stretch from `since` to `now` (ms) that counts: on screen, and no longer
+ * than `idle` after the last input. A game left open with nobody at it stops counting.
  */
-export function usePlaytime(gameId: string | undefined, accessToken: string | undefined) {
+export function playedIn(since: number, now: number, lastInput: number, idle: number): number {
+  return onScreen(Math.min(now, lastInput + idle) - since);
+}
+
+/**
+ * Counts how long the game is on screen and played (not while the tab is hidden, nor after
+ * minutes without input) and sends it to Toki when the player leaves, hides the app, or every
+ * 10 minutes. Uses a keepalive request so the time also arrives when the tab is closed.
+ */
+export function usePlaytime(
+  gameId: string | undefined,
+  accessToken: string | undefined,
+  frame: RefObject<HTMLIFrameElement | null>,
+) {
   const token = useRef(accessToken);
   token.current = accessToken;
 
   useEffect(() => {
     if (!gameId) return;
     let since = document.visibilityState === "visible" ? performance.now() : null;
+    let lastInput = performance.now();
+    let reports = false; // the game says when there was input in it
     let pending = 0; // ms not sent yet
     let session = 0; // ms on screen in this visit
 
     const tick = () => {
       if (since === null) return;
       const now = performance.now();
-      const ms = onScreen(now - since);
+      const ms = playedIn(since, now, lastInput, reports ? IDLE_MS : IDLE_UNSEEN_MS);
       pending += ms;
       session += ms;
       since = now;
+    };
+    const input = () => {
+      tick();
+      lastInput = performance.now();
     };
     const flush = () => {
       tick();
@@ -92,18 +120,42 @@ export function usePlaytime(gameId: string | undefined, accessToken: string | un
         since = null;
       } else if (since === null) {
         since = performance.now();
+        lastInput = since;
       }
     };
+    const onMessage = (e: MessageEvent) => {
+      const m = e.data as { toki?: unknown; type?: unknown } | null;
+      if (!m || m.toki !== 1 || !frame.current || e.source !== frame.current.contentWindow) return;
+      if (m.type === "inputs") {
+        tick();
+        reports = true;
+      } else if (m.type === "active") {
+        reports = true;
+        input();
+      }
+    };
+    // Clicking into the game moves the focus from the page to it.
+    const onBlur = () => {
+      if (frame.current && document.activeElement === frame.current) input();
+    };
+    const opts = { capture: true, passive: true };
+    const inputs = ["keydown", "pointerdown", "pointermove", "touchstart", "wheel"] as const;
     const timer = setInterval(flush, FLUSH_EVERY_MS);
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("pagehide", flush);
+    window.addEventListener("message", onMessage);
+    window.addEventListener("blur", onBlur);
+    for (const name of inputs) window.addEventListener(name, input, opts);
     return () => {
       clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pagehide", flush);
+      window.removeEventListener("message", onMessage);
+      window.removeEventListener("blur", onBlur);
+      for (const name of inputs) window.removeEventListener(name, input, opts);
       flush();
     };
-  }, [gameId]);
+  }, [gameId, frame]);
 }
 
 /**

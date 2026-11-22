@@ -72,9 +72,9 @@ describe("the game script", () => {
     return { toki: win.toki as { score(n: unknown, board?: unknown): void }, sent, src };
   }
 
-  it("is v11, and sends scores to the main list or to another one", async () => {
+  it("is v12, and sends scores to the main list or to another one", async () => {
     const { toki, sent, src } = await load();
-    expect(src.startsWith("/* Toki save support v11.")).toBe(true);
+    expect(src.startsWith("/* Toki save support v12.")).toBe(true);
     toki.score(10);
     toki.score(20, "hard");
     toki.score(30, "");
