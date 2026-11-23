@@ -40,6 +40,9 @@ const LANDSCAPE_PHONE = "(orientation: landscape) and (pointer: coarse) and (max
 // iPhones and iPads (iPads say they are Macs).
 const APPLE_TOUCH = typeof navigator !== "undefined" &&
   (/iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1));
+// Toki opened from the home screen: no Safari bars, so nothing takes taps along the top edge.
+const STANDALONE = typeof window !== "undefined" &&
+  (window.matchMedia?.("(display-mode: standalone)").matches || (navigator as Navigator & { standalone?: boolean }).standalone === true);
 // A visit counts as a play after this long on the page (the server counts one per browser per day).
 const PLAY_AFTER_MS = 10_000;
 
@@ -232,8 +235,9 @@ export function GamePage() {
         )}
         {/* with-close: the way out gets its own strip above the game, so it never covers the
             game's own buttons (often top right). top-gap: iPhones in landscape keep taps along
-            the top edge of the screen for themselves, so the game starts just below it. */}
-        <div className={`frame ${isFull ? "is-full" : ""} ${fillScreen ? "pseudo-full" : ""} ${pseudoFull && !landscapePhone ? "with-close" : ""} ${landscapePhone && APPLE_TOUCH ? "top-gap" : ""}`} ref={frameWrap}>
+            the top edge of the screen for themselves (Safari shows its bars again), so the game starts
+            just below it. Opened from the home screen there are no bars: the game fills it all. */}
+        <div className={`frame ${isFull ? "is-full" : ""} ${fillScreen ? "pseudo-full" : ""} ${pseudoFull && !landscapePhone ? "with-close" : ""} ${landscapePhone && APPLE_TOUCH && !STANDALONE ? "top-gap" : ""}`} ref={frameWrap}>
           {pseudoFull && !landscapePhone && (
             <button type="button" className="close-full" onClick={() => setPseudoFull(false)} aria-label={t("game.exitFullscreen")}>
               <CloseIcon />

@@ -157,7 +157,7 @@ h1, h2 { text-wrap: balance; }
 .frame.pseudo-full { position: fixed; inset: 0; z-index: 100; width: 100vw; height: 100vh; height: 100dvh; max-height: none; aspect-ratio: auto; border: 0; margin: 0; padding: 0; }
 /* The way out sits in its own strip above the game (GamePage.tsx). */
 .frame.pseudo-full.with-close iframe { top: calc(env(safe-area-inset-top, 0px) + 52px); height: calc(100% - env(safe-area-inset-top, 0px) - 52px); }
-/* iPhone sideways: the top edge of the screen doesn't pass taps on, so the game starts below it. */
+/* iPhone sideways in Safari: tapping the top edge brings Safari's bars back, so the game starts below it. */
 .frame.pseudo-full.top-gap iframe { top: max(20px, env(safe-area-inset-top, 0px)); height: calc(100% - max(20px, env(safe-area-inset-top, 0px))); }
 .close-full { position: absolute; z-index: 2; top: calc(env(safe-area-inset-top, 0px) + 6px); right: calc(env(safe-area-inset-right, 0px) + 10px);
   width: 40px; height: 40px; display: grid; place-items: center; border: 1px solid #fff; background: rgba(16,19,23,.75); color: #fff; cursor: pointer; }
