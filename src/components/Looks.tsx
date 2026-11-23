@@ -125,11 +125,11 @@ export function TokenCoin({ size = 14 }: { size?: number }) {
 }
 
 /** Stars from 1 to 5 (halves for an average). */
-export function Stars({ value, size = 14, label }: { value: number; size?: number; label?: string }) {
+export function Stars({ value, size = 14, label, count = 5 }: { value: number; size?: number; label?: string; count?: number }) {
   const full = Math.round(value * 2) / 2;
   return (
     <span className="stars" {...(label === "" ? { "aria-hidden": true } : { role: "img", "aria-label": label ?? `${value.toFixed(1)} / 5` })}>
-      {[1, 2, 3, 4, 5].map((i) => (
+      {Array.from({ length: count }, (_, k) => k + 1).map((i) => (
         <svg key={i} viewBox="0 0 10 10" width={size} height={size} shapeRendering="crispEdges" aria-hidden="true">
           <defs>
             <clipPath id={`half-${i}-${size}`}><rect x="0" y="0" width="5" height="10" /></clipPath>

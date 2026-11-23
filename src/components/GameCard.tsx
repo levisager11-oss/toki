@@ -38,7 +38,7 @@ export function Rating({ game }: { game: Game }) {
   const label = t("rev.average", { avg: avg.toFixed(1) });
   return (
     <span className="plays rating" title={`${label} · ${t("rev.count", { n: game.stats?.reviews ?? 0 })}`}>
-      <Stars value={1} size={10} label="" />
+      <Stars value={1} count={1} size={10} label="" />
       <span aria-hidden="true">{avg.toLocaleString(lang === "de" ? "de-CH" : "en-GB", { maximumFractionDigits: 1, minimumFractionDigits: 1 })}</span>
       <span className="sr-only">{label}</span>
     </span>
