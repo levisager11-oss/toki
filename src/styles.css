@@ -1277,7 +1277,8 @@ main.content:focus { outline: none; }
 @media (max-width: 860px) {
   .daily { grid-template-columns: minmax(0, 1fr); border-left-width: 1px; border-top: 6px solid var(--accent); }
   .daily-cover { border-right: 0; border-bottom: 1px solid var(--fg); }
-  .daily .daily-cover .cover { aspect-ratio: 16 / 9; }
+  /* Show the whole picture on phones: its own shape once loaded (2:1 before). */
+  .daily .daily-cover .cover { aspect-ratio: auto 2 / 1; height: auto; }
   .daily-txt { padding: 16px; }
   .daily .actions .btn.primary { flex: 1; padding-block: 12px; }
   .board-tabs { flex: 1 1 100%; }
