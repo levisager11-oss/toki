@@ -40,8 +40,14 @@ export function looksLikeJwt(token: string): boolean {
 
 type Jwks = { keys: (JsonWebKey & { kid?: string })[] };
 let cache: { at: number; jwks: Jwks } | null = null;
+let lastForced = 0;
 async function keys(fetchImpl: typeof fetch, fresh: boolean): Promise<Jwks> {
   if (cache && !fresh && Date.now() - cache.at < 3600_000) return cache.jwks;
+  // A token with an unknown key id may force a new look at GitHub's keys, but only once a minute.
+  if (fresh && cache) {
+    if (Date.now() - lastForced < 60_000) return cache.jwks;
+    lastForced = Date.now();
+  }
   const res = await fetchImpl(`${ACTIONS_ISSUER}/.well-known/jwks`, { signal: AbortSignal.timeout(10_000) });
   if (!res.ok) throw new ActionsAuthError(`GitHub keys: ${res.status}`);
   cache = { at: Date.now(), jwks: (await res.json()) as Jwks };
