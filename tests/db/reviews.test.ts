@@ -163,3 +163,20 @@ describe("a copy of your data", () => {
     expect(d.level_and_tokens).toHaveLength(1);
   });
 });
+
+describe("review breakdown", () => {
+  it("counts reviews per star value, without hidden ones, for anyone", async () => {
+    const g = await t.game(dev);
+    const ps = [await t.user(), await t.user(), await t.user(), await t.user()];
+    for (const p of ps) await played(p.id, 600, g.id);
+    await review(ps[0], 5, "", g.id);
+    await review(ps[1], 5, "Great", g.id);
+    await review(ps[2], 2, "", g.id);
+    await review(ps[3], 5, "Spam", g.id);
+    await t.admin("update game_reviews set hidden = true where game_id = $1 and user_id = $2", [g.id, ps[3].id]);
+    const rows = await t.as<{ stars: number; n: number }>(null, "select * from public.review_breakdown($1)", [g.id]);
+    expect(rows.map((r) => [r.stars, r.n])).toEqual([[5, 2], [4, 0], [3, 0], [2, 1], [1, 0]]);
+    const none = await t.as<{ stars: number; n: number }>(null, "select * from public.review_breakdown($1)", [(await t.game(dev)).id]);
+    expect(none.map((r) => r.n)).toEqual([0, 0, 0, 0, 0]);
+  });
+});
