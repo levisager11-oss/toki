@@ -163,3 +163,61 @@ describe("a copy of your data", () => {
     expect(d.level_and_tokens).toHaveLength(1);
   });
 });
+
+describe("review fixes", () => {
+  it("let a game with reviews be deleted", async () => {
+    const g = await t.game(dev);
+    const p = await t.user();
+    await played(p.id, 600, g.id);
+    await review(p, 4, "nice", g.id);
+    await t.admin("delete from games where id = $1", [g.id]);
+    expect(await t.admin("select 1 from game_stats where game_id = $1", [g.id])).toEqual([]);
+  });
+
+  it("keep a review an admin removed removed, also when it is deleted and written again", async () => {
+    const g = await t.game(dev);
+    const p = await t.user();
+    const reporter = await t.user();
+    await played(p.id, 600, g.id);
+    const id = await review(p, 1, "mean words", g.id);
+    await t.as(reporter, "select public.report_content('review', $1, 'harassment', '')", [id]);
+    const [rep] = await t.as<{ id: number }>(admin, "select id from content_reports where kind = 'review' and target = $1", [id]);
+    await t.as(admin, "select public.handle_content_report($1, 'removed', '')", [rep.id]);
+    await rpc(p, "public.delete_review($1)", [g.id]);
+    const [kept] = await t.admin<{ body: string; hidden: boolean }>("select body, hidden from game_reviews where id = $1", [id]);
+    expect(kept).toEqual({ body: "", hidden: true });
+    await review(p, 1, "mean words again", g.id);
+    expect(await t.as(null, "select 1 from game_reviews where game_id = $1", [g.id])).toEqual([]);
+  });
+
+  it("tell the developer about a player's review once", async () => {
+    const g = await t.game(dev);
+    const p = await t.user();
+    await played(p.id, 600, g.id);
+    for (let i = 0; i < 3; i++) {
+      await review(p, 5, "again", g.id);
+      await rpc(p, "public.delete_review($1)", [g.id]);
+    }
+    const notes = await t.admin("select 1 from notifications where user_id = $1 and actor_id = $2 and kind = 'review' and data->>'game' = $3", [dev.id, p.id, g.id]);
+    expect(notes).toHaveLength(1);
+  });
+
+  it("tell the player about the developer's answer once", async () => {
+    const g = await t.game(dev);
+    const p = await t.user();
+    await played(p.id, 600, g.id);
+    const id = await review(p, 3, "ok", g.id);
+    for (const text of ["Thanks", "", "Thanks!"]) await rpc(dev, "public.reply_review($1, $2)", [id, text]);
+    expect(await t.admin("select 1 from notifications where user_id = $1 and kind = 'review_reply'", [p.id])).toHaveLength(1);
+  });
+});
+
+describe("the feed's day of achievements", () => {
+  it("keeps the newest 10", async () => {
+    const p = await t.user();
+    for (let i = 1; i <= 12; i++)
+      await t.admin("select public.add_activity($1, 'achievement', 'ach:test', null, $2::jsonb, 'ids')", [p.id, JSON.stringify({ ids: [`a${i}`] })]);
+    const [row] = await t.admin<{ ids: string[] }>("select data->'ids' as ids from activity where user_id = $1 and key = 'ach:test'", [p.id]);
+    expect(row.ids).toEqual(Array.from({ length: 10 }, (_, i) => `a${i + 3}`));
+  });
+});

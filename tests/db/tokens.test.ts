@@ -160,6 +160,9 @@ describe("the shop", () => {
     await expect(rpc(p, "public.buy_cosmetic('title.chill')")).rejects.toThrow(/not_found/);
     await rpc(admin, "public.admin_set_cosmetic('title.chill', 70, true)");
     expect(await rpc(p, "public.buy_cosmetic('title.chill')")).toBe(430);
+    // Leaving the price out keeps it.
+    await rpc(admin, "public.admin_set_cosmetic('title.chill', null, true)");
+    expect((await t.admin<{ price: number }>("select price from cosmetics where id = 'title.chill'"))[0].price).toBe(70);
   });
 
   it("lets admins take tokens and cosmetics away", async () => {
@@ -286,6 +289,16 @@ describe("trades", () => {
     const mine = await t.as<{ id: string; status: string; mine: boolean }>(a, "select * from public.my_trades()");
     expect(mine.find((x) => x.id === one)).toMatchObject({ status: "declined", mine: true });
     expect(await t.as(stranger, "select * from trades")).toEqual([]);
+  });
+
+  it("can't be accepted by a banned player, who can still decline", async () => {
+    const one = await offer(a, b.id, 5, [], 5, []);
+    const two = await offer(a, b.id, 5, [], 5, []);
+    await t.admin("update profiles set banned_until = now() + interval '1 day' where id = $1", [b.id]);
+    await expect(rpc(b, "public.answer_trade($1, true)", [one])).rejects.toThrow(/banned/);
+    expect(await rpc(b, "public.answer_trade($1, false)", [two])).toBe("declined");
+    await t.admin("update profiles set banned_until = null where id = $1", [b.id]);
+    await rpc(a, "public.cancel_trade($1)", [one]);
   });
 
   it("can't include a game's cosmetics", async () => {
