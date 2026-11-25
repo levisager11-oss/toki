@@ -1516,6 +1516,14 @@ main.content:focus { outline: none; }
 /* reviews */
 .reviews { scroll-margin-top: calc(var(--top-h, 75px) + 16px); max-width: 760px; }
 .rev-avg { display: inline-flex; align-items: center; gap: 8px; }
+.rev-sort { margin: 12px 0 0; }
+.rev-badge { margin-left: 6px; padding: 0 6px; background: var(--accent); color: var(--bg); font-size: 11px; font-weight: 700; }
+.rev-break { list-style: none; margin: 12px 0 0; padding: 0; max-width: 360px; display: flex; flex-direction: column; gap: 4px; }
+.rev-break li { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.rev-break-l { width: 12px; text-align: right; }
+.rev-break-n { min-width: 28px; color: var(--muted); }
+.rev-bar { flex: 1; height: 8px; background: var(--surface); border: 1px solid var(--line); }
+.rev-bar span { display: block; height: 100%; background: var(--accent); }
 .rev-list { list-style: none; margin: 12px 0 8px; padding: 0; border-top: 1px solid var(--line); }
 .rev-list li { padding: 12px 2px; border-bottom: 1px solid var(--line); }
 .rev-list li.hidden-post { opacity: .6; }
