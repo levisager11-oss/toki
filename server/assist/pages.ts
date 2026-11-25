@@ -32,7 +32,7 @@ async function publicUrl(url: string, resolve: Lookup): Promise<boolean> {
   }
 }
 
-async function fetchPublic(url: string, fetchImpl: typeof fetch, resolve: Lookup, accept = "text/html"): Promise<Response | null> {
+export async function fetchPublic(url: string, fetchImpl: typeof fetch, resolve: Lookup, accept = "text/html"): Promise<Response | null> {
   const signal = AbortSignal.timeout(8000);
   for (let hops = 0; hops <= 5; hops++) {
     if (!(await publicUrl(url, resolve))) return null;

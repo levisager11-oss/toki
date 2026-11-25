@@ -175,6 +175,7 @@ export async function POST(request: Request) {
             git: await gitAccess(w),
             origin: new URL(request.url).origin,
             anyway: b.anyway === true,
+            secret: w.serviceKey,
             repo: typeof b.installation_id === "number" && typeof b.repo === "string" && /^[\w.-]+\/[\w.-]+$/.test(b.repo) ? { installation_id: b.installation_id, repo: b.repo } : null,
           }),
         );

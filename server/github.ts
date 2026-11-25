@@ -169,6 +169,16 @@ export function github(cfg: ServerEnv["github"], fetchImpl: typeof fetch = fetch
         async defaultBranch(): Promise<string> {
           return (await call<{ default_branch: string }>(`/repos/${repo}`, token)).default_branch;
         },
+        /**
+         * Where GitHub says the repository's site is: the "homepage" field (set by hand, not checked
+         * by GitHub), and the custom domain of its GitHub Pages site ("cname"; GitHub lets only one
+         * repository use a domain). When the app may not read the Pages settings, they are left out.
+         */
+        async site(): Promise<{ homepage: string | null; cname: string | null; pagesUrl: string | null }> {
+          const r = await call<{ homepage?: string | null }>(`/repos/${repo}`, token);
+          const pg = await call<{ cname?: string | null; html_url?: string | null }>(`/repos/${repo}/pages`, token).catch(() => null);
+          return { homepage: r.homepage || null, cname: pg?.cname || null, pagesUrl: pg?.html_url || null };
+        },
         /** The repository's name as GitHub has it now (it follows renames), so also a check that it can be reached. */
         async name(): Promise<string> {
           return (await call<{ full_name: string }>(`/repos/${repo}`, token)).full_name;
