@@ -6,6 +6,7 @@ import { deleteAccount, exportMyData, saveFile } from "../lib/account";
 import { stopAccountSaves } from "../lib/saves";
 import { forgetPush } from "../lib/push";
 import { supabase } from "../lib/supabase";
+import { SettingRow } from "./SettingRow";
 
 /** On the account page: download everything Toki keeps about you, or delete the account. */
 export function AccountData() {
@@ -47,25 +48,29 @@ export function AccountData() {
   };
 
   return (
-    <section className="account-data">
-      <h2 className="h small">{t("data.title")}</h2>
-      <p>{t("data.text")} <Link to="/privacy">{t("data.privacy")}</Link></p>
-      <div className="actions">
-        <button type="button" className="btn" onClick={download} disabled={!!busy}>{busy === "export" ? t("loading") : t("data.download")}</button>
-        {!deleting && <button type="button" className="btn ghost-danger" onClick={() => setDeleting(true)}>{t("data.delete")}</button>}
-      </div>
-      {deleting && (
-        <form className="form" onSubmit={remove}>
-          <p className="check warn">{t("data.deleteWarn")}</p>
-          <label htmlFor="delete-name">{t("data.typeName", { name: profile.username })}</label>
-          <input id="delete-name" required value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" autoCapitalize="none" spellCheck={false} />
-          <div className="actions">
-            <button className="btn danger" disabled={!!busy || typed.trim().toLowerCase() !== profile.username}>{busy === "delete" ? t("loading") : t("data.deleteNow")}</button>
-            <button type="button" className="btn" onClick={() => { setDeleting(false); setTyped(""); }}>{t("form.cancel")}</button>
-          </div>
-        </form>
-      )}
-      {err && <p className="error" role="alert">{err}</p>}
-    </section>
+    <>
+      <SettingRow title={t("data.title")} help={<>{t("data.text")} <Link to="/privacy">{t("data.privacy")}</Link></>}>
+        <button type="button" className="btn small" onClick={download} disabled={!!busy}>{busy === "export" ? t("loading") : t("account.download")}</button>
+      </SettingRow>
+      <SettingRow
+        danger
+        title={t("data.delete")}
+        help={t("account.deleteHelp")}
+        below={deleting && (
+          <form className="set-form" onSubmit={remove}>
+            <p className="check warn">{t("data.deleteWarn")}</p>
+            <label htmlFor="delete-name">{t("data.typeName", { name: profile.username })}</label>
+            <input id="delete-name" required value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" autoCapitalize="none" spellCheck={false} />
+            <div className="set-form-foot">
+              <button type="button" className="btn small" onClick={() => { setDeleting(false); setTyped(""); }}>{t("form.cancel")}</button>
+              <button className="btn small danger" disabled={!!busy || typed.trim().toLowerCase() !== profile.username}>{busy === "delete" ? t("loading") : t("data.deleteNow")}</button>
+            </div>
+          </form>
+        )}
+      >
+        {!deleting && <button type="button" className="btn small ghost-danger" onClick={() => setDeleting(true)}>{t("account.deleteShort")}</button>}
+      </SettingRow>
+      {err && <p className="error set-note" role="alert">{err}</p>}
+    </>
   );
 }

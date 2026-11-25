@@ -59,7 +59,7 @@ export function Collection({ ids, person, self, games }: { ids: Set<string>; per
     setBusy(false);
   };
   return (
-    <section>
+    <section id="collection" className="collection-sec">
       <div className="sechead">
         <h2>{t("shop.collection")}</h2>
         {self && <Link to="/shop" className="btn">{t("shop.title")}</Link>}
