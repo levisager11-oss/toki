@@ -87,8 +87,15 @@ function failed(e: unknown): Response {
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  // Vercel's nightly job (vercel.json). Harmless to call: it only deletes what is due.
+  // Vercel's nightly job (vercel.json). Vercel sends `Authorization: Bearer $CRON_SECRET`.
   if (url.searchParams.get("action") === "sweep") {
+    // Until CRON_SECRET is set in Vercel, only Vercel's scheduler (by its name) may start it,
+    // so the nightly cleanup keeps running; with the secret, only a request that carries it.
+    const secret = process.env.CRON_SECRET;
+    const ok = secret
+      ? request.headers.get("authorization") === `Bearer ${secret}`
+      : /^vercel-cron\//.test(request.headers.get("user-agent") ?? "");
+    if (!ok) return json({ error: "unauthorized" }, 401);
     const env = serverEnv();
     if (!env.serviceKey) return json({ error: "not_configured" }, 503);
     const db = serviceDb(env.serviceKey);
@@ -111,7 +118,7 @@ export async function GET(request: Request) {
     out.accountId = config?.accountId ?? null;
     out.bucket = config?.bucket ?? null;
     // At a glance: space used (of the free 10 GB), hosted games, and GitHub auto-updates.
-    const builds = await w.db.select<{ bytes: number; game_id: string; status: string }>("game_builds", "status=in.(uploading,live,previous)&select=bytes,game_id,status");
+    const builds = await w.db.select<{ bytes: number; game_id: string; status: string }>("game_builds", "status=in.(uploading,live,previous,deleting)&select=bytes,game_id,status");
     out.usedBytes = builds.reduce((n, b) => n + Number(b.bytes), 0);
     out.limitBytes = BUCKET_BYTES;
     out.hostedGames = new Set(builds.filter((b) => b.status === "live").map((b) => b.game_id)).size;
@@ -175,6 +182,7 @@ export async function POST(request: Request) {
             git: await gitAccess(w),
             origin: new URL(request.url).origin,
             anyway: b.anyway === true,
+            secret: w.serviceKey,
             repo: typeof b.installation_id === "number" && typeof b.repo === "string" && /^[\w.-]+\/[\w.-]+$/.test(b.repo) ? { installation_id: b.installation_id, repo: b.repo } : null,
           }),
         );

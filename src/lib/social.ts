@@ -276,7 +276,9 @@ export type NotificationKind =
   /** a question from an admin on your developer application (to you), or the applicant's answer (to admins) */
   | "application"
   /** Toki 2.0: a new level, a friend's trade (or what became of yours), a review of your game, the developer's answer to yours */
-  | "level_up" | "trade" | "review" | "review_reply";
+  | "level_up" | "trade" | "review" | "review_reply"
+  /** a developer you follow released a new game or a big update */
+  | "follow_news";
 
 export interface Notification {
   id: number;
@@ -299,6 +301,8 @@ export interface Notification {
     level?: number;
     tokens?: number;
     stars?: number;
+    /** follow_news: the game's link name (slug) */
+    slug?: string;
     trade?: string;
     /** application: which developer application */
     application?: string;
@@ -307,6 +311,9 @@ export interface Notification {
     note?: string;
     days?: number | null;
     outcome?: "dismissed" | "removed" | "banned";
+    /** trade offers: nothing wanted back (a gift), or an answer to one of your offers */
+    gift?: boolean;
+    counter?: boolean;
   };
   created_at: string;
   read_at: string | null;

@@ -52,7 +52,8 @@ export async function POST(request: Request) {
         return json({ error: "bad_request" }, 400);
     }
   } catch (e) {
-    return json({ error: e instanceof DbError ? e.message : "error" }, 500);
+    console.error("connect error", e);
+    return json({ error: "error" }, 500);
   }
 }
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { useI18n } from "../lib/i18n";
+import { SettingRow, Switch } from "./SettingRow";
 
 /**
  * Whether friends see what the player did (new levels, achievements, best scores, cosmetics,
@@ -30,15 +31,11 @@ export function ShareActivity({ userId }: { userId: string }) {
     setBusy(false);
   };
   return (
-    <div className="share-activity">
-      <label className="switch-row">
-        <input type="checkbox" checked={!!on} disabled={on === null || busy} onChange={toggle} />
-        <span>
-          <b>{t("feed.share")}</b>
-          <small>{t("feed.shareHelp")}</small>
-        </span>
-      </label>
-      {err && <p className="error" role="alert">{t("error")}</p>}
-    </div>
+    <>
+      <SettingRow title={t("feed.share")} help={t("feed.shareHelp")} htmlFor="share-activity">
+        <Switch id="share-activity" checked={!!on} disabled={on === null || busy} onChange={toggle} />
+      </SettingRow>
+      {err && <p className="error set-note" role="alert">{t("error")}</p>}
+    </>
   );
 }

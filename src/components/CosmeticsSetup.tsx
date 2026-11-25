@@ -2,7 +2,7 @@ import { useEffect, useState, type KeyboardEvent } from "react";
 import { useI18n, type Key } from "../lib/i18n";
 import { gameAchievements, type AchievementRow } from "../lib/achievements";
 import {
-  FRAME_STYLES, loadCatalog, setGameCosmetics, shopErrorKey, THEME_PATTERNS, type Cosmetic, type FrameStyle, type Style, type ThemePattern, type WearKind,
+  GAME_FRAME_STYLES, GAME_THEME_PATTERNS, loadCatalog, setGameCosmetics, shopErrorKey, type Cosmetic, type FrameStyle, type Style, type ThemePattern, type WearKind,
 } from "../lib/cosmetics";
 import { useAuth } from "../lib/auth";
 import { CosmeticPreview } from "./Collection";
@@ -12,7 +12,7 @@ type Draft = { id?: string; kind: WearKind; name: string; name_de: string; style
 const MAX = 5;
 const KIND_LIST: WearKind[] = ["frame", "color", "title", "theme"];
 const defaultStyle = (kind: WearKind): Style =>
-  kind === "frame" ? { style: "ring", a: "#ff7a59", b: "#ffc531" } : kind === "color" ? { a: "#2e8fe6" } : kind === "theme" ? { a: "#1a1446", b: "#7a5cff", pattern: "stars" } : {};
+  kind === "frame" ? { style: "ring", a: "#ff7a59", b: "#ffc531" } : kind === "color" ? { a: "#2e8fe6" } : kind === "theme" ? { a: "#1f6f4a", b: "#8fd694", pattern: "dots" } : {};
 
 /**
  * For the game's developer, on its form: up to 5 cosmetics of the game's own (a frame, a name
@@ -62,7 +62,7 @@ export function CosmeticsSetup({ gameId }: { gameId: string }) {
     setBusy(true);
     try {
       const saved = await setGameCosmetics(gameId, list.map((d) => ({
-        id: d.id, kind: d.kind, name: d.name.trim(), name_de: d.name_de.trim() || null, style: d.kind === "title" ? {} : d.style, achievement: d.achievement,
+        id: d.id, kind: d.kind, name: d.name.trim(), name_de: d.name_de.trim() || null, style: d.kind === "title" ? {} : d.kind === "color" ? { a: d.style.a } : d.style, achievement: d.achievement,
       })));
       setList(saved.map((c) => ({ id: c.id, kind: c.kind as WearKind, name: c.name, name_de: c.name_de ?? "", style: c.style, achievement: c.achievement ?? "" })));
       setMsg(t("gcos.saved"));
@@ -72,7 +72,7 @@ export function CosmeticsSetup({ gameId }: { gameId: string }) {
     setBusy(false);
   };
 
-  const person = profile ?? { id: "", username: "you" };
+  const person = profile ?? { id: "", username: t("shop.you") };
   const preview = (d: Draft): Cosmetic => ({
     id: d.id ?? "preview", kind: d.kind, name: d.name || "…", name_de: d.name_de || null, price: null, min_level: 1,
     style: d.style, game_id: gameId, achievement: d.achievement, position: 0, active: true,
@@ -82,7 +82,7 @@ export function CosmeticsSetup({ gameId }: { gameId: string }) {
     <details id="cosmetics" className="helper-setup cos-setup" open={list.length > 0 || location.hash === "#cosmetics"} onKeyDown={noSubmit}>
       <summary><b>{t("gcos.title")}</b>{list.length > 0 && <span className="sub"> · {list.length}/{MAX}</span>}</summary>
       <div className="ai-panel">
-        <small>{t("gcos.lead")}</small>
+        <small>{t("gcos.lead")} {t("gcos.shopOnly")}</small>
         {achievements.length === 0 ? (
           <p className="check">{t("gcos.needAchievements")}</p>
         ) : (
@@ -107,19 +107,19 @@ export function CosmeticsSetup({ gameId }: { gameId: string }) {
                     <div className="cos-edit-style">
                       {d.kind === "frame" && (
                         <select aria-label={t("gcos.look")} value={d.style.style ?? "ring"} onChange={(e) => setStyle(i, { style: e.target.value as FrameStyle })}>
-                          {FRAME_STYLES.map((s) => <option key={s} value={s}>{t(`gcos.frame.${s}` as Key)}</option>)}
+                          {GAME_FRAME_STYLES.map((s) => <option key={s} value={s}>{t(`gcos.frame.${s}` as Key)}</option>)}
                         </select>
                       )}
                       {d.kind === "theme" && (
                         <select aria-label={t("gcos.look")} value={d.style.pattern ?? "plain"} onChange={(e) => setStyle(i, { pattern: e.target.value as ThemePattern })}>
-                          {THEME_PATTERNS.map((p) => <option key={p} value={p}>{t(`gcos.pattern.${p}` as Key)}</option>)}
+                          {GAME_THEME_PATTERNS.map((p) => <option key={p} value={p}>{t(`gcos.pattern.${p}` as Key)}</option>)}
                         </select>
                       )}
                       {!(d.kind === "frame" && d.style.style === "rainbow") && (
                         <label className="sub">{t("gcos.color1")} <input type="color" value={d.style.a ?? "#ff7a59"} onChange={(e) => setStyle(i, { a: e.target.value })} /></label>
                       )}
-                      {(d.kind === "theme" || (d.kind === "frame" && d.style.style !== "rainbow" && d.style.style !== "dashed") || d.kind === "color") && (
-                        <label className="sub">{t(d.kind === "color" ? "gcos.color2Optional" : "gcos.color2")} <input type="color" value={d.style.b ?? d.style.a ?? "#ffc531"} onChange={(e) => setStyle(i, { b: e.target.value })} /></label>
+                      {(d.kind === "theme" || (d.kind === "frame" && d.style.style !== "rainbow" && d.style.style !== "dashed")) && (
+                        <label className="sub">{t("gcos.color2")} <input type="color" value={d.style.b ?? d.style.a ?? "#ffc531"} onChange={(e) => setStyle(i, { b: e.target.value })} /></label>
                       )}
                     </div>
                   )}

@@ -32,11 +32,12 @@ async function publicUrl(url: string, resolve: Lookup): Promise<boolean> {
   }
 }
 
-async function fetchPublic(url: string, fetchImpl: typeof fetch, resolve: Lookup, accept = "text/html"): Promise<Response | null> {
+/** Fetches a public page, checking every redirect hop's name against local and private addresses. */
+export async function fetchPublic(url: string, fetchImpl: typeof fetch = fetch, resolve: Lookup = dnsLookup, accept = "text/html", userAgent = "TokiAssist/1.0"): Promise<Response | null> {
   const signal = AbortSignal.timeout(8000);
   for (let hops = 0; hops <= 5; hops++) {
     if (!(await publicUrl(url, resolve))) return null;
-    const res = await fetchImpl(url, { redirect: "manual", headers: { "user-agent": "TokiAssist/1.0", accept }, signal });
+    const res = await fetchImpl(url, { redirect: "manual", headers: { "user-agent": userAgent, accept }, signal });
     const next = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
     if (!next) return res;
     await res.body?.cancel();

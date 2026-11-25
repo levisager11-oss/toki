@@ -107,6 +107,10 @@ must be built first (`npm run build`, engine exports) use the GitHub Action show
 
 ## Clean-up and limits
 
+- Set `CRON_SECRET` (any long random string) in the Vercel project's environment variables.
+  Vercel sends it as a bearer token, and then only requests that carry it start the nightly
+  sweep. Until it is set, the sweep only runs when Vercel's scheduler (`vercel-cron`) calls it.
+
 - Each upload replaces the game right away. The version before is kept for **30 days** so the
   developer can roll back; older versions, unfinished uploads and the files of deleted games are
   deleted every night (Vercel cron → `/api/hosting?action=sweep`) and after each upload.

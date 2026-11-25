@@ -14,6 +14,10 @@
 //    sites are read, never local or private addresses.
 // The repository: the one the developer picked, the one a GitHub Pages address names, or one of
 // theirs named like the game or its site.
+// Before anything is copied, the developer must prove the game's address is theirs (siteProof):
+// the picked repository is the GitHub Pages repository of that address, GitHub says the repository
+// serves that site, or a file with Toki's code is on the site. Otherwise someone could point a
+// game at another person's site, copy it, and later collect that site's players' progress.
 // Either way the files go live through the same steps as any upload (server/hosting.ts).
 //
 // Players' progress: a game keeps it in the browser, under its address, and the new address
@@ -21,10 +25,11 @@
 // itself (src/lib/movedSaves.ts picks it up at the old address the first time a player opens the
 // moved game). So a game moves only once it has the save script (and, for Godot and Unity, keeps
 // a copy of its progress where the script sees it), unless the developer says to move anyway.
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { lookup } from "node:dns/promises";
 import { brotliCompressSync, brotliDecompressSync, gunzipSync, gzipSync } from "node:zlib";
 import { isCheckableUrl } from "./embed-check.js";
-import { privateAddress, type Lookup } from "./assist/pages.js";
+import { fetchText, privateAddress, type Lookup } from "./assist/pages.js";
 import { finishUpload, HostingError, startUpload, type Deps, type HostUser } from "./hosting.js";
 import { deployCommit, type GitRow } from "./gitDeploy.js";
 import { buildKind, manualBuildLink, setUpBuild, type BuildSetup, type NoBuild } from "./gitBuild.js";
@@ -500,6 +505,95 @@ export async function findRepo(
   return { found: null, repo: pages[0]?.repo ?? null, reached: false, candidates: [] };
 }
 
+
+// ---------- proving the game's address is the developer's ----------
+
+/** The file a developer puts on their site to prove it is theirs. */
+export const VERIFY_FILE = "toki-verify.txt";
+
+/** The code that file must hold: only Toki can make it (it needs a server secret), and it is tied to this game and its address. */
+export function verifyCode(secret: string, gameId: string, playUrl: string): string {
+  const host = hostOf(playUrl).toLowerCase();
+  return "toki-" + createHmac("sha256", secret).update(`move-verify:${gameId}:${host}`).digest("hex").slice(0, 32);
+}
+
+/** Where the file may be: the site's root, or the game's own folder. */
+export function verifyUrls(playUrl: string): string[] {
+  let u: URL;
+  try {
+    u = new URL(playUrl);
+  } catch {
+    return [];
+  }
+  const parts = u.pathname.split("/");
+  if (parts[parts.length - 1].includes(".")) parts.pop(); // index.html
+  const dir = parts.join("/").replace(/\/+$/, "");
+  return [...new Set([`${u.origin}/${VERIFY_FILE}`, `${u.origin}${dir}/${VERIFY_FILE}`])];
+}
+
+export type SiteProof = "pages" | "repo" | "file";
+
+/** (a) A GitHub Pages address, and the repository is that owner's Pages repository for it. */
+export function pagesOwns(playUrl: string, repo: string): boolean {
+  return pagesRepos(playUrl).some((w) => w.repo.toLowerCase() === repo.toLowerCase());
+}
+
+const originOf = (u: string | null | undefined) => {
+  if (!u) return "";
+  try {
+    const x = new URL(/^[a-z][a-z0-9+.-]*:/i.test(u) ? u : `https://${u}`);
+    return x.protocol === "https:" || x.protocol === "http:" ? `https://${x.host.toLowerCase()}` : "";
+  } catch {
+    return "";
+  }
+};
+
+/**
+ * (b) GitHub says the repository serves this site: its Pages address or custom domain is the
+ * game's address. (Not the "homepage" field: anyone can type any site there.)
+ */
+export async function repoServes(gh: GitHubClient, installation: number, repo: string, playUrl: string): Promise<boolean> {
+  const want = originOf(playUrl);
+  if (!want) return false;
+  try {
+    const r = (await gh.repo(installation, repo)) as { site?: () => Promise<{ homepage: string | null; cname: string | null; pagesUrl: string | null }> };
+    const site = await r.site?.();
+    return !!site && [site.pagesUrl, site.cname].some((x) => originOf(x) === want);
+  } catch {
+    return false;
+  }
+}
+
+/** (c) The verification file is on the site with Toki's code in it. */
+export async function fileProves(playUrl: string, code: string, o: { fetch?: typeof fetch; resolve?: Lookup } = {}): Promise<boolean> {
+  const host = hostOf(playUrl).toLowerCase();
+  for (const url of verifyUrls(playUrl)) {
+    const got = await fetchText(url, { accept: "text/plain", max: 200 }, o.fetch ?? fetch, o.resolve ?? dnsLookup);
+    if (!got || hostOf(got.url).toLowerCase() !== host) continue;
+    const a = Buffer.from(got.text.trim());
+    const b = Buffer.from(code);
+    if (a.length === b.length && timingSafeEqual(a, b)) return true;
+  }
+  return false;
+}
+
+/**
+ * Which way the developer proved the game's address is theirs, or null. Tried in this order:
+ * GitHub Pages owner, GitHub's own word on what the repository serves, then Toki's file.
+ */
+export async function siteProof(
+  gh: GitHubClient,
+  repo: { repo: string; installation_id: number },
+  g: { id: string; play_url: string },
+  secret: string,
+  o: { fetch?: typeof fetch; resolve?: Lookup } = {},
+): Promise<SiteProof | null> {
+  if (pagesOwns(g.play_url, repo.repo)) return "pages";
+  if (await repoServes(gh, repo.installation_id, repo.repo, g.play_url)) return "repo";
+  if (secret && (await fileProves(g.play_url, verifyCode(secret, g.id, g.play_url), o))) return "file";
+  return null;
+}
+
 // ---------- moving the game ----------
 
 export interface MoveResult {
@@ -595,6 +689,8 @@ export interface MoveOptions extends CrawlOptions {
   repo?: { installation_id: number; repo: string } | null;
   /** Move although players' progress stays behind */
   anyway?: boolean;
+  /** A server secret (never shown): the verification code is made from it */
+  secret?: string;
   /** Toki's own address, for the build file (where to get the upload script) */
   origin?: string;
 }
@@ -618,6 +714,10 @@ export async function moveGame(deps: Deps, user: HostUser, gameId: string, o: Mo
   if (!o.git) throw new HostingError("github_required", 409);
   const repo = await findRepo(o.git.gh, o.git.installations, g, o.repo, o.git.allows);
   if (!repo.reached) throw new HostingError("repo_required", 409, repo.repo ?? "");
+  // Nothing is copied before the developer has shown the address is theirs.
+  const installation = repo.found?.installation_id ?? repo.source?.installation_id;
+  const proof = installation === undefined ? null : await siteProof(o.git.gh, { repo: repo.repo!, installation_id: installation }, g, o.secret ?? "", o);
+  if (!proof) throw new HostingError("site_not_proven", 409, verifyCode(o.secret ?? "", g.id, g.play_url));
   // Loading from GitHub takes time too: then the old address only gets a shorter look.
   const { got, verdict } = await look(deps, g, { ...o, extra: repo.candidates, ...(repo.found ? { deadline: Math.min(o.deadline ?? CRAWL_MS, 120_000) } : {}) });
   if (!verdict.ok && !o.anyway) throw new HostingError(MOVE_ERRORS[verdict.problem!], 409);

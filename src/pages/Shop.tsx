@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { useI18n, type Key } from "../lib/i18n";
@@ -30,6 +30,8 @@ export function Shop() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [got, setGot] = useState<string | null>(null);
+  // A double-click must not go straight through "Sure?": the confirm click counts a moment later.
+  const sureAt = useRef(0);
   const admin = profile?.role === "admin";
   useTitle(t("shop.title"));
 
@@ -54,12 +56,17 @@ export function Shop() {
     setBusy(false);
   };
   const buy = (c: Cosmetic) => act(async () => {
-    if (sure !== c.id) return setSure(c.id);
+    if (sure !== c.id) {
+      sureAt.current = Date.now();
+      return setSure(c.id);
+    }
+    if (Date.now() - sureAt.current < 400) return;
     setSure(null);
     await buyCosmetic(c.id);
     setGot(c.id);
     owned.reload();
-    await refreshProgress(profile?.id, true);
+    // The purchase is done: a failing refresh is no error, the numbers catch up later.
+    void refreshProgress(profile?.id, true);
   });
   const wear = (c: Cosmetic) => act(async () => {
     if (c.kind === "stickers" || !profile) return;
@@ -109,7 +116,7 @@ export function Shop() {
 
       <div className="chips" role="group" aria-label={t("shop.filter")}>
         {(["all", ...KINDS, "games"] as Filter[]).map((f) => (
-          <button key={f} type="button" className={filter === f ? "on" : ""} aria-pressed={filter === f} onClick={() => setFilter(f)}>
+          <button key={f} type="button" className={filter === f ? "on" : ""} aria-pressed={filter === f} onClick={() => { setFilter(f); setGot(null); setSure(null); }}>
             {t(f === "all" ? "shop.all" : f === "games" ? "shop.fromGames" : (`shop.kinds.${f}` as Key))}
           </button>
         ))}
@@ -131,6 +138,7 @@ export function Shop() {
           {shown.map((c) => {
             const has = !!owned.ids?.has(c.id);
             const locked = !!lv && lv.level < c.min_level;
+            const broke = me ? me.tokens < (c.price ?? 0) : true;
             const game = c.game_id ? byId.get(c.game_id) : undefined;
             return (
               <CosmeticTile key={c.id} c={c} person={person} games={byId} on={wearing(c)}>
@@ -149,9 +157,12 @@ export function Shop() {
                     {!profile ? null : locked ? (
                       <span className="sub">{t("shop.fromLevel", { n: c.min_level })}</span>
                     ) : (
-                      <button type="button" className={`btn small${sure === c.id ? " primary" : ""}`} disabled={busy || (me ? me.tokens < c.price : true)} onClick={() => buy(c)}>
-                        {sure === c.id ? t("shop.buySure") : t("shop.buy")}
-                      </button>
+                      <>
+                        <button type="button" className={`btn small${sure === c.id ? " primary" : ""}`} disabled={busy || broke} title={broke ? t("shop.needTokens") : undefined} aria-describedby={broke ? `why-${c.id}` : undefined} onClick={() => buy(c)}>
+                          {sure === c.id ? t("shop.buySure") : t("shop.buy")}
+                        </button>
+                        {broke && <span id={`why-${c.id}`} className="sr-only">{t("shop.needTokens")}</span>}
+                      </>
                     )}
                   </span>
                 )}
@@ -186,14 +197,20 @@ function AdminPrice({ c }: { c: Cosmetic }) {
   const { t } = useI18n();
   const [price, setPrice] = useState(String(c.price ?? ""));
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  useEffect(() => {
+    setPrice(String(c.price ?? ""));
+  }, [c.price]);
   const save = async (active: boolean) => {
-    setBusy(true);
     const p = Number.parseInt(price, 10);
+    if (!(p > 0)) return setErr(t("shop.admin.badPrice"));
+    setBusy(true);
+    setErr("");
     try {
-      await adminSetCosmetic(c.id, p > 0 ? p : null, active);
+      await adminSetCosmetic(c.id, p, active);
       await loadCatalog(true);
-    } catch {
-      /* the tile shows the old values */
+    } catch (e) {
+      setErr(t(shopErrorKey(e) as Key));
     }
     setBusy(false);
   };
@@ -203,6 +220,7 @@ function AdminPrice({ c }: { c: Cosmetic }) {
       <input id={`price-${c.id}`} type="number" min={1} value={price} onChange={(e) => setPrice(e.target.value)} />
       <button type="submit" className="btn small" disabled={busy}>{t("shop.admin.save")}</button>
       <button type="button" className="btn small" disabled={busy} onClick={() => save(!c.active)}>{t(c.active ? "shop.admin.stop" : "shop.admin.start")}</button>
+      {err && <span className="error" role="alert">{err}</span>}
     </form>
   );
 }

@@ -124,7 +124,7 @@ export function Notifications() {
         return { line: t("notif.levelUp", { n: d.level ?? 0, tokens: d.tokens ?? 0 }), to: "/shop" };
       case "trade":
         return {
-          line: t(d.event === "offer" ? "notif.tradeOffer" : d.event === "done" ? "notif.tradeDone" : d.event === "failed" ? "notif.tradeFailed" : "notif.tradeDeclined", { who }),
+          line: t(d.event === "offer" ? (d.gift ? "notif.tradeGift" : d.counter ? "notif.tradeCounter" : "notif.tradeOffer") : d.event === "done" ? "notif.tradeDone" : d.event === "failed" ? "notif.tradeFailed" : "notif.tradeDeclined", { who }),
           to: "/trades",
         };
       case "review": {
@@ -134,6 +134,13 @@ export function Notifications() {
       case "review_reply": {
         const g = games?.find((x) => x.id === d.game);
         return { line: t("notif.reviewReply", { who, title: g?.title ?? d.title ?? "" }), to: g ? `/game/${g.slug}#reviews` : "/" };
+      }
+      case "follow_news": {
+        const g = games?.find((x) => x.id === d.game);
+        const slug = g?.slug ?? d.slug;
+        const title = g?.title ?? d.title ?? "";
+        if (d.version) return { line: t("notif.followUpdate", { who, title, v: d.version }), to: slug ? `/game/${slug}/updates` : "/" };
+        return { line: t("notif.followGame", { who, title }), to: slug ? `/game/${slug}` : "/" };
       }
       default:
         // A kind this version of Toki doesn't know yet.

@@ -45,17 +45,37 @@ async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
   return data as T;
 }
 
-/** A game's reviews, newest first (hidden ones only for their author and the developer). */
-export async function listReviews(gameId: string, limit = 50): Promise<Review[]> {
-  const { data, error } = await supabase
+export type ReviewSort = "newest" | "highest" | "lowest" | "text" | "unanswered";
+
+/** A game's reviews in an order or filtered (hidden ones only for their author and the developer). */
+export async function listReviews(gameId: string, sort: ReviewSort = "newest", limit = 50): Promise<Review[]> {
+  let q = supabase
     .from("game_reviews")
     .select("*, author:profiles!game_reviews_user_id_fkey(id, username, avatar_url, avatar_seed)")
-    .eq("game_id", gameId)
-    .order("created_at", { ascending: false })
-    .limit(limit);
+    .eq("game_id", gameId);
+  if (sort === "text") q = q.neq("body", "");
+  if (sort === "unanswered") q = q.is("reply", null);
+  if (sort === "highest") q = q.order("stars", { ascending: false });
+  if (sort === "lowest") q = q.order("stars", { ascending: true });
+  const { data, error } = await q.order("created_at", { ascending: false }).limit(limit);
   if (error) throw new Error(error.message);
   return data as unknown as Review[];
 }
+
+/** How many visible reviews have no answer from the developer yet. */
+export async function countUnanswered(gameId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from("game_reviews")
+    .select("id", { count: "exact", head: true })
+    .eq("game_id", gameId)
+    .eq("hidden", false)
+    .is("reply", null);
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
+/** Reviews per star value, 5 down to 1 (hidden ones don't count). */
+export const reviewBreakdown = (gameId: string) => rpc<{ stars: number; n: number }[]>("review_breakdown", { p_game: gameId });
 
 export const reviewStatus = (gameId: string) => rpc<ReviewStatus | null>("review_status", { p_game: gameId });
 export const saveReview = (gameId: string, stars: number, body: string) => rpc<string>("save_review", { p_game: gameId, p_stars: stars, p_body: body });
@@ -69,7 +89,8 @@ export function averageStars(stats: { reviews?: number; stars?: number } | null 
 
 // ---------- following developers ----------
 
-export const followInfo = (devId: string) => rpc<{ followers: number; following: boolean }>("follow_info", { p_dev: devId });
+export interface FollowInfo { followers: number; following: boolean; notify: boolean }
+export const followInfo = (devId: string) => rpc<FollowInfo>("follow_info", { p_dev: devId });
 export const followDeveloper = (devId: string, on: boolean) => rpc<void>("follow_developer", { p_dev: devId, p_on: on });
 
 // ---------- the feed ----------
@@ -98,3 +119,4 @@ export interface FeedItem {
 }
 
 export const myFeed = (before?: string) => rpc<FeedItem[]>("my_feed", { p_before: before ?? null, p_limit: 30 });
+export const setFollowNotify = (devId: string, on: boolean) => rpc<void>("set_follow_notify", { p_dev: devId, p_on: on });

@@ -50,6 +50,12 @@ describe("sitemap and llms.txt", () => {
   it("describes every game for AI search", () => {
     expect(llmsTxt([game], O)).toContain(`- [Deep </script>](${O}/game/deep): Puzzle game. multiplayer. Dive deep.`);
   });
+  it("keeps a game's title and description on one line each", () => {
+    const out = llmsTxt([{ ...game, title: "Evil\n## Injected", description: "Line one\n\n- [x](http://evil)\r\nend" }], O);
+    expect(out).toContain("- [Evil ## Injected](");
+    expect(out).toContain("Line one - [x](http://evil) end");
+    expect(out.split("\n").some((l) => l.startsWith("## Injected"))).toBe(false);
+  });
 });
 
 describe("PREVIEW_BOT", () => {

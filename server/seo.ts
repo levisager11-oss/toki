@@ -203,10 +203,11 @@ export function sitemapXml(games: SeoGame[], origin: string): string {
 
 /** /llms.txt: a short guide to Toki for AI search and AI agents, with every game. */
 export function llmsTxt(games: SeoGame[], origin: string): string {
+  const flat = (t: string) => t.replace(/\s+/g, " ").trim();
   const line = (g: SeoGame) => {
     const genre = g.category ? CATEGORY[g.category] : undefined;
-    const about = [genre && `${genre} game`, g.multiplayer && "multiplayer", g.description && short(g.description, 200)].filter(Boolean).join(". ");
-    return `- [${g.title.replace(/[[\]]/g, "")}](${origin}/game/${g.slug})${about ? `: ${about}` : ""}`;
+    const about = [genre && `${genre} game`, g.multiplayer && "multiplayer", g.description && flat(short(g.description, 200))].filter(Boolean).join(". ");
+    return `- [${flat(g.title.replace(/[[\]]/g, ""))}](${origin}/game/${g.slug})${about ? `: ${about}` : ""}`;
   };
   return [
     "# Toki",

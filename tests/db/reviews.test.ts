@@ -111,6 +111,37 @@ describe("following developers", () => {
   });
 });
 
+describe("follow notifications", () => {
+  const news = (who: { id: string }) => t.admin<{ data: Record<string, string> }>("select data from notifications where user_id = $1 and kind = 'follow_news' order by id", [who.id]);
+  it("tell followers with notifications on about new games and big updates only", async () => {
+    const d = await t.user("creator");
+    const on = await t.user();
+    const off = await t.user();
+    const blocker = await t.user();
+    await t.admin("insert into follows (follower_id, developer_id) values ($1, $4), ($2, $4), ($3, $4)", [on.id, off.id, blocker.id, d.id]);
+    expect(await rpc(on, "public.follow_info($1)", [d.id])).toMatchObject({ following: true, notify: true });
+    await rpc(off, "public.set_follow_notify($1, false)", [d.id]);
+    expect(await rpc(off, "public.follow_info($1)", [d.id])).toMatchObject({ following: true, notify: false });
+    await t.admin("insert into blocks (blocker_id, blocked_id) values ($1, $2)", [blocker.id, d.id]);
+
+    const g = await t.game(d);
+    expect((await news(on)).map((n) => n.data)).toEqual([{ game: g.id, title: g.slug, slug: g.slug }]);
+    expect(await news(off)).toEqual([]);
+    expect(await news(blocker)).toEqual([]);
+    expect(await news(d)).toEqual([]);
+
+    await t.as(d, "insert into game_releases (game_id, version, notes, small) values ($1, '1.0.1', '- Fix', true)", [g.id]);
+    expect(await news(on)).toHaveLength(1);
+    await t.as(d, "insert into game_releases (game_id, version, notes) values ($1, '1.1', '- New level')", [g.id]);
+    const after = await news(on);
+    expect(after).toHaveLength(2);
+    expect(after[1].data).toMatchObject({ game: g.id, version: "1.1" });
+    expect(await news(off)).toEqual([]);
+    await t.admin("insert into game_releases (game_id, version) values (null, '9.9')");
+    expect(await news(on)).toHaveLength(2);
+  });
+});
+
 describe("the feed", () => {
   it("shows what friends did, and new games and updates of followed developers", async () => {
     const me = await t.user();
@@ -161,5 +192,80 @@ describe("a copy of your data", () => {
       expect(d).toHaveProperty(key);
     expect(d.reviews).toHaveLength(1);
     expect(d.level_and_tokens).toHaveLength(1);
+  });
+});
+
+describe("review fixes", () => {
+  it("let a game with reviews be deleted", async () => {
+    const g = await t.game(dev);
+    const p = await t.user();
+    await played(p.id, 600, g.id);
+    await review(p, 4, "nice", g.id);
+    await t.admin("delete from games where id = $1", [g.id]);
+    expect(await t.admin("select 1 from game_stats where game_id = $1", [g.id])).toEqual([]);
+  });
+
+  it("keep a review an admin removed removed, also when it is deleted and written again", async () => {
+    const g = await t.game(dev);
+    const p = await t.user();
+    const reporter = await t.user();
+    await played(p.id, 600, g.id);
+    const id = await review(p, 1, "mean words", g.id);
+    await t.as(reporter, "select public.report_content('review', $1, 'harassment', '')", [id]);
+    const [rep] = await t.as<{ id: number }>(admin, "select id from content_reports where kind = 'review' and target = $1", [id]);
+    await t.as(admin, "select public.handle_content_report($1, 'removed', '')", [rep.id]);
+    await rpc(p, "public.delete_review($1)", [g.id]);
+    const [kept] = await t.admin<{ body: string; hidden: boolean }>("select body, hidden from game_reviews where id = $1", [id]);
+    expect(kept).toEqual({ body: "", hidden: true });
+    await review(p, 1, "mean words again", g.id);
+    expect(await t.as(null, "select 1 from game_reviews where game_id = $1", [g.id])).toEqual([]);
+  });
+
+  it("tell the developer about a player's review once", async () => {
+    const g = await t.game(dev);
+    const p = await t.user();
+    await played(p.id, 600, g.id);
+    for (let i = 0; i < 3; i++) {
+      await review(p, 5, "again", g.id);
+      await rpc(p, "public.delete_review($1)", [g.id]);
+    }
+    const notes = await t.admin("select 1 from notifications where user_id = $1 and actor_id = $2 and kind = 'review' and data->>'game' = $3", [dev.id, p.id, g.id]);
+    expect(notes).toHaveLength(1);
+  });
+
+  it("tell the player about the developer's answer once", async () => {
+    const g = await t.game(dev);
+    const p = await t.user();
+    await played(p.id, 600, g.id);
+    const id = await review(p, 3, "ok", g.id);
+    for (const text of ["Thanks", "", "Thanks!"]) await rpc(dev, "public.reply_review($1, $2)", [id, text]);
+    expect(await t.admin("select 1 from notifications where user_id = $1 and kind = 'review_reply'", [p.id])).toHaveLength(1);
+  });
+});
+
+describe("the feed's day of achievements", () => {
+  it("keeps the newest 10", async () => {
+    const p = await t.user();
+    for (let i = 1; i <= 12; i++)
+      await t.admin("select public.add_activity($1, 'achievement', 'ach:test', null, $2::jsonb, 'ids')", [p.id, JSON.stringify({ ids: [`a${i}`] })]);
+    const [row] = await t.admin<{ ids: string[] }>("select data->'ids' as ids from activity where user_id = $1 and key = 'ach:test'", [p.id]);
+    expect(row.ids).toEqual(Array.from({ length: 10 }, (_, i) => `a${i + 3}`));
+  });
+});
+
+describe("review breakdown", () => {
+  it("counts reviews per star value, without hidden ones, for anyone", async () => {
+    const g = await t.game(dev);
+    const ps = [await t.user(), await t.user(), await t.user(), await t.user()];
+    for (const p of ps) await played(p.id, 600, g.id);
+    await review(ps[0], 5, "", g.id);
+    await review(ps[1], 5, "Great", g.id);
+    await review(ps[2], 2, "", g.id);
+    await review(ps[3], 5, "Spam", g.id);
+    await t.admin("update game_reviews set hidden = true where game_id = $1 and user_id = $2", [g.id, ps[3].id]);
+    const rows = await t.as<{ stars: number; n: number }>(null, "select * from public.review_breakdown($1)", [g.id]);
+    expect(rows.map((r) => [r.stars, r.n])).toEqual([[5, 2], [4, 0], [3, 0], [2, 1], [1, 0]]);
+    const none = await t.as<{ stars: number; n: number }>(null, "select * from public.review_breakdown($1)", [(await t.game(dev)).id]);
+    expect(none.map((r) => r.n)).toEqual([0, 0, 0, 0, 0]);
   });
 });

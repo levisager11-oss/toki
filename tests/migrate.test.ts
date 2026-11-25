@@ -3,7 +3,7 @@
 import { brotliCompressSync } from "node:zlib";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { gzipSync } from "node:zlib";
-import { checkMove, crawlGame, dynamicNames, findRepo, moveBack, moveGame, pagesRepos, references, repoCandidates, savesVerdict, siteName, type CrawledFile } from "../server/migrate";
+import { checkMove, crawlGame, dynamicNames, findRepo, moveBack, moveGame, pagesRepos, references, repoCandidates, savesVerdict, siteName, siteProof, verifyCode, type CrawledFile } from "../server/migrate";
 import { deployCommit } from "../server/gitDeploy";
 import { guessRepo } from "../src/lib/hostingRules";
 import { GitHubError, type GitHubClient } from "../server/github";
@@ -288,7 +288,7 @@ describe("whether players' progress can come along", () => {
 });
 
 /** A pretend GitHub: one installation that reaches the given repositories with their files per branch. */
-function fakeGitHub(repos: Record<string, Record<string, Record<string, string>>>, prs: { files: Record<string, string>; base: string }[] = []) {
+function fakeGitHub(repos: Record<string, Record<string, Record<string, string>>>, prs: { files: Record<string, string>; base: string }[] = [], sites: Record<string, { homepage: string | null; cname: string | null; pagesUrl: string | null }> = {}) {
   const gh = {
     failPr: false,
     repos: async () => Object.keys(repos).map((repo) => ({ repo, private: false, defaultBranch: "main" })),
@@ -302,6 +302,7 @@ function fakeGitHub(repos: Record<string, Record<string, Record<string, string>>
         tarball: async (ref: string) => gzipSync(tar(branches[ref] ?? branches["gh-pages"] ?? branches.main)),
         defaultBranch: async () => "main",
         name: async () => name,
+        site: async () => sites[name] ?? { homepage: null, cname: null, pagesUrl: null },
         openPullRequest: async (p: { files: Record<string, string>; base: string }) => {
           if (gh.failPr) throw new GitHubError("GitHub 403: Resource not accessible by integration", 403);
           prs.push(p);
@@ -459,6 +460,90 @@ describe("bringing players' progress over", () => {
       vi.advanceTimersByTime(HELLO_MS + 1);
       expect(done).toHaveBeenCalledWith(false);
       expect(kv.data["toki.moved.g1"]).toBeTruthy();
+    });
+  });
+});
+
+describe("proving the game's address is the developer's", () => {
+  const SECRET = "server-secret";
+  const GAME = "22222222-2222-4222-8222-222222222222";
+  const OTHER = "https://cool-game.example/";
+  const VITE = { "index.html": '<script type="module" src="./src/main.ts"></script>', "package.json": '{"scripts":{"build":"vite build"}}', "src/main.ts": "x" };
+  const game = (play_url: string) => ({ id: GAME, play_url });
+  const repo = (name: string) => ({ repo: name, installation_id: 7 });
+  const gh = (sites = {}) => fakeGitHub({ "lu/cool-game": { main: VITE }, "lu/lu.github.io": { main: VITE } }, [], sites);
+
+  it("accepts a GitHub Pages address whose owner and repository match (any capitals)", async () => {
+    expect(await siteProof(gh(), repo("lu/moon-hop"), game(ROOT), SECRET)).toBe("pages");
+    expect(await siteProof(gh(), repo("Lu/Moon-Hop"), game(ROOT), SECRET)).toBe("pages");
+    expect(await siteProof(gh(), repo("lu/lu.github.io"), game("https://lu.github.io/"), SECRET)).toBe("pages");
+    // someone else's Pages site, a repository of the same name
+    expect(await siteProof(gh(), repo("evil/moon-hop"), game(ROOT), SECRET)).toBeNull();
+    expect(await siteProof(gh(), repo("lu/other"), game(ROOT), SECRET)).toBeNull();
+  });
+
+  it("refuses another site just because a repository has its name", async () => {
+    const { fetchImpl } = web({});
+    expect(await siteProof(gh(), repo("lu/cool-game"), game(OTHER), SECRET, { fetch: fetchImpl, resolve: publicDns })).toBeNull();
+    // a homepage or custom domain of a different site doesn't help either
+    const other = gh({ "lu/cool-game": { homepage: "https://lu.example/", cname: "lu.example", pagesUrl: "https://lu.github.io/cool-game/" } });
+    expect(await siteProof(other, repo("lu/cool-game"), game(OTHER), SECRET, { fetch: fetchImpl, resolve: publicDns })).toBeNull();
+  });
+
+  it("accepts a repository whose Pages domain is the game's address, but not its homepage field", async () => {
+    const { fetchImpl } = web({});
+    const o = { fetch: fetchImpl, resolve: publicDns };
+    expect(await siteProof(gh({ "lu/cool-game": { homepage: "https://Cool-Game.example", cname: null, pagesUrl: null } }), repo("lu/cool-game"), game(OTHER), SECRET, o)).toBeNull();
+    expect(await siteProof(gh({ "lu/cool-game": { homepage: null, cname: "cool-game.example", pagesUrl: null } }), repo("lu/cool-game"), game("https://cool-game.example/play/"), SECRET, o)).toBe("repo");
+  });
+
+  it("accepts the verification file with the right code, and not a wrong one", async () => {
+    const code = verifyCode(SECRET, GAME, OTHER);
+    expect(code).toMatch(/^toki-[0-9a-f]{32}$/);
+    expect(verifyCode("another", GAME, OTHER)).not.toBe(code);
+    expect(verifyCode(SECRET, "33333333-3333-4333-8333-333333333333", OTHER)).not.toBe(code);
+    const right = web({ [`${OTHER}toki-verify.txt`]: { body: `${code}\n`, type: "text/plain" } });
+    expect(await siteProof(gh(), repo("lu/cool-game"), game(OTHER), SECRET, { fetch: right.fetchImpl, resolve: publicDns })).toBe("file");
+    const wrong = web({ [`${OTHER}toki-verify.txt`]: { body: "toki-00000000000000000000000000000000", type: "text/plain" } });
+    expect(await siteProof(gh(), repo("lu/cool-game"), game(OTHER), SECRET, { fetch: wrong.fetchImpl, resolve: publicDns })).toBeNull();
+    // next to the game's index.html
+    const folder = web({ [`${OTHER}play/toki-verify.txt`]: { body: verifyCode(SECRET, GAME, `${OTHER}play/`), type: "text/plain" } });
+    expect(await siteProof(gh(), repo("lu/cool-game"), game(`${OTHER}play/index.html`), SECRET, { fetch: folder.fetchImpl, resolve: publicDns })).toBe("file");
+    // a private address is never asked
+    expect(await siteProof(gh(), repo("lu/cool-game"), game(OTHER), SECRET, { fetch: right.fetchImpl, resolve: async () => ["10.0.0.1"] })).toBeNull();
+  });
+
+  describe("moving", () => {
+    let tables: Record<string, Row[]>;
+    let deps: Deps;
+    let puts: string[];
+    const files = new Map<string, number>();
+    const put = (async (url: string) => {
+      puts.push(url);
+      const u = new URL(url);
+      files.set(decodeURIComponent(u.pathname.slice(1)), Number(u.searchParams.get("size")));
+      return new Response(null, { status: 200 });
+    }) as unknown as typeof fetch;
+    const DEV = { id: "dev", role: "creator" as const };
+    const page = { body: '<html><script src="https://playtoki.app/toki-save.js"></script></html>' };
+    beforeEach(() => {
+      tables = { games: [{ id: GAME, slug: "cool-game", title: "Cool", created_by: "dev", hosted_site: null, needs_isolation: false, thumbnail_url: null, screenshots: [], old_slugs: [], play_url: OTHER }], game_builds: [], game_releases: [], game_saves: [], game_git: [], profiles: [{ id: "dev", role: "creator" }] };
+      puts = [];
+      deps = { db: fakeDb(tables), store: fakeStore(files, new Map()), config: { accountId: "a", accessKeyId: "k", secretAccessKey: "s", bucket: "games", domain: "playtoki.app" }, now: () => new Date("2026-11-19T10:00:00Z") };
+    });
+    const go = (pages: Record<string, Page>) => ({ fetch: web(pages).fetchImpl, resolve: publicDns, put, git: { gh: gh(), installations: [7] }, secret: SECRET, origin: "https://www.playtoki.app" });
+
+    it("copies nothing from a site the developer hasn't shown to be theirs, and says what to put on it", async () => {
+      await expect(moveGame(deps, DEV, GAME, go({ [OTHER]: page }))).rejects.toMatchObject({ code: "site_not_proven", detail: verifyCode(SECRET, GAME, OTHER) });
+      expect(puts).toEqual([]);
+      expect(tables.games[0]).toMatchObject({ play_url: OTHER });
+      expect(tables.games[0].moved_from).toBeUndefined();
+    });
+
+    it("moves once the file is on the site", async () => {
+      const out = await moveGame(deps, DEV, GAME, go({ [OTHER]: page, [`${OTHER}toki-verify.txt`]: { body: verifyCode(SECRET, GAME, OTHER), type: "text/plain" } }));
+      expect(out).toMatchObject({ from: OTHER, source: "site" });
+      expect(tables.games[0]).toMatchObject({ moved_from: OTHER });
     });
   });
 });

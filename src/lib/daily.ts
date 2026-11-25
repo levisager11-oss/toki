@@ -113,6 +113,9 @@ export function useDaily(userId: string | undefined): Daily | null | undefined {
     };
   }, []);
   useEffect(() => {
+    setD(undefined);
+  }, [userId]);
+  useEffect(() => {
     let alive = true;
     dailyToday(userId).then((r) => alive && setD(r), () => alive && setD(null));
     return () => {

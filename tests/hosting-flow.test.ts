@@ -53,6 +53,11 @@ describe("hosting a game", () => {
     await startUpload(deps, DEV, { game_id: "11111111-1111-4111-8111-111111111111", files: big });
   });
 
+  it("counts builds waiting to be deleted until their files are gone", async () => {
+    tables.game_builds.push({ id: "old", game_id: "11111111-1111-4111-8111-111111111111", created_by: "dev", status: "deleting", bytes: 1024 ** 3 - 50, files: 1, created_at: now.toISOString() });
+    await expect(startUpload(deps, DEV, { game_id: "11111111-1111-4111-8111-111111111111", files: FILES })).rejects.toMatchObject({ code: "account_full" });
+  });
+
   it("remembers the link a game ran at before, so players' progress comes along", async () => {
     game().play_url = "https://lu.itch.io/snake";
     const s = await startUpload(deps, DEV, { game_id: "11111111-1111-4111-8111-111111111111", files: FILES });
@@ -65,6 +70,16 @@ describe("hosting a game", () => {
     uploadAll(s2);
     await finishUpload(deps, DEV, { build_id: s2.build_id });
     expect(game().moved_at).toBe("2026-11-15T10:00:00.000Z");
+  });
+
+  it("doesn't take over the old link when another game on Toki runs at that site", async () => {
+    game().play_url = "https://lu.itch.io/snake";
+    tables.games.push({ id: "99999999-9999-4999-8999-999999999999", slug: "real-snake", play_url: "https://lu.itch.io/snake/play", created_by: "someone" });
+    const s = await startUpload(deps, DEV, { game_id: "11111111-1111-4111-8111-111111111111", files: FILES });
+    uploadAll(s);
+    await finishUpload(deps, DEV, { build_id: s.build_id });
+    expect(game().play_url).toBe("https://snake.playtoki.app/");
+    expect(game().moved_from ?? null).toBeNull();
   });
 
   it("uploads, goes live at the game's own address and takes over toki.json", async () => {

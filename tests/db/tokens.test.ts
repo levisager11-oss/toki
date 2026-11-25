@@ -160,6 +160,9 @@ describe("the shop", () => {
     await expect(rpc(p, "public.buy_cosmetic('title.chill')")).rejects.toThrow(/not_found/);
     await rpc(admin, "public.admin_set_cosmetic('title.chill', 70, true)");
     expect(await rpc(p, "public.buy_cosmetic('title.chill')")).toBe(430);
+    // Leaving the price out keeps it.
+    await rpc(admin, "public.admin_set_cosmetic('title.chill', null, true)");
+    expect((await t.admin<{ price: number }>("select price from cosmetics where id = 'title.chill'"))[0].price).toBe(70);
   });
 
   it("lets admins take tokens and cosmetics away", async () => {
@@ -178,7 +181,7 @@ describe("the shop", () => {
 
 describe("a game's own cosmetics", () => {
   const LIST = [
-    { kind: "frame", name: "Lava ring", name_de: "Lavaring", style: { style: "glow", a: "#ff3300", b: "#ffaa00" }, achievement: "a0" },
+    { kind: "frame", name: "Lava ring", name_de: "Lavaring", style: { style: "double", a: "#ff3300", b: "#ffaa00" }, achievement: "a0" },
     { kind: "title", name: "Dragon slayer", style: {}, achievement: "a1" },
   ];
 
@@ -208,6 +211,30 @@ describe("a game's own cosmetics", () => {
       .rejects.toThrow();
     await expect(t.as(dev, "select * from public.set_game_cosmetics($1, $2::jsonb)", [game.id, JSON.stringify([{ ...LIST[0], kind: "stickers" }])]))
       .rejects.toThrow(/bad_cosmetics/);
+  });
+
+  it("can't have the looks the shop sells", async () => {
+    const set = (item: object) => t.as(dev, "select * from public.set_game_cosmetics($1, $2::jsonb)", [game.id, JSON.stringify([item])]);
+    for (const style of ["glow", "spin", "rainbow"])
+      await expect(set({ ...LIST[0], style: { style, a: "#ff3300", b: "#ffaa00" } })).rejects.toThrow(/cosmetics_game_look_check/);
+    await expect(set({ kind: "color", name: "Fire", style: { a: "#ff3300", b: "#ffaa00" }, achievement: "a2" })).rejects.toThrow(/cosmetics_game_look_check/);
+    await expect(set({ kind: "theme", name: "Night", style: { a: "#111111", b: "#7a5cff", pattern: "stars" }, achievement: "a2" })).rejects.toThrow(/cosmetics_game_look_check/);
+    await expect(set({ kind: "color", name: "Fire", style: { a: "#ff3300" }, achievement: "a2" })).resolves.toBeTruthy();
+    await expect(set({ kind: "theme", name: "Grass", style: { a: "#1f6f4a", b: "#8fd694", pattern: "dots" }, achievement: "a2" })).resolves.toBeTruthy();
+  });
+
+  it("can be reported, and an admin's removal deletes it", async () => {
+    const rows = await t.as<{ id: string; ref: string; name: string }>(dev, "select * from public.set_game_cosmetics($1, $2::jsonb)", [game.id, JSON.stringify([LIST[0], { kind: "title", name: "Rude name", style: {}, achievement: "a3" }])]);
+    const c = rows.find((r) => r.name === "Rude name")!;
+    const reporter = await t.user();
+    await t.as(reporter, "select public.report_content('cosmetic', $1, 'harassment', '')", [c.ref]);
+    await expect(t.as(dev, "select public.report_content('cosmetic', $1, 'spam', '')", [c.ref])).rejects.toThrow(/not_found/);
+    const [rep] = await t.as<{ id: number; title: string; owner_id: string }>(admin, "select id, title, owner_id from content_reports where kind = 'cosmetic' and target = $1", [c.ref]);
+    expect(rep.title).toContain("Rude name");
+    expect(rep.owner_id).toBe(dev.id);
+    await t.as(admin, "select public.handle_content_report($1, 'removed', 'Keep names friendly')", [rep.id]);
+    expect(await t.admin("select 1 from cosmetics where id = $1", [c.id])).toEqual([]);
+    expect(await t.admin("select 1 from cosmetics where game_id = $1", [game.id])).toHaveLength(1);
   });
 
   it("can't be bought", async () => {
@@ -288,6 +315,16 @@ describe("trades", () => {
     expect(await t.as(stranger, "select * from trades")).toEqual([]);
   });
 
+  it("can't be accepted by a banned player, who can still decline", async () => {
+    const one = await offer(a, b.id, 5, [], 5, []);
+    const two = await offer(a, b.id, 5, [], 5, []);
+    await t.admin("update profiles set banned_until = now() + interval '1 day' where id = $1", [b.id]);
+    await expect(rpc(b, "public.answer_trade($1, true)", [one])).rejects.toThrow(/banned/);
+    expect(await rpc(b, "public.answer_trade($1, false)", [two])).toBe("declined");
+    await t.admin("update profiles set banned_until = null where id = $1", [b.id]);
+    await rpc(a, "public.cancel_trade($1)", [one]);
+  });
+
   it("can't include a game's cosmetics", async () => {
     const [c] = await t.admin<{ id: string }>("select id from cosmetics where game_id = $1", [game.id]);
     await t.admin("insert into player_cosmetics (user_id, cosmetic_id, how) values ($1, $2, 'achievement')", [a.id, c.id]);
@@ -315,5 +352,51 @@ describe("top players", () => {
     const loner = await t.user();
     const mine = await t.as<{ user_id: string }>(loner, "select * from public.top_players(true, 5)");
     expect(mine.map((r) => r.user_id)).toEqual([loner.id]);
+  });
+});
+
+describe("top players this week", () => {
+  const week = (who: Who | null, friends = false) =>
+    t.as<{ rank: string; user_id: string; xp_week: number }>(who, "select * from public.top_players_week($1, 50)", [friends]);
+  const earn = (user: string, xp: number) => t.admin("select public.award($1, 'daily', $2, 0)", [user, xp]);
+
+  it("counts this week's XP, and starts again in a new week", async () => {
+    const a = await t.user();
+    const b = await t.user();
+    await earn(a.id, 40);
+    await earn(a.id, 10);
+    await earn(b.id, 70);
+    let rows = await week(null);
+    expect(rows.find((r) => r.user_id === a.id)!.xp_week).toBe(50);
+    expect(rows.find((r) => r.user_id === b.id)!.xp_week).toBe(70);
+    expect(Number(rows.find((r) => r.user_id === b.id)!.rank)).toBeLessThan(Number(rows.find((r) => r.user_id === a.id)!.rank));
+    // last week's XP no longer counts
+    await t.admin("update player_progress set week = week - 7 where user_id = $1", [a.id]);
+    rows = await week(null);
+    expect(rows.some((r) => r.user_id === a.id)).toBe(false);
+    // and the first award of the new week starts from zero, while all-time XP keeps growing
+    await earn(a.id, 5);
+    rows = await week(null);
+    expect(rows.find((r) => r.user_id === a.id)!.xp_week).toBe(5);
+    const [{ xp }] = await t.admin<{ xp: string }>("select xp from player_progress where user_id = $1", [a.id]);
+    expect(Number(xp)).toBe(55);
+  });
+
+  it("shows friends, and the player's own place", async () => {
+    const me = await t.user();
+    const pal = await t.user();
+    const stranger = await t.user();
+    await befriend(me, pal);
+    await earn(pal.id, 30);
+    await earn(stranger.id, 90);
+    const rows = await week(me, true);
+    expect(rows.map((r) => r.user_id).sort()).toEqual([me.id, pal.id].sort());
+    expect(rows.find((r) => r.user_id === me.id)!.xp_week).toBe(0);
+    expect(Number(rows.find((r) => r.user_id === pal.id)!.rank)).toBe(1);
+    expect((await week(me)).some((r) => r.user_id === me.id)).toBe(false);
+  });
+
+  it("is open to guests like the all-time list", async () => {
+    expect((await week(null)).length).toBeGreaterThan(0);
   });
 });

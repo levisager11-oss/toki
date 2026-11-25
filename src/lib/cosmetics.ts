@@ -8,6 +8,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { supabase } from "./supabase";
 import { limitErrorKey } from "./limitValues";
 import { termsApply } from "./terms";
+import { EARN } from "./progress";
 
 export type CosmeticKind = "frame" | "color" | "title" | "theme" | "stickers";
 export type WearKind = Exclude<CosmeticKind, "stickers">;
@@ -15,6 +16,9 @@ export const KINDS: CosmeticKind[] = ["frame", "color", "title", "theme", "stick
 export const FRAME_STYLES = ["ring", "double", "dashed", "pixel", "glow", "spin", "rainbow"] as const;
 export type FrameStyle = (typeof FRAME_STYLES)[number];
 export const THEME_PATTERNS = ["plain", "dots", "grid", "stripes", "stars", "waves"] as const;
+/** The looks a game's own cosmetics may have (the rest are the shop's; the database checks it too). */
+export const GAME_FRAME_STYLES = ["ring", "double", "dashed", "pixel"] as const;
+export const GAME_THEME_PATTERNS = ["plain", "dots", "grid", "stripes"] as const;
 export type ThemePattern = (typeof THEME_PATTERNS)[number];
 
 export interface Style {
@@ -41,6 +45,8 @@ export interface Cosmetic {
   achievement: string | null;
   position: number;
   active: boolean;
+  /** a uuid made from the id, to report a game's cosmetic */
+  ref?: string;
 }
 
 export const cosmeticName = (c: Pick<Cosmetic, "name" | "name_de">, lang: string) => (lang === "de" && c.name_de) || c.name;
@@ -196,7 +202,8 @@ export interface MyProgress {
 let mine: MyProgress | null = null;
 let mineFor: string | null = null;
 let mineAt = 0;
-let mineLoading: Promise<void> | null = null;
+let mineLoading: { user: string; promise: Promise<void> } | null = null;
+let mineSeq = 0;
 const mineListeners = new Set<() => void>();
 /** Fired with the new level when the player reaches one while Toki is open. */
 export const LEVEL_UP = "toki:level-up";
@@ -204,21 +211,27 @@ export const LEVEL_UP = "toki:level-up";
 /** Loads the logged-in player's progress again (at most every 20 seconds, unless forced). */
 export function refreshProgress(userId: string | null | undefined, force = false): Promise<void> {
   if (!userId) {
+    mineSeq++;
+    mineLoading = null;
     mine = null;
     mineFor = null;
     mineListeners.forEach((l) => l());
     return Promise.resolve();
   }
   if (!force && mineFor === userId && Date.now() - mineAt < 20_000) return Promise.resolve();
-  if (mineLoading) return mineLoading;
-  mineLoading = rpc<MyProgress | null>("my_progress")
+  // A request for the same player that is already under way is shared, unless a fresh one is forced.
+  if (!force && mineLoading && mineLoading.user === userId) return mineLoading.promise;
+  // Otherwise a new request starts, and only the latest one may write its answer.
+  const seq = ++mineSeq;
+  const promise: Promise<void> = rpc<MyProgress | null>("my_progress")
     .then((p) => {
+      if (seq !== mineSeq) return;
       const before = mineFor === userId ? mine : null;
       mine = p;
       mineFor = userId;
       mineAt = Date.now();
       if (before && p && p.level > before.level && typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent(LEVEL_UP, { detail: { level: p.level, tokens: 20 * (p.level - before.level) } }));
+        window.dispatchEvent(new CustomEvent(LEVEL_UP, { detail: { level: p.level, tokens: EARN.levelTokens * (p.level - before.level) } }));
       }
       // The player's own look shows the new level too.
       refreshLook(userId);
@@ -226,9 +239,10 @@ export function refreshProgress(userId: string | null | undefined, force = false
     })
     .catch(() => {})
     .finally(() => {
-      mineLoading = null;
+      if (mineLoading?.promise === promise) mineLoading = null;
     });
-  return mineLoading;
+  mineLoading = { user: userId, promise };
+  return promise;
 }
 
 let soon: ReturnType<typeof setTimeout> | undefined;
@@ -273,7 +287,10 @@ export function useCollection(userId: string | null | undefined) {
   const [ids, setIds] = useState<Set<string> | null>(null);
   const [n, setN] = useState(0);
   useEffect(() => {
-    if (!userId) return setIds(null);
+    setIds(null);
+  }, [userId]);
+  useEffect(() => {
+    if (!userId) return;
     let alive = true;
     collectionOf(userId).then((rows) => alive && setIds(new Set(rows.map((r) => r.id))), () => alive && setIds(new Set()));
     return () => {
@@ -316,6 +333,11 @@ export interface TopRow {
   level: number;
   xp: number;
 }
+export interface TopWeekRow extends TopRow {
+  /** XP earned since Monday 00:00 UTC */
+  xp_week: number;
+}
+export const topPlayersWeek = (friends: boolean) => rpc<TopWeekRow[]>("top_players_week", { p_friends: friends, p_limit: 50 });
 export const topPlayers = (friends: boolean) => rpc<TopRow[]>("top_players", { p_friends: friends, p_limit: 50 });
 
 // ---------- trades ----------
@@ -340,7 +362,8 @@ export interface Trade {
   answered_at: string | null;
 }
 export const myTrades = () => rpc<Trade[]>("my_trades");
-export const offerTrade = (to: string, giveTokens: number, giveItems: string[], wantTokens: number, wantItems: string[]) =>
-  rpc<string>("offer_trade", { p_to: to, p_give_tokens: giveTokens, p_give_items: giveItems, p_want_tokens: wantTokens, p_want_items: wantItems });
+/** Nothing wanted (no tokens, no items) makes it a gift. replyTo: an offer received from this friend, declined by sending this one. */
+export const offerTrade = (to: string, giveTokens: number, giveItems: string[], wantTokens: number, wantItems: string[], replyTo?: string) =>
+  rpc<string>("offer_trade", { p_to: to, p_give_tokens: giveTokens, p_give_items: giveItems, p_want_tokens: wantTokens, p_want_items: wantItems, p_reply_to: replyTo ?? null });
 export const answerTrade = (id: string, accept: boolean) => rpc<"done" | "declined" | "failed">("answer_trade", { p_id: id, p_accept: accept });
 export const cancelTrade = (id: string) => rpc<void>("cancel_trade", { p_id: id });

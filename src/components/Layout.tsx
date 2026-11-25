@@ -383,7 +383,7 @@ function LevelUpToast() {
         <span className="sub"><TokenCoin /> {t("lv.upTokens", { n: up.tokens })}</span>
       </span>
       <Link to="/shop" className="btn small" onClick={() => setUp(null)}>{t("nav.shop")}</Link>
-      <button type="button" className="linkish" aria-label={t("invite.close")} onClick={() => setUp(null)}>×</button>
+      <button type="button" className="linkish" aria-label={t("lv.close")} onClick={() => setUp(null)}>×</button>
     </div>
   );
 }

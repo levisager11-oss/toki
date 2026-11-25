@@ -6,10 +6,10 @@ import { REPORT_CATEGORIES, REPORT_REASON_MAX, reportContent, type ReportCategor
 import { SocialError } from "../lib/social";
 
 /** "Report": tells Toki's admins about a game, a profile, a feedback post or an idea that breaks the rules or the law. */
-export function ReportButton({ kind, target, className = "linkish" }: { kind: ReportKind; target: string; className?: string }) {
+export function ReportButton({ kind, target, className = "linkish", startOpen = false }: { kind: ReportKind; target: string; className?: string; startOpen?: boolean }) {
   const { t } = useI18n();
   const { session } = useAuth();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(startOpen);
   const [category, setCategory] = useState<ReportCategory | "">("");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
