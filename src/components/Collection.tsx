@@ -6,6 +6,7 @@ import { STICKER_PACKS } from "../lib/stickers";
 import type { Game } from "../lib/types";
 import { Avatar } from "./Avatar";
 import { Name, Sticker, ThemeBand } from "./Looks";
+import { ReportButton } from "./ReportButton";
 
 type Person = { id: string; username: string; avatar_url?: string | null; avatar_seed?: string | null };
 
@@ -74,6 +75,7 @@ export function Collection({ ids, person, self, games }: { ids: Set<string>; per
               </button>
             )}
             {!self && wearing(c) && <span className="sub">{t("shop.wearing")}</span>}
+            {!self && c.game_id && c.ref && <ReportButton kind="cosmetic" target={c.ref} />}
           </CosmeticTile>
         ))}
       </ul>

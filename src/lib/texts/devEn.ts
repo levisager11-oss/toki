@@ -802,6 +802,7 @@ export const devEn = {
   "quick.what.saves": "Saves",
   // Toki 2.0
   "gcos.title": "Cosmetics for your game",
+  "gcos.shopOnly": "Glowing, spinning and rainbow frames, two-color names and star or wave themes are only in the shop.",
   "gcos.lead": "Up to 5 things players can wear on Toki: a frame, a name color, a title or a profile theme. Each is given with one of your game's achievements, also to players who have it already.",
   "gcos.needAchievements": "Add achievements first (above): each cosmetic is given with one of them.",
   "gcos.kind": "What it is",

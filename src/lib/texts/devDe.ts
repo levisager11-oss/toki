@@ -804,6 +804,7 @@ export const devDe: Record<GroupKey["dev"], string> = {
   "quick.what.saves": "Spielstände",
   // Toki 2.0
   "gcos.title": "Kosmetik für dein Spiel",
+  "gcos.shopOnly": "Leuchtende, drehende und Regenbogen-Rahmen, zweifarbige Namen und Stern- oder Wellen-Designs gibt es nur im Shop.",
   "gcos.lead": "Bis zu 5 Sachen, die Spieler auf Toki tragen können: ein Rahmen, eine Namensfarbe, ein Titel oder ein Profil-Design. Jede gibt es für einen Erfolg deines Spiels, auch für Spieler, die ihn schon haben.",
   "gcos.needAchievements": "Leg zuerst Erfolge an (oben): Jede Kosmetik gibt es für einen davon.",
   "gcos.kind": "Was es ist",

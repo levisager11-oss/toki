@@ -181,7 +181,7 @@ describe("the shop", () => {
 
 describe("a game's own cosmetics", () => {
   const LIST = [
-    { kind: "frame", name: "Lava ring", name_de: "Lavaring", style: { style: "glow", a: "#ff3300", b: "#ffaa00" }, achievement: "a0" },
+    { kind: "frame", name: "Lava ring", name_de: "Lavaring", style: { style: "double", a: "#ff3300", b: "#ffaa00" }, achievement: "a0" },
     { kind: "title", name: "Dragon slayer", style: {}, achievement: "a1" },
   ];
 
@@ -211,6 +211,30 @@ describe("a game's own cosmetics", () => {
       .rejects.toThrow();
     await expect(t.as(dev, "select * from public.set_game_cosmetics($1, $2::jsonb)", [game.id, JSON.stringify([{ ...LIST[0], kind: "stickers" }])]))
       .rejects.toThrow(/bad_cosmetics/);
+  });
+
+  it("can't have the looks the shop sells", async () => {
+    const set = (item: object) => t.as(dev, "select * from public.set_game_cosmetics($1, $2::jsonb)", [game.id, JSON.stringify([item])]);
+    for (const style of ["glow", "spin", "rainbow"])
+      await expect(set({ ...LIST[0], style: { style, a: "#ff3300", b: "#ffaa00" } })).rejects.toThrow(/cosmetics_game_look_check/);
+    await expect(set({ kind: "color", name: "Fire", style: { a: "#ff3300", b: "#ffaa00" }, achievement: "a2" })).rejects.toThrow(/cosmetics_game_look_check/);
+    await expect(set({ kind: "theme", name: "Night", style: { a: "#111111", b: "#7a5cff", pattern: "stars" }, achievement: "a2" })).rejects.toThrow(/cosmetics_game_look_check/);
+    await expect(set({ kind: "color", name: "Fire", style: { a: "#ff3300" }, achievement: "a2" })).resolves.toBeTruthy();
+    await expect(set({ kind: "theme", name: "Grass", style: { a: "#1f6f4a", b: "#8fd694", pattern: "dots" }, achievement: "a2" })).resolves.toBeTruthy();
+  });
+
+  it("can be reported, and an admin's removal deletes it", async () => {
+    const rows = await t.as<{ id: string; ref: string; name: string }>(dev, "select * from public.set_game_cosmetics($1, $2::jsonb)", [game.id, JSON.stringify([LIST[0], { kind: "title", name: "Rude name", style: {}, achievement: "a3" }])]);
+    const c = rows.find((r) => r.name === "Rude name")!;
+    const reporter = await t.user();
+    await t.as(reporter, "select public.report_content('cosmetic', $1, 'harassment', '')", [c.ref]);
+    await expect(t.as(dev, "select public.report_content('cosmetic', $1, 'spam', '')", [c.ref])).rejects.toThrow(/not_found/);
+    const [rep] = await t.as<{ id: number; title: string; owner_id: string }>(admin, "select id, title, owner_id from content_reports where kind = 'cosmetic' and target = $1", [c.ref]);
+    expect(rep.title).toContain("Rude name");
+    expect(rep.owner_id).toBe(dev.id);
+    await t.as(admin, "select public.handle_content_report($1, 'removed', 'Keep names friendly')", [rep.id]);
+    expect(await t.admin("select 1 from cosmetics where id = $1", [c.id])).toEqual([]);
+    expect(await t.admin("select 1 from cosmetics where game_id = $1", [game.id])).toHaveLength(1);
   });
 
   it("can't be bought", async () => {

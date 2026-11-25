@@ -16,6 +16,9 @@ export const KINDS: CosmeticKind[] = ["frame", "color", "title", "theme", "stick
 export const FRAME_STYLES = ["ring", "double", "dashed", "pixel", "glow", "spin", "rainbow"] as const;
 export type FrameStyle = (typeof FRAME_STYLES)[number];
 export const THEME_PATTERNS = ["plain", "dots", "grid", "stripes", "stars", "waves"] as const;
+/** The looks a game's own cosmetics may have (the rest are the shop's; the database checks it too). */
+export const GAME_FRAME_STYLES = ["ring", "double", "dashed", "pixel"] as const;
+export const GAME_THEME_PATTERNS = ["plain", "dots", "grid", "stripes"] as const;
 export type ThemePattern = (typeof THEME_PATTERNS)[number];
 
 export interface Style {
@@ -42,6 +45,8 @@ export interface Cosmetic {
   achievement: string | null;
   position: number;
   active: boolean;
+  /** a uuid made from the id, to report a game's cosmetic */
+  ref?: string;
 }
 
 export const cosmeticName = (c: Pick<Cosmetic, "name" | "name_de">, lang: string) => (lang === "de" && c.name_de) || c.name;
