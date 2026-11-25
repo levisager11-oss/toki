@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../lib/i18n";
+import { ApiError } from "../lib/api";
 import { githubConnectLink, githubManage, githubRepos, type GitHubInfo } from "../lib/ai";
 import { BuildInfo } from "./GitHubFollow";
 import { checkMove, hostError, moveBack, moveToToki, type MoveCheck, type MoveResult } from "../lib/hosting";
@@ -109,6 +110,25 @@ function SavesWarning({ problem, engine, accepted, onAccept }: {
   );
 }
 
+/** The link isn't shown to be the developer's: the file and the code to put on their site. */
+function SiteProof({ url, code }: { url: string; code: string }) {
+  const { t } = useI18n();
+  let root = url;
+  try {
+    root = `${new URL(url).origin}/toki-verify.txt`;
+  } catch {
+    /* the link is shown as it is */
+  }
+  return (
+    <div className="check warn" role="alert">
+      <p><strong>{t("move.proofTitle")}</strong></p>
+      <p>{t("move.proofHow", { file: "toki-verify.txt", url: root })}</p>
+      <p><code>{code}</code></p>
+      <small>{t("move.proofAlt")}</small>
+    </div>
+  );
+}
+
 /**
  * In the form of a game that runs at a link elsewhere: "Move to Toki". It needs GitHub connected
  * and the game's repository picked: then Toki knows every file of the game, and the moved game
@@ -131,6 +151,8 @@ export function MoveToToki({ gameId, slug, url, onMoved }: { gameId: string; slu
   // Players' progress wouldn't come along: why, and whether the developer accepts it.
   const [problem, setProblem] = useState<"no_script" | "engine_storage" | null>(null);
   const [accept, setAccept] = useState(false);
+  // The link isn't shown to be the developer's yet: the code to put on their site.
+  const [proof, setProof] = useState<string | null>(null);
   const box = useRef<HTMLDivElement>(null);
   // Opened from "Move to Toki" on My games, or back from connecting GitHub.
   useEffect(() => {
@@ -140,6 +162,7 @@ export function MoveToToki({ gameId, slug, url, onMoved }: { gameId: string; slu
     if (!repo) return setErr(t("move.repoFirst"));
     setBusy(true);
     setErr("");
+    setProof(null);
     try {
       onMoved(await moveToToki(gameId, { anyway: !!problem && accept, repo: { installation_id: repo.installation_id, repo: repo.repo } }));
     } catch (e) {
@@ -147,6 +170,7 @@ export function MoveToToki({ gameId, slug, url, onMoved }: { gameId: string; slu
       if (code === "move_no_saves") setProblem("no_script");
       else if (code === "move_engine_saves") setProblem("engine_storage");
       else if (code === "github_required") reloadGitHub();
+      else if (code === "site_not_proven" && e instanceof ApiError && e.detail) setProof(e.detail);
       else setErr(t(`host.err.${code}`, { mb: mbText(MAX_GAME_BYTES), repo: repo.repo }));
     }
     setBusy(false);
@@ -164,11 +188,12 @@ export function MoveToToki({ gameId, slug, url, onMoved }: { gameId: string; slu
       ) : (
         <>
           <RepoPicker info={github} reload={reloadGitHub} value={repoValue} onChange={setPicked} hint={pagesRepo} />
+          {proof && <SiteProof url={url} code={proof} />}
           {problem && <SavesWarning problem={problem} engine={null} accepted={accept} onAccept={setAccept} />}
           {!!github.installations?.length && (
             <div className="actions">
               <button type="button" className="btn primary" onClick={move} disabled={busy || !repo} aria-describedby={busy ? "move-wait" : undefined}>
-                {busy ? t("move.busy") : anyway ? t("move.anyway") : problem ? t("move.checkAgain") : t("move.button")}
+                {busy ? t("move.busy") : anyway ? t("move.anyway") : problem || proof ? t("move.checkAgain") : t("move.button")}
               </button>
             </div>
           )}
