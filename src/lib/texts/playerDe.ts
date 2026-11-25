@@ -322,6 +322,8 @@ export const playerDe: Record<GroupKey["player"], string> = {
   "notif.devMultiplayer": "Neu für deine Spiele: Spieler können ihre Freunde in Mehrspieler-Räume einladen. So baust du es ein.",
   "notif.devNews": "Toki kann etwas Neues für deine Spiele. Schau es dir an.",
   "notif.other": "Etwas Neues auf Toki",
+  "prof.more": "Mehr",
+  "prof.unfriendAsk": "@{name} aus deinen Freunden entfernen?",
   "prof.playtime": "Spielzeit",
   "prof.gamesPlayed": "Gespielte Spiele",
   "prof.gamesMade": "Eigene Spiele",

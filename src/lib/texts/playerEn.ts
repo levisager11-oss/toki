@@ -320,6 +320,8 @@ export const playerEn = {
   "notif.devMultiplayer": "New for your games: players can invite their friends into multiplayer rooms. See how to add it.",
   "notif.devNews": "Toki can do something new for your games. Have a look.",
   "notif.other": "Something new on Toki",
+  "prof.more": "More",
+  "prof.unfriendAsk": "Remove @{name} from your friends?",
   "prof.playtime": "Playtime",
   "prof.gamesPlayed": "Games played",
   "prof.gamesMade": "Games made",

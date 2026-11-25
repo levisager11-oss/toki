@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
@@ -23,10 +23,11 @@ import { BadgeRow } from "../components/Achievements";
 import { boardLabel } from "../lib/boardRules";
 import { useCatalog, useLook, tradingOpen, useCollection } from "../lib/cosmetics";
 import { levelProgress } from "../lib/progress";
-import { followDeveloper, followInfo } from "../lib/reviews";
+import { followDeveloper, followInfo, type FollowInfo } from "../lib/reviews";
 import { LevelBadge, Name, ThemeBand } from "../components/Looks";
 import { Collection } from "../components/Collection";
 import { AdminTokens } from "../components/AdminTokens";
+import { FollowNotify } from "../components/FollowNotify";
 
 /** A player's page: /u/:username */
 export function Profile() {
@@ -43,13 +44,18 @@ export function Profile() {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [reload, setReload] = useState(0);
-  const [confirmBlock, setConfirmBlock] = useState(false);
-  const [confirmUnfriend, setConfirmUnfriend] = useState(false);
+  // What the "More" menu asked to confirm (or the report form it opened).
+  const [confirm, setConfirm] = useState<"" | "unfriend" | "block" | "report">("");
+  const moreRef = useRef<HTMLDetailsElement>(null);
+  const ask = (what: "unfriend" | "block" | "report") => {
+    setConfirm(what);
+    if (moreRef.current) moreRef.current.open = false;
+  };
   const userId = session?.user.id;
   const look = useLook(p?.id);
   const catalog = useCatalog();
   const collection = useCollection(p?.id);
-  const [follow, setFollow] = useState<{ followers: number; following: boolean } | null>(null);
+  const [follow, setFollow] = useState<FollowInfo | null>(null);
   const isDev = p?.role === "creator" || p?.role === "admin";
   useEffect(() => {
     setFollow(null);
@@ -68,7 +74,7 @@ export function Profile() {
     setStreak(null);
     setBadges({ badges: [], total: 0 });
     setErr("");
-    setConfirmBlock(false);
+    setConfirm("");
   }, [username]);
 
   useEffect(() => {
@@ -126,80 +132,97 @@ export function Profile() {
   const toggleFollow = () => act(async () => {
     if (!follow) return;
     await followDeveloper(p.id, !follow.following);
-    setFollow({ followers: follow.followers + (follow.following ? -1 : 1), following: !follow.following });
+    setFollow({ ...follow, followers: follow.followers + (follow.following ? -1 : 1), following: !follow.following, notify: true });
   });
   const themeStyle = look?.theme ? catalog?.get(look.theme)?.style : undefined;
   const lv = look ? levelProgress(look.xp) : null;
 
+  const themeVars = themeStyle?.a ? ({ "--ta": themeStyle.a, "--tb": themeStyle.b ?? themeStyle.a } as CSSProperties) : undefined;
+  const friendly = ["none", "sent", "received", "friend"].includes(p.relation);
+
   return (
-    <section className="profile">
-      {themeStyle && <ThemeBand style={themeStyle} className="profile-band" />}
-      <div className="profile-head">
-        <Avatar person={p} size={96} online={online} />
-        <div className="profile-id">
-          <h1 className="h"><Name person={p} /></h1>
+    <section className={`profile${themeStyle ? " themed" : ""}`} style={themeVars}>
+      <ThemeBand style={themeStyle} className="profile-hero">
+        <div className="profile-card">
+          <Avatar person={p} size={112} online={online} />
+          <div className="profile-id">
+            <div className="profile-top">
+              <h1 className="h"><Name person={p} /></h1>
+            <div className="profile-actions">
+              {p.relation === "self" && <Link to="/account" className="btn primary">{t("soc.editProfile")}</Link>}
+              {p.relation === "guest" && <Link to={login} className="btn primary">{t("soc.loginToAdd")}</Link>}
+              {p.relation === "none" && <button type="button" className="btn primary" disabled={busy} onClick={() => act(() => sendFriendRequest(p.id))}>{t("soc.addFriend")}</button>}
+              {p.relation === "sent" && <button type="button" className="btn" disabled={busy} onClick={() => act(() => removeFriend(p.id))}>{t("soc.cancelRequest")}</button>}
+              {p.relation === "received" && (
+                <>
+                  <button type="button" className="btn primary" disabled={busy} onClick={() => act(() => answerFriendRequest(p.id, true))}>{t("soc.accept")}</button>
+                  <button type="button" className="btn" disabled={busy} onClick={() => act(() => answerFriendRequest(p.id, false))}>{t("soc.decline")}</button>
+                </>
+              )}
+              {p.relation === "friend" && <button type="button" className="btn primary" disabled={busy} onClick={message}>{t("soc.message")}</button>}
+              {p.relation === "blocked" && <button type="button" className="btn" disabled={busy} onClick={() => act(() => unblockUser(p.id))}>{t("soc.unblock")}</button>}
+              {follow && p.relation !== "self" && (
+                p.relation === "guest"
+                  ? <Link to={login} className="btn">{t("fol.follow")}</Link>
+                  : <button type="button" className={`btn${follow.following ? "" : " primary"}`} aria-pressed={follow.following} disabled={busy} onClick={toggleFollow}>{t(follow.following ? "fol.following" : "fol.follow")}</button>
+              )}
+              {follow && p.relation !== "self" && p.relation !== "guest" && (
+                <FollowNotify devId={p.id} info={follow} onChange={(notify) => setFollow({ ...follow, notify })} />
+              )}
+              <details className="more-menu" ref={moreRef}>
+                <summary className="btn" aria-label={t("prof.more")} title={t("prof.more")}><span aria-hidden="true">•••</span></summary>
+                <div className="more-list" role="menu">
+                  <ShareButton path={`/u/${p.username}`} title={`@${p.username} · Toki`} className="more-item" />
+                  {p.relation === "friend" && tradingOpen() && (
+                    <Link role="menuitem" to={`/trades/new?with=${encodeURIComponent(p.username)}`} className="more-item">{t("trade.offer")}</Link>
+                  )}
+                  {p.relation === "friend" && <button role="menuitem" type="button" className="more-item" onClick={() => ask("unfriend")}>{t("soc.unfriend")}</button>}
+                  {friendly && <button role="menuitem" type="button" className="more-item danger-text" onClick={() => ask("block")}>{t("soc.block")}</button>}
+                  {p.relation !== "self" && <button role="menuitem" type="button" className="more-item" onClick={() => ask("report")}>{t("chat.report")}</button>}
+                </div>
+              </details>
+            </div>
+            </div>
+            <p className="profile-meta">
+              {p.role !== "player" && <b className="role-chip">{t(p.role === "admin" ? "soc.role.admin" : "soc.role.dev")}</b>}
+              <span>{t("soc.joined", { date: new Date(p.created_at).toLocaleDateString(lang === "de" ? "de-CH" : "en", { month: "long", year: "numeric" }) })}</span>
+              <span>{t("soc.friendCount", { n: p.friend_count })}</span>
+              {follow && <span>{t("fol.count", { n: follow.followers })}</span>}
+            </p>
+            {(p.relation === "friend" || p.relation === "self") && (
+              <p className={`presence${online || playing ? " live" : ""}`}>
+                {playing ? (
+                  <>{t("soc.playingNow")} <Link to={`/game/${playing.slug}`}><b>{playing.title}</b></Link></>
+                ) : online ? t("soc.online") : p.last_seen ? t("soc.lastSeen", { when: ago(p.last_seen, lang) }) : t("soc.offline")}
+              </p>
+            )}
+            {p.bio && <p className="bio">{p.bio}</p>}
+          </div>
           {lv && (
             <Link to="/top" className="profile-level" title={t("lv.xp", { xp: look!.xp })}>
               <LevelBadge level={lv.level} big />
               <span className="lv-bar" aria-hidden="true"><i style={{ width: `${lv.share * 100}%` }} /></span>
-              <span className="sub">{t("lv.toNext", { n: lv.needed - lv.into })}</span>
+              <small>{t("lv.toNext", { n: lv.needed - lv.into })}</small>
             </Link>
           )}
-          <span className="sub">
-            {p.role !== "player" && <b className="role-badge">{t(p.role === "admin" ? "soc.role.admin" : "soc.role.dev")}</b>}
-            {t("soc.joined", { date: new Date(p.created_at).toLocaleDateString(lang === "de" ? "de-CH" : "en", { month: "long", year: "numeric" }) })}
-            {" · "}{t("soc.friendCount", { n: p.friend_count })}
-            {follow && <>{" · "}{t("fol.count", { n: follow.followers })}</>}
-          </span>
-          {(p.relation === "friend" || p.relation === "self") && (
-            <span className="sub presence">
-              {playing ? (
-                <>{t("soc.playingNow")} <Link to={`/game/${playing.slug}`}><b>{playing.title}</b></Link></>
-              ) : online ? t("soc.online") : p.last_seen ? t("soc.lastSeen", { when: ago(p.last_seen, lang) }) : t("soc.offline")}
-            </span>
-          )}
-          {p.bio && <p className="bio">{p.bio}</p>}
         </div>
-        <div className="actions profile-actions">
-          {p.relation === "self" && <Link to="/account" className="btn">{t("soc.editProfile")}</Link>}
-          {p.relation === "guest" && <Link to={login} className="btn primary">{t("soc.loginToAdd")}</Link>}
-          {p.relation === "none" && <button type="button" className="btn primary" disabled={busy} onClick={() => act(() => sendFriendRequest(p.id))}>{t("soc.addFriend")}</button>}
-          {p.relation === "sent" && <button type="button" className="btn" disabled={busy} onClick={() => act(() => removeFriend(p.id))}>{t("soc.cancelRequest")}</button>}
-          {p.relation === "received" && (
-            <>
-              <button type="button" className="btn primary" disabled={busy} onClick={() => act(() => answerFriendRequest(p.id, true))}>{t("soc.accept")}</button>
-              <button type="button" className="btn" disabled={busy} onClick={() => act(() => answerFriendRequest(p.id, false))}>{t("soc.decline")}</button>
-            </>
-          )}
-          {p.relation === "friend" && (
-            <>
-              <button type="button" className="btn primary" disabled={busy} onClick={message}>{t("soc.message")}</button>
-              {tradingOpen() && <Link to={`/trades/new?with=${encodeURIComponent(p.username)}`} className="btn">{t("trade.offer")}</Link>}
-              {confirmUnfriend ? (
-                <button type="button" className="btn danger" disabled={busy} onClick={() => act(async () => { await removeFriend(p.id); setConfirmUnfriend(false); })}>{t("soc.unfriendSure")}</button>
-              ) : (
-                <button type="button" className="btn" disabled={busy} onClick={() => setConfirmUnfriend(true)}>{t("soc.unfriend")}</button>
-              )}
-            </>
-          )}
-          {follow && p.relation !== "self" && (
-            p.relation === "guest"
-              ? <Link to={login} className="btn">{t("fol.follow")}</Link>
-              : <button type="button" className={`btn${follow.following ? "" : " primary"}`} aria-pressed={follow.following} disabled={busy} onClick={toggleFollow}>{t(follow.following ? "fol.following" : "fol.follow")}</button>
-          )}
-          <ShareButton path={`/u/${p.username}`} title={`@${p.username} · Toki`} />
-          {p.relation === "blocked" && <button type="button" className="btn" disabled={busy} onClick={() => act(() => unblockUser(p.id))}>{t("soc.unblock")}</button>}
-          {["none", "sent", "received", "friend"].includes(p.relation) && (
-            confirmBlock ? (
-              <button type="button" className="btn danger" disabled={busy} onClick={() => act(async () => { await blockUser(p.id); setConfirmBlock(false); })}>{t("soc.confirmBlock")}</button>
-            ) : (
-              <button type="button" className="btn ghost-danger" onClick={() => setConfirmBlock(true)}>{t("soc.block")}</button>
-            )
-          )}
+      </ThemeBand>
+
+      {confirm === "unfriend" && (
+        <div className="confirm-bar" role="alertdialog" aria-label={t("soc.unfriend")}>
+          <span>{t("prof.unfriendAsk", { name: p.username })}</span>
+          <button type="button" className="btn danger" disabled={busy} onClick={() => act(async () => { await removeFriend(p.id); setConfirm(""); })}>{t("soc.unfriend")}</button>
+          <button type="button" className="btn" onClick={() => setConfirm("")}>{t("form.cancel")}</button>
         </div>
-      </div>
-      {confirmBlock && <p className="hint">{t("soc.blockHelp")}</p>}
-      {p.relation !== "self" && <div className="report-line"><ReportButton key={p.id} kind="profile" target={p.id} /></div>}
+      )}
+      {confirm === "block" && (
+        <div className="confirm-bar" role="alertdialog" aria-label={t("soc.block")}>
+          <span>{t("soc.blockHelp")}</span>
+          <button type="button" className="btn danger" disabled={busy} onClick={() => act(async () => { await blockUser(p.id); setConfirm(""); })}>{t("soc.confirmBlock")}</button>
+          <button type="button" className="btn" onClick={() => setConfirm("")}>{t("form.cancel")}</button>
+        </div>
+      )}
+      {confirm === "report" && p.relation !== "self" && <div className="report-line"><ReportButton key={p.id} kind="profile" target={p.id} startOpen /></div>}
       {err && <p className="error" role="alert">{err}</p>}
       {p.relation === "self" && p.banned_until && new Date(p.banned_until) > new Date() && (
         <p className="check warn">{t("soc.bannedUntil", { date: new Date(p.banned_until).toLocaleString(lang === "de" ? "de-CH" : "en") })}</p>
