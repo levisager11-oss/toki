@@ -23,18 +23,30 @@ export function Reviews({ game }: { game: Game }) {
   const [list, setList] = useState<Review[] | null>(null);
   const [status, setStatus] = useState<ReviewStatus | null>(null);
   const [all, setAll] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [n, setN] = useState(0);
   const manager = !!profile && (profile.role === "admin" || profile.id === game.created_by);
 
   useEffect(() => {
     let alive = true;
-    listReviews(game.id).then((l) => alive && setList(l), () => alive && setList([]));
+    listReviews(game.id).then((l) => {
+      if (!alive) return;
+      setList(l);
+      setFailed(false);
+    }, () => alive && setFailed(true));
     if (profile) reviewStatus(game.id).then((s) => alive && setStatus(s), () => {});
     else setStatus(null);
     return () => {
       alive = false;
     };
   }, [game.id, profile?.id, n]);
+  // Another game: nothing of the last one stays.
+  useEffect(() => {
+    setList(null);
+    setStatus(null);
+    setAll(false);
+    setFailed(false);
+  }, [game.id]);
 
   const shownList = (list ?? []).filter((r) => r.user_id !== profile?.id);
   const visible = all ? shownList : shownList.slice(0, SHOWN);
@@ -63,10 +75,11 @@ export function Reviews({ game }: { game: Game }) {
         status.seconds < status.needed && !status.review ? (
           <p className="hint">{t("rev.playMore", { n: Math.max(1, Math.ceil((status.needed - status.seconds) / 60)) })}</p>
         ) : (
-          <MyReview game={game} mine={status.review} onChange={changed} />
+          <MyReview key={game.id} game={game} mine={status.review} onChange={changed} />
         )
       ) : null}
 
+      {failed && <p className="error" role="alert">{t("error")}</p>}
       {list === null ? null : shownList.length === 0 ? (
         <p className="msg">{t("rev.none")}</p>
       ) : (
@@ -116,6 +129,7 @@ function MyReview({ game, mine, onChange }: { game: Game; mine: ReviewStatus["re
     if (!mine) return;
     if (!sure) return setSure(true);
     setBusy(true);
+    setErr("");
     try {
       await deleteReview(game.id);
       onChange({ reviews: Math.max(0, reviews - 1), stars: Math.max(0, sum - mine.stars) });
@@ -137,6 +151,7 @@ function MyReview({ game, mine, onChange }: { game: Game; mine: ReviewStatus["re
           <button type="button" className="btn small" onClick={() => setEditing(true)}>{t("rev.edit")}</button>
           <button type="button" className={`btn small ${sure ? "danger" : "ghost-danger"}`} disabled={busy} onClick={remove}>{t(sure ? "rev.deleteSure" : "rev.delete")}</button>
         </div>
+        {err && <p className="error" role="alert">{err}</p>}
       </div>
     );
   }

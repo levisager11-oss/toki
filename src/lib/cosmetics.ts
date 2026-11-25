@@ -8,6 +8,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { supabase } from "./supabase";
 import { limitErrorKey } from "./limitValues";
 import { termsApply } from "./terms";
+import { EARN } from "./progress";
 
 export type CosmeticKind = "frame" | "color" | "title" | "theme" | "stickers";
 export type WearKind = Exclude<CosmeticKind, "stickers">;
@@ -196,7 +197,8 @@ export interface MyProgress {
 let mine: MyProgress | null = null;
 let mineFor: string | null = null;
 let mineAt = 0;
-let mineLoading: Promise<void> | null = null;
+let mineLoading: { user: string; promise: Promise<void> } | null = null;
+let mineSeq = 0;
 const mineListeners = new Set<() => void>();
 /** Fired with the new level when the player reaches one while Toki is open. */
 export const LEVEL_UP = "toki:level-up";
@@ -204,21 +206,27 @@ export const LEVEL_UP = "toki:level-up";
 /** Loads the logged-in player's progress again (at most every 20 seconds, unless forced). */
 export function refreshProgress(userId: string | null | undefined, force = false): Promise<void> {
   if (!userId) {
+    mineSeq++;
+    mineLoading = null;
     mine = null;
     mineFor = null;
     mineListeners.forEach((l) => l());
     return Promise.resolve();
   }
   if (!force && mineFor === userId && Date.now() - mineAt < 20_000) return Promise.resolve();
-  if (mineLoading) return mineLoading;
-  mineLoading = rpc<MyProgress | null>("my_progress")
+  // A request for the same player that is already under way is shared, unless a fresh one is forced.
+  if (!force && mineLoading && mineLoading.user === userId) return mineLoading.promise;
+  // Otherwise a new request starts, and only the latest one may write its answer.
+  const seq = ++mineSeq;
+  const promise: Promise<void> = rpc<MyProgress | null>("my_progress")
     .then((p) => {
+      if (seq !== mineSeq) return;
       const before = mineFor === userId ? mine : null;
       mine = p;
       mineFor = userId;
       mineAt = Date.now();
       if (before && p && p.level > before.level && typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent(LEVEL_UP, { detail: { level: p.level, tokens: 20 * (p.level - before.level) } }));
+        window.dispatchEvent(new CustomEvent(LEVEL_UP, { detail: { level: p.level, tokens: EARN.levelTokens * (p.level - before.level) } }));
       }
       // The player's own look shows the new level too.
       refreshLook(userId);
@@ -226,9 +234,10 @@ export function refreshProgress(userId: string | null | undefined, force = false
     })
     .catch(() => {})
     .finally(() => {
-      mineLoading = null;
+      if (mineLoading?.promise === promise) mineLoading = null;
     });
-  return mineLoading;
+  mineLoading = { user: userId, promise };
+  return promise;
 }
 
 let soon: ReturnType<typeof setTimeout> | undefined;
@@ -273,7 +282,10 @@ export function useCollection(userId: string | null | undefined) {
   const [ids, setIds] = useState<Set<string> | null>(null);
   const [n, setN] = useState(0);
   useEffect(() => {
-    if (!userId) return setIds(null);
+    setIds(null);
+  }, [userId]);
+  useEffect(() => {
+    if (!userId) return;
     let alive = true;
     collectionOf(userId).then((rows) => alive && setIds(new Set(rows.map((r) => r.id))), () => alive && setIds(new Set()));
     return () => {

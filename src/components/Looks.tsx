@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import { useId, type CSSProperties, type ReactNode } from "react";
 import { cosmeticName, useCatalog, useLook, type Cosmetic, type Style } from "../lib/cosmetics";
 import { useI18n } from "../lib/i18n";
 import { stickerCells } from "../lib/stickers";
@@ -126,16 +126,17 @@ export function TokenCoin({ size = 14 }: { size?: number }) {
 
 /** Stars from 1 to 5 (halves for an average). */
 export function Stars({ value, size = 14, label, count = 5 }: { value: number; size?: number; label?: string; count?: number }) {
+  const uid = useId();
   const full = Math.round(value * 2) / 2;
   return (
     <span className="stars" {...(label === "" ? { "aria-hidden": true } : { role: "img", "aria-label": label ?? `${value.toFixed(1)} / 5` })}>
       {Array.from({ length: count }, (_, k) => k + 1).map((i) => (
         <svg key={i} viewBox="0 0 10 10" width={size} height={size} shapeRendering="crispEdges" aria-hidden="true">
           <defs>
-            <clipPath id={`half-${i}-${size}`}><rect x="0" y="0" width="5" height="10" /></clipPath>
+            <clipPath id={`half${uid}-${i}`}><rect x="0" y="0" width="5" height="10" /></clipPath>
           </defs>
           <path d={STAR} className="star-off" />
-          {full >= i ? <path d={STAR} className="star-on" /> : full >= i - 0.5 ? <path d={STAR} className="star-on" clipPath={`url(#half-${i}-${size})`} /> : null}
+          {full >= i ? <path d={STAR} className="star-on" /> : full >= i - 0.5 ? <path d={STAR} className="star-on" clipPath={`url(#half${uid}-${i})`} /> : null}
         </svg>
       ))}
     </span>
