@@ -465,6 +465,9 @@ export const playerDe: Record<GroupKey["player"], string> = {
   "fol.follow": "Folgen",
   "fol.following": "Folgst du",
   "fol.count": "{n} Follower|{n} Follower",
+  "fol.notify": "Benachrichtige mich",
+  "fol.notifyOn": "Benachrichtigungen an",
+  "fol.notifyHelp": "Du bekommst eine Benachrichtigung, wenn diese Entwicklerin oder dieser Entwickler ein neues Spiel oder ein grosses Update veröffentlicht.",
   "notif.levelUp": "Du hast Level {n} erreicht und {tokens} Toki-Tokens bekommen",
   "notif.tradeOffer": "{who} bietet dir einen Tausch an",
   "notif.tradeDone": "{who} hat deinen Tausch angenommen",
@@ -472,4 +475,6 @@ export const playerDe: Record<GroupKey["player"], string> = {
   "notif.tradeFailed": "Dein Tausch mit {who} hat nicht geklappt: Einer von euch hatte nicht mehr, was angeboten war",
   "notif.review": "{who} hat dein Spiel „{title}“ bewertet: {n} Stern|{who} hat dein Spiel „{title}“ bewertet: {n} Sterne",
   "notif.reviewReply": "{who} hat auf deine Bewertung von „{title}“ geantwortet",
+  "notif.followGame": "{who} hat ein neues Spiel veröffentlicht: „{title}“",
+  "notif.followUpdate": "{who} hat „{title}“ auf {v} aktualisiert",
 };

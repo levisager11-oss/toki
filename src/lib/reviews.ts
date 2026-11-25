@@ -69,7 +69,8 @@ export function averageStars(stats: { reviews?: number; stars?: number } | null 
 
 // ---------- following developers ----------
 
-export const followInfo = (devId: string) => rpc<{ followers: number; following: boolean }>("follow_info", { p_dev: devId });
+export interface FollowInfo { followers: number; following: boolean; notify: boolean }
+export const followInfo = (devId: string) => rpc<FollowInfo>("follow_info", { p_dev: devId });
 export const followDeveloper = (devId: string, on: boolean) => rpc<void>("follow_developer", { p_dev: devId, p_on: on });
 
 // ---------- the feed ----------
@@ -98,3 +99,4 @@ export interface FeedItem {
 }
 
 export const myFeed = (before?: string) => rpc<FeedItem[]>("my_feed", { p_before: before ?? null, p_limit: 30 });
+export const setFollowNotify = (devId: string, on: boolean) => rpc<void>("set_follow_notify", { p_dev: devId, p_on: on });

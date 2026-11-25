@@ -135,6 +135,13 @@ export function Notifications() {
         const g = games?.find((x) => x.id === d.game);
         return { line: t("notif.reviewReply", { who, title: g?.title ?? d.title ?? "" }), to: g ? `/game/${g.slug}#reviews` : "/" };
       }
+      case "follow_news": {
+        const g = games?.find((x) => x.id === d.game);
+        const slug = g?.slug ?? d.slug;
+        const title = g?.title ?? d.title ?? "";
+        if (d.version) return { line: t("notif.followUpdate", { who, title, v: d.version }), to: slug ? `/game/${slug}/updates` : "/" };
+        return { line: t("notif.followGame", { who, title }), to: slug ? `/game/${slug}` : "/" };
+      }
       default:
         // A kind this version of Toki doesn't know yet.
         return { line: t("notif.other"), to: "/updates" };

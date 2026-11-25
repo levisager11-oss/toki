@@ -111,6 +111,37 @@ describe("following developers", () => {
   });
 });
 
+describe("follow notifications", () => {
+  const news = (who: { id: string }) => t.admin<{ data: Record<string, string> }>("select data from notifications where user_id = $1 and kind = 'follow_news' order by id", [who.id]);
+  it("tell followers with notifications on about new games and big updates only", async () => {
+    const d = await t.user("creator");
+    const on = await t.user();
+    const off = await t.user();
+    const blocker = await t.user();
+    await t.admin("insert into follows (follower_id, developer_id) values ($1, $4), ($2, $4), ($3, $4)", [on.id, off.id, blocker.id, d.id]);
+    expect(await rpc(on, "public.follow_info($1)", [d.id])).toMatchObject({ following: true, notify: true });
+    await rpc(off, "public.set_follow_notify($1, false)", [d.id]);
+    expect(await rpc(off, "public.follow_info($1)", [d.id])).toMatchObject({ following: true, notify: false });
+    await t.admin("insert into blocks (blocker_id, blocked_id) values ($1, $2)", [blocker.id, d.id]);
+
+    const g = await t.game(d);
+    expect((await news(on)).map((n) => n.data)).toEqual([{ game: g.id, title: g.slug, slug: g.slug }]);
+    expect(await news(off)).toEqual([]);
+    expect(await news(blocker)).toEqual([]);
+    expect(await news(d)).toEqual([]);
+
+    await t.as(d, "insert into game_releases (game_id, version, notes, small) values ($1, '1.0.1', '- Fix', true)", [g.id]);
+    expect(await news(on)).toHaveLength(1);
+    await t.as(d, "insert into game_releases (game_id, version, notes) values ($1, '1.1', '- New level')", [g.id]);
+    const after = await news(on);
+    expect(after).toHaveLength(2);
+    expect(after[1].data).toMatchObject({ game: g.id, version: "1.1" });
+    expect(await news(off)).toEqual([]);
+    await t.admin("insert into game_releases (game_id, version) values (null, '9.9')");
+    expect(await news(on)).toHaveLength(2);
+  });
+});
+
 describe("the feed", () => {
   it("shows what friends did, and new games and updates of followed developers", async () => {
     const me = await t.user();
