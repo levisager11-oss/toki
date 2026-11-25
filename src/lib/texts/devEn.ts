@@ -828,6 +828,7 @@ export const devEn = {
   "gcos.pattern.stars": "Stars",
   "gcos.pattern.waves": "Waves",
   "lim.k.trades_day": "Trades offered a day",
+  "lim.k.trade_tokens_day": "Tokens a player can receive a day through trades and gifts",
   "lim.k.reviews_day": "Reviews a day",
   "lim.keep.trades": "Finished trades",
   "lim.keep.activity": "Activity in friends' feeds",
