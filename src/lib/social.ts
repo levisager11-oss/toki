@@ -307,6 +307,9 @@ export interface Notification {
     note?: string;
     days?: number | null;
     outcome?: "dismissed" | "removed" | "banned";
+    /** trade offers: nothing wanted back (a gift), or an answer to one of your offers */
+    gift?: boolean;
+    counter?: boolean;
   };
   created_at: string;
   read_at: string | null;

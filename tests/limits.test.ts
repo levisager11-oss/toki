@@ -7,7 +7,7 @@ import { textKeys } from "./textUse";
 
 const ROOT = join(import.meta.dirname, "..");
 // The limits table and later migrations that add a row to it.
-const migration = ["20261130090000_admin_limits.sql", "20261206090000_ai_polish.sql", "20261212090000_toki_tokens.sql", "20261213090000_reviews_and_feed.sql"]
+const migration = ["20261130090000_admin_limits.sql", "20261206090000_ai_polish.sql", "20261212090000_toki_tokens.sql", "20261213090000_reviews_and_feed.sql", "20261216090000_gifts_and_counters.sql"]
   .map((f) => readFileSync(join(ROOT, "supabase", "migrations", f), "utf8"))
   .join("\n");
 const i18n = join(ROOT, "src", "lib", "i18n.tsx");

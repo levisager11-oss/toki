@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { useI18n, type Key } from "../lib/i18n";
@@ -83,22 +83,30 @@ export function Trades() {
         <ul className="trade-list">
           {list.map((tr) => {
             const open = tr.status === "open";
+            const gift = tr.want_tokens === 0 && tr.want_items.length === 0;
             return (
               <li key={tr.id} className={open && !tr.mine ? "new" : ""}>
                 <Link to={`/u/${tr.other_username}`} className="person">
                   <Avatar person={{ id: tr.other_id, username: tr.other_username, avatar_url: tr.other_avatar_url, avatar_seed: tr.other_avatar_seed }} size={28} />
                   <Name person={{ id: tr.other_id, username: tr.other_username }} title={false} />
                 </Link>
-                <div className="trade-deal">
-                  <span><span className="label">{t(tr.mine ? "trade.youGive" : "trade.youGet")}</span>{items(tr.give_items, tr.give_tokens)}</span>
-                  <span><span className="label">{t(tr.mine ? "trade.youGet" : "trade.youGive")}</span>{items(tr.want_items, tr.want_tokens)}</span>
-                </div>
+                {gift ? (
+                  <div className="trade-deal">
+                    <span><span className="label">{t(tr.mine ? "trade.giftTo" : "trade.giftFrom", { who: `@${tr.other_username}` })}</span>{items(tr.give_items, tr.give_tokens)}</span>
+                  </div>
+                ) : (
+                  <div className="trade-deal">
+                    <span><span className="label">{t(tr.mine ? "trade.youGive" : "trade.youGet")}</span>{items(tr.give_items, tr.give_tokens)}</span>
+                    <span><span className="label">{t(tr.mine ? "trade.youGet" : "trade.youGive")}</span>{items(tr.want_items, tr.want_tokens)}</span>
+                  </div>
+                )}
                 <div className="trade-end">
                   <span className="sub">{t(`trade.status.${tr.status}` as Key)} · {ago(tr.answered_at ?? tr.created_at, lang)}</span>
                   {open && !tr.mine && (
                     <span className="actions">
                       <button type="button" className="btn small primary" disabled={busy || !tradingOpen()} onClick={() => act(() => answerTrade(tr.id, true))}>{t("trade.accept")}</button>
                       <button type="button" className="btn small" disabled={busy} onClick={() => act(() => answerTrade(tr.id, false))}>{t("trade.decline")}</button>
+                      {tradingOpen() && <Link to={`/trades/new?with=${encodeURIComponent(tr.other_username)}&counter=${tr.id}`} className="btn small">{t("trade.counter")}</Link>}
                     </span>
                   )}
                   {open && tr.mine && <button type="button" className="btn small" disabled={busy} onClick={() => act(() => cancelTrade(tr.id))}>{t("trade.cancel")}</button>}
@@ -124,6 +132,9 @@ export function NewTrade() {
   const me = useMyProgress(profile?.id);
   const [friends, setFriends] = useState<FriendRow[] | null>(null);
   const withName = params.get("with") ?? "";
+  const counterId = params.get("counter") ?? "";
+  const [counter, setCounter] = useState<Trade | null>(null);
+  const prefilled = useRef("");
   const friend = friends?.find((f) => f.username.toLowerCase() === withName.toLowerCase() && f.status === "friend");
   const mine = useCollection(profile?.id);
   const theirs = useCollection(friend?.id);
@@ -138,9 +149,16 @@ export function NewTrade() {
   useEffect(() => {
     myFriends().then((f) => setFriends(f.filter((x) => x.status === "friend")), () => setFriends([]));
   }, []);
+  // A counter-offer: the open offer this answers, from this friend.
+  useEffect(() => {
+    if (!counterId) return setCounter(null);
+    myTrades().then((l) => setCounter(l.find((x) => x.id === counterId && !x.mine && x.status === "open") ?? null), () => setCounter(null));
+  }, [counterId]);
+  const replyTo = counter && friend && counter.other_id === friend.id ? counter : null;
   useEffect(() => {
     setGive(new Set());
     setWant(new Set());
+    prefilled.current = "";
   }, [friend?.id]);
 
   // Only Toki's own cosmetics can be traded, and only ones the other side doesn't have.
@@ -148,9 +166,19 @@ export function NewTrade() {
     [...(ids ?? [])].map((id) => catalog?.get(id)).filter((c): c is Cosmetic => !!c && !c.game_id && !other?.has(c.id));
   const myItems = useMemo(() => tradable(mine.ids, theirs.ids), [mine.ids, theirs.ids, catalog]);
   const theirItems = useMemo(() => tradable(theirs.ids, mine.ids), [mine.ids, theirs.ids, catalog]);
+  // The offer reversed: what they gave is what you want now, and the other way round.
+  useEffect(() => {
+    if (!replyTo || !mine.ids || !theirs.ids || !catalog || prefilled.current === replyTo.id) return;
+    prefilled.current = replyTo.id;
+    setGive(new Set(replyTo.want_items.filter((id) => myItems.some((c) => c.id === id))));
+    setWant(new Set(replyTo.give_items.filter((id) => theirItems.some((c) => c.id === id))));
+    setGiveTokens(replyTo.want_tokens > 0 ? String(Math.min(replyTo.want_tokens, me?.tokens ?? replyTo.want_tokens)) : "");
+    setWantTokens(replyTo.give_tokens > 0 ? String(replyTo.give_tokens) : "");
+  }, [replyTo, mine.ids, theirs.ids, catalog, myItems, theirItems, me?.tokens]);
   const gt = Math.max(0, Number.parseInt(giveTokens, 10) || 0);
   const wt = Math.max(0, Number.parseInt(wantTokens, 10) || 0);
-  const ready = !!friend && (gt > 0 || give.size > 0) && (wt > 0 || want.size > 0) && gt <= (me?.tokens ?? 0);
+  const ready = !!friend && (gt > 0 || give.size > 0) && gt <= (me?.tokens ?? 0);
+  const gift = wt === 0 && want.size === 0;
 
   const toggle = (set: Set<string>, id: string, put: (s: Set<string>) => void) => {
     const next = new Set(set);
@@ -163,7 +191,7 @@ export function NewTrade() {
     setBusy(true);
     setErr("");
     try {
-      await offerTrade(friend.id, gt, [...give], wt, [...want]);
+      await offerTrade(friend.id, gt, [...give], wt, [...want], replyTo?.id);
       navigate("/trades");
     } catch (e) {
       setErr(t(shopErrorKey(e) as Key));
@@ -200,6 +228,7 @@ export function NewTrade() {
     <section className="panel trades">
       <h1 className="h">{t("trade.new")}</h1>
       <p className="check warn">{t("trade.safety")}</p>
+      {replyTo && <p className="check">{t("trade.counterHint")}</p>}
       <div className="field">
         <label htmlFor="trade-with">{t("trade.with")}</label>
         <select id="trade-with" value={friend?.username ?? ""} onChange={(e) => setParams(e.target.value ? { with: e.target.value } : {}, { replace: true })}>
@@ -231,8 +260,9 @@ export function NewTrade() {
       {err && <p className="error" role="alert">{err}</p>}
       <div className="actions">
         <Link to="/trades" className="btn">{t("form.cancel")}</Link>
-        <button type="button" className="btn primary" disabled={!ready || busy} onClick={send}>{t("trade.send")}</button>
+        <button type="button" className="btn primary" disabled={!ready || busy} onClick={send}>{t(gift ? "trade.sendGift" : "trade.send")}</button>
       </div>
+      {friend && <p className="hint">{t("trade.giftHint")}</p>}
       <p className="note">{t("trade.how")}</p>
     </section>
   );

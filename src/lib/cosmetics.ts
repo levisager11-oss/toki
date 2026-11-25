@@ -352,7 +352,8 @@ export interface Trade {
   answered_at: string | null;
 }
 export const myTrades = () => rpc<Trade[]>("my_trades");
-export const offerTrade = (to: string, giveTokens: number, giveItems: string[], wantTokens: number, wantItems: string[]) =>
-  rpc<string>("offer_trade", { p_to: to, p_give_tokens: giveTokens, p_give_items: giveItems, p_want_tokens: wantTokens, p_want_items: wantItems });
+/** Nothing wanted (no tokens, no items) makes it a gift. replyTo: an offer received from this friend, declined by sending this one. */
+export const offerTrade = (to: string, giveTokens: number, giveItems: string[], wantTokens: number, wantItems: string[], replyTo?: string) =>
+  rpc<string>("offer_trade", { p_to: to, p_give_tokens: giveTokens, p_give_items: giveItems, p_want_tokens: wantTokens, p_want_items: wantItems, p_reply_to: replyTo ?? null });
 export const answerTrade = (id: string, accept: boolean) => rpc<"done" | "declined" | "failed">("answer_trade", { p_id: id, p_accept: accept });
 export const cancelTrade = (id: string) => rpc<void>("cancel_trade", { p_id: id });

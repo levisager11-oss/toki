@@ -124,7 +124,7 @@ export function Notifications() {
         return { line: t("notif.levelUp", { n: d.level ?? 0, tokens: d.tokens ?? 0 }), to: "/shop" };
       case "trade":
         return {
-          line: t(d.event === "offer" ? "notif.tradeOffer" : d.event === "done" ? "notif.tradeDone" : d.event === "failed" ? "notif.tradeFailed" : "notif.tradeDeclined", { who }),
+          line: t(d.event === "offer" ? (d.gift ? "notif.tradeGift" : d.counter ? "notif.tradeCounter" : "notif.tradeOffer") : d.event === "done" ? "notif.tradeDone" : d.event === "failed" ? "notif.tradeFailed" : "notif.tradeDeclined", { who }),
           to: "/trades",
         };
       case "review": {

@@ -830,6 +830,7 @@ export const devDe: Record<GroupKey["dev"], string> = {
   "gcos.pattern.stars": "Sterne",
   "gcos.pattern.waves": "Wellen",
   "lim.k.trades_day": "Tauschangebote pro Tag",
+  "lim.k.trade_tokens_day": "Tokens, die ein Spieler pro Tag durch Tausche und Geschenke bekommen kann",
   "lim.k.reviews_day": "Bewertungen pro Tag",
   "lim.keep.trades": "Abgeschlossene Tausche",
   "lim.keep.activity": "Aktivitäten, die Freunde sehen",
