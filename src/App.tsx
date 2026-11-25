@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { loadTexts, useI18n, type TextGroup } from "./lib/i18n";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, useParams } from "react-router-dom";
 import { Analytics } from "@vercel/analytics/react";
 import { Layout } from "./components/Layout";
 import { RequireMember } from "./components/RequireMember";
@@ -55,6 +55,12 @@ const NewTrade = page(() => import("./pages/Trades").then((m) => ({ default: m.N
 const Legal = page(() => import("./pages/Legal").then((m) => ({ default: m.Legal })), "legal");
 const Docs = page(() => import("./pages/Docs").then((m) => ({ default: m.Docs })), "player", "dev");
 
+/** A game's page starts over for each game (nothing of the last one stays in its state). */
+function GameRoute() {
+  const { slug } = useParams();
+  return <GamePage key={slug} />;
+}
+
 /** Shown while a page's code is still downloading (slow connections); after a short wait, so fast loads don't flash. */
 function PageLoading() {
   const { t } = useI18n();
@@ -82,7 +88,7 @@ export function App() {
         <Route element={<Layout />}>
           <Route index element={<Home />} />
           <Route path="favorites" element={<Favorites />} />
-          <Route path="game/:slug" element={<GamePage />} />
+          <Route path="game/:slug" element={<GameRoute />} />
           <Route path="game/:slug/feedback" element={<Later><FeedbackBoard /></Later>} />
           <Route path="game/:slug/stats" element={<RequireMember><Later><GameStats /></Later></RequireMember>} />
           <Route path="game/:slug/updates" element={<Later><Releases /></Later>} />

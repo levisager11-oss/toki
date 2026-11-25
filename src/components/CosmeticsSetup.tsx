@@ -72,7 +72,7 @@ export function CosmeticsSetup({ gameId }: { gameId: string }) {
     setBusy(false);
   };
 
-  const person = profile ?? { id: "", username: "you" };
+  const person = profile ?? { id: "", username: t("shop.you") };
   const preview = (d: Draft): Cosmetic => ({
     id: d.id ?? "preview", kind: d.kind, name: d.name || "…", name_de: d.name_de || null, price: null, min_level: 1,
     style: d.style, game_id: gameId, achievement: d.achievement, position: 0, active: true,

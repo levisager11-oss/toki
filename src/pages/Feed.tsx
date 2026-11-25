@@ -20,6 +20,7 @@ export function Feed() {
   const [more, setMore] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(false);
+  const [moreErr, setMoreErr] = useState(false);
   useTitle(t("feed.title"));
 
   useEffect(() => {
@@ -37,12 +38,16 @@ export function Feed() {
   const loadMore = async () => {
     if (!items?.length) return;
     setBusy(true);
+    setMoreErr(false);
     try {
       const next = await myFeed(items[items.length - 1].at);
-      setItems([...items, ...next]);
+      // The next page starts at the last timestamp, so an item can come twice: keep it once.
+      const key = (i: FeedItem) => `${i.kind}|${i.at}|${i.user_id}|${i.game_id ?? ""}|${JSON.stringify(i.data)}`;
+      const seen = new Set(items.map(key));
+      setItems([...items, ...next.filter((i) => !seen.has(key(i)))]);
       setMore(next.length >= 30);
     } catch {
-      setErr(true);
+      setMoreErr(true);
     }
     setBusy(false);
   };
@@ -104,7 +109,8 @@ export function Feed() {
           })}
         </ul>
       )}
-      {more && <button type="button" className="btn" disabled={busy} onClick={loadMore}>{t("feed.more")}</button>}
+      {moreErr && <p className="error" role="alert">{t("error")}</p>}
+      {more && !err && <button type="button" className="btn" disabled={busy} onClick={loadMore}>{t("feed.more")}</button>}
       <p className="note">{t("feed.note")}</p>
     </section>
   );

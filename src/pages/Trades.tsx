@@ -36,7 +36,11 @@ export function Trades() {
 
   useEffect(() => {
     let alive = true;
-    myTrades().then((l) => alive && setList(l), () => alive && setErr(t("error")));
+    myTrades().then((l) => {
+      if (!alive) return;
+      setList(l);
+      setErr("");
+    }, () => alive && setErr(t("error")));
     return () => {
       alive = false;
     };
@@ -48,13 +52,14 @@ export function Trades() {
     try {
       const r = await fn();
       if (r === "failed") setErr(t("trade.failed"));
-      setN((x) => x + 1);
       await refreshProgress(profile?.id, true);
       if (profile) refreshLook(profile.id);
     } catch (e) {
       setErr(t(shopErrorKey(e) as Key));
+    } finally {
+      setN((x) => x + 1);
+      setBusy(false);
     }
-    setBusy(false);
   };
 
   const items = (ids: string[], tokens: number) => (
@@ -134,6 +139,7 @@ export function NewTrade() {
     myFriends().then((f) => setFriends(f.filter((x) => x.status === "friend")), () => setFriends([]));
   }, []);
   useEffect(() => {
+    setGive(new Set());
     setWant(new Set());
   }, [friend?.id]);
 
