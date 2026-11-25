@@ -316,6 +316,11 @@ export interface TopRow {
   level: number;
   xp: number;
 }
+export interface TopWeekRow extends TopRow {
+  /** XP earned since Monday 00:00 UTC */
+  xp_week: number;
+}
+export const topPlayersWeek = (friends: boolean) => rpc<TopWeekRow[]>("top_players_week", { p_friends: friends, p_limit: 50 });
 export const topPlayers = (friends: boolean) => rpc<TopRow[]>("top_players", { p_friends: friends, p_limit: 50 });
 
 // ---------- trades ----------
