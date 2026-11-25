@@ -89,9 +89,13 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   // Vercel's nightly job (vercel.json). Vercel sends `Authorization: Bearer $CRON_SECRET`.
   if (url.searchParams.get("action") === "sweep") {
+    // Until CRON_SECRET is set in Vercel, only Vercel's scheduler (by its name) may start it,
+    // so the nightly cleanup keeps running; with the secret, only a request that carries it.
     const secret = process.env.CRON_SECRET;
-    if (!secret) return json({ error: "not_configured" }, 503);
-    if (request.headers.get("authorization") !== `Bearer ${secret}`) return json({ error: "unauthorized" }, 401);
+    const ok = secret
+      ? request.headers.get("authorization") === `Bearer ${secret}`
+      : /^vercel-cron\//.test(request.headers.get("user-agent") ?? "");
+    if (!ok) return json({ error: "unauthorized" }, 401);
     const env = serverEnv();
     if (!env.serviceKey) return json({ error: "not_configured" }, 503);
     const db = serviceDb(env.serviceKey);
