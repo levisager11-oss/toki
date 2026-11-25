@@ -505,6 +505,9 @@ export const playerEn = {
   "fol.follow": "Follow",
   "fol.following": "Following",
   "fol.count": "{n} follower|{n} followers",
+  "fol.notify": "Notify me",
+  "fol.notifyOn": "Notifications on",
+  "fol.notifyHelp": "Get a notification when this developer releases a new game or a big update.",
   "notif.levelUp": "You reached level {n} and got {tokens} Toki Tokens",
   "notif.tradeOffer": "{who} offers you a trade",
   "notif.tradeGift": "{who} sends you a gift",
@@ -514,4 +517,6 @@ export const playerEn = {
   "notif.tradeFailed": "Your trade with {who} didn't work: one of you no longer had what was offered",
   "notif.review": "{who} reviewed your game “{title}”: {n} star|{who} reviewed your game “{title}”: {n} stars",
   "notif.reviewReply": "{who} answered your review of “{title}”",
+  "notif.followGame": "{who} released a new game: “{title}”",
+  "notif.followUpdate": "{who} updated “{title}” to {v}",
 };
