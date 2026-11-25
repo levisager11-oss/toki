@@ -330,3 +330,49 @@ describe("top players", () => {
     expect(mine.map((r) => r.user_id)).toEqual([loner.id]);
   });
 });
+
+describe("top players this week", () => {
+  const week = (who: Who | null, friends = false) =>
+    t.as<{ rank: string; user_id: string; xp_week: number }>(who, "select * from public.top_players_week($1, 50)", [friends]);
+  const earn = (user: string, xp: number) => t.admin("select public.award($1, 'daily', $2, 0)", [user, xp]);
+
+  it("counts this week's XP, and starts again in a new week", async () => {
+    const a = await t.user();
+    const b = await t.user();
+    await earn(a.id, 40);
+    await earn(a.id, 10);
+    await earn(b.id, 70);
+    let rows = await week(null);
+    expect(rows.find((r) => r.user_id === a.id)!.xp_week).toBe(50);
+    expect(rows.find((r) => r.user_id === b.id)!.xp_week).toBe(70);
+    expect(Number(rows.find((r) => r.user_id === b.id)!.rank)).toBeLessThan(Number(rows.find((r) => r.user_id === a.id)!.rank));
+    // last week's XP no longer counts
+    await t.admin("update player_progress set week = week - 7 where user_id = $1", [a.id]);
+    rows = await week(null);
+    expect(rows.some((r) => r.user_id === a.id)).toBe(false);
+    // and the first award of the new week starts from zero, while all-time XP keeps growing
+    await earn(a.id, 5);
+    rows = await week(null);
+    expect(rows.find((r) => r.user_id === a.id)!.xp_week).toBe(5);
+    const [{ xp }] = await t.admin<{ xp: string }>("select xp from player_progress where user_id = $1", [a.id]);
+    expect(Number(xp)).toBe(55);
+  });
+
+  it("shows friends, and the player's own place", async () => {
+    const me = await t.user();
+    const pal = await t.user();
+    const stranger = await t.user();
+    await befriend(me, pal);
+    await earn(pal.id, 30);
+    await earn(stranger.id, 90);
+    const rows = await week(me, true);
+    expect(rows.map((r) => r.user_id).sort()).toEqual([me.id, pal.id].sort());
+    expect(rows.find((r) => r.user_id === me.id)!.xp_week).toBe(0);
+    expect(Number(rows.find((r) => r.user_id === pal.id)!.rank)).toBe(1);
+    expect((await week(me)).some((r) => r.user_id === me.id)).toBe(false);
+  });
+
+  it("is open to guests like the all-time list", async () => {
+    expect((await week(null)).length).toBeGreaterThan(0);
+  });
+});
