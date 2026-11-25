@@ -32,11 +32,14 @@ export function DailyCard({ games }: { games: Game[] }) {
   const streak = currentStreak(daily.streak, daily.day);
   const done = playedToday(daily.streak, daily.day);
   const path = `/game/${game.slug}`;
+  const picture = game.banner_url || game.thumbnail_url;
 
   return (
     <section className="daily" aria-labelledby="daily-h">
-      <Link to={path} className="daily-cover" tabIndex={-1} aria-hidden="true">
-        <Cover slug={game.slug} cover={game.cover} image={game.banner_url || game.thumbnail_url} wide eager />
+      <Link to={path} className={`daily-cover${picture ? " has-img" : ""}`} tabIndex={-1} aria-hidden="true">
+        {/* The whole picture, never cropped; a blurred copy fills the space around it. */}
+        {picture && <img className="daily-backdrop" src={picture} alt="" decoding="async" />}
+        <Cover slug={game.slug} cover={game.cover} image={picture} wide eager />
       </Link>
       <div className="daily-txt">
         <div className="daily-head">

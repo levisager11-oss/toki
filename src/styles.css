@@ -1255,6 +1255,9 @@ main.content:focus { outline: none; }
 .daily { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); border: 1px solid var(--fg); border-left: 6px solid var(--accent); background: var(--surface); }
 .daily-cover { display: block; border-right: 1px solid var(--fg); min-width: 0; }
 .daily .daily-cover .cover { aspect-ratio: 2 / 1; height: 100%; }
+.daily-cover.has-img { position: relative; overflow: hidden; display: grid; place-items: center; background: #000; }
+.daily-backdrop { position: absolute; inset: -24px; width: calc(100% + 48px); height: calc(100% + 48px); object-fit: cover; filter: blur(22px) brightness(.55) saturate(1.2); }
+.daily .daily-cover.has-img .cover { position: relative; aspect-ratio: auto; width: 100%; height: 100%; max-height: 100%; object-fit: contain; background: none; }
 .daily-txt { padding: 20px 22px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .daily.skel .daily-txt { min-height: 330px; }
 .daily-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
@@ -1279,6 +1282,8 @@ main.content:focus { outline: none; }
   .daily-cover { border-right: 0; border-bottom: 1px solid var(--fg); }
   /* Show the whole picture on phones: its own shape once loaded (2:1 before). */
   .daily .daily-cover .cover { aspect-ratio: auto 2 / 1; height: auto; }
+  .daily .daily-cover.has-img .cover { height: auto; }
+  .daily-backdrop { display: none; }
   .daily-txt { padding: 16px; }
   .daily .actions .btn.primary { flex: 1; padding-block: 12px; }
   .board-tabs { flex: 1 1 100%; }
