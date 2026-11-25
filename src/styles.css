@@ -1565,3 +1565,26 @@ main.content:focus { outline: none; }
 .navgroup-toggle .chev { margin-left: auto; transition: transform .15s; }
 .navgroup-toggle.open .chev { transform: rotate(180deg); }
 .navgroup-toggle:hover { color: var(--fg); }
+
+/* ---------- the account page ---------- */
+.panel.account { max-width: 600px; gap: 16px; }
+.account-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 6px 16px; padding: 16px; border: 1px solid var(--line); background: var(--surface); }
+.account-who { min-width: 0; }
+.account-who .h { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-who .sub { margin: 2px 0 0; font-size: 13px; }
+.account-level { grid-column: 1 / -1; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 6px 10px; margin-top: 10px; padding-top: 14px; border-top: 1px solid var(--line); }
+.account-level > small { grid-column: 1 / 3; font-size: 12px; }
+.account-links { display: flex; gap: 14px; justify-content: flex-end; font-size: 13px; font-weight: 700; }
+.account-card { border: 1px solid var(--line); background: var(--surface); padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.account-card > h2, .account-card .edit-profile h2, .account-card .save-history h2, .account-card .account-data h2 { margin: 0; font-size: 18px; font-weight: 800; }
+.account-card .edit-profile, .account-card .save-history, .account-card .account-data, .account-card .share-activity { margin-top: 0; }
+.account-card .pw-change { margin-top: 0; border-top: 0; padding-top: 0; }
+.account-card .account-data { border-top: 1px solid var(--line); padding-top: 12px; }
+.account-card .switch-row { background: var(--bg); }
+.panel.account > .dev-card { margin-top: 0; }
+@media (max-width: 520px) {
+  .account-head { grid-template-columns: auto minmax(0, 1fr); }
+  .account-head > .btn { grid-column: 1 / -1; justify-self: stretch; text-align: center; }
+  .account-level > small { grid-column: 1 / -1; }
+  .account-links { grid-column: 1 / -1; justify-content: flex-start; }
+}

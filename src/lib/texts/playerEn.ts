@@ -45,6 +45,8 @@ export const playerEn = {
   "account.role.admin": "Admin: you can add games and invite people.",
   "account.role.creator": "Developer: you can add games.",
   "account.role.player": "Player account",
+  "account.games": "Your games",
+  "account.settings": "Account settings",
   "account.saves": "Your progress in games with save support is kept in your account, on every device you log in on.",
   "account.inviteTitle": "Got an invite code?",
   "account.inviteHelp": "An invite code makes you a developer right away.",

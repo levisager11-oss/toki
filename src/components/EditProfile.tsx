@@ -1,5 +1,4 @@
 import { useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
 import { randomSeed, shrinkImage } from "../lib/avatar";
@@ -73,7 +72,6 @@ export function EditProfile() {
         {err && <p className="error" role="alert">{err}</p>}
         <div className="actions">
           <button className="btn" disabled={busy}>{busy ? t("form.saving") : t("soc.saveBio")}</button>
-          <Link to={`/u/${profile.username}`} className="btn">{t("soc.viewProfile")}</Link>
           {saved && <span className="hint saved" role="status">✓ {t("soc.saved")}</span>}
         </div>
       </form>

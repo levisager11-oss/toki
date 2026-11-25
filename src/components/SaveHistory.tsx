@@ -45,7 +45,7 @@ export function SaveHistory() {
   return (
     <section className="save-history">
       <h2>{t("history.title")}</h2>
-      <p className="hint">{t("history.help")}</p>
+      <p className="hint">{t("account.saves")} {t("history.help")}</p>
       {restored !== null && <p className="check good" role="status">{t("history.restored")}</p>}
       {err && <p className="error" role="alert">{t("error")}</p>}
       {byGame.length === 0 && <p className="hint">{t("history.empty")}</p>}

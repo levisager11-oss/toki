@@ -47,6 +47,8 @@ export const playerDe: Record<GroupKey["player"], string> = {
   "account.role.admin": "Admin: Du kannst Spiele hinzufügen und Leute einladen.",
   "account.role.creator": "Entwickler: Du kannst Spiele hinzufügen.",
   "account.role.player": "Spielerkonto",
+  "account.games": "Deine Spiele",
+  "account.settings": "Kontoeinstellungen",
   "account.saves": "Dein Fortschritt in Spielen mit Speicher-Unterstützung wird in deinem Konto gespeichert, auf jedem Gerät, auf dem du angemeldet bist.",
   "account.inviteTitle": "Hast du einen Einladungscode?",
   "account.inviteHelp": "Mit einem Einladungscode wirst du sofort Entwickler.",

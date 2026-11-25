@@ -15,6 +15,7 @@ import { ShareActivity } from "../components/ShareActivity";
 import { useMyProgress } from "../lib/cosmetics";
 import { levelProgress } from "../lib/progress";
 import { LevelBadge, Tokens } from "../components/Looks";
+import { Avatar } from "../components/Avatar";
 
 export function Account() {
   const { t } = useI18n();
@@ -44,39 +45,43 @@ export function Account() {
   };
 
   return (
-    <section className="panel narrow">
-      <h1 className="h">@{profile.username}</h1>
-      <p className="lead">{t(`account.role.${profile.role}`)}</p>
-      {lv && (
-        <Link to="/shop" className="me-level account-level" title={t("lv.toNext", { n: lv.needed - lv.into })}>
-          <LevelBadge level={lv.level} big />
-          <span className="lv-bar" aria-hidden="true"><i style={{ width: `${lv.share * 100}%` }} /></span>
-          <Tokens n={progress?.tokens} />
-        </Link>
-      )}
+    <section className="panel account">
+      <header className="account-head">
+        <Avatar person={profile} size={64} />
+        <div className="account-who">
+          <h1 className="h">@{profile.username}</h1>
+          <p className="sub">{t(`account.role.${profile.role}`)}</p>
+        </div>
+        <Link to={`/u/${profile.username}`} className="btn small">{t("soc.viewProfile")}</Link>
+        {lv && (
+          <div className="account-level">
+            <LevelBadge level={lv.level} big />
+            <span className="lv-bar" aria-hidden="true"><i style={{ width: `${lv.share * 100}%` }} /></span>
+            <Tokens n={progress?.tokens} />
+            <small className="sub">{t("lv.toNext", { n: lv.needed - lv.into })}</small>
+            <span className="account-links">
+              <Link to="/shop">{t("nav.shop")}</Link>
+              <Link to="/trades">{t("nav.trades")}</Link>
+              {profile.role === "admin" && <Link to="/reports">{t("nav.reports")}</Link>}
+            </span>
+          </div>
+        )}
+      </header>
       {pwSaved && <p className="check good" role="status">{t("pw.saved")}</p>}
-      <p>{t("account.saves")}</p>
-      <div className="actions">
-        <Link to={`/u/${profile.username}`} className="btn">{t("soc.viewProfile")}</Link>
-        <Link to="/friends" className="btn">{t("nav.friends")}</Link>
-        <Link to="/chat" className="btn">{t("nav.chat")}</Link>
-        {profile.role === "admin" && <Link to="/reports" className="btn">{t("nav.reports")}</Link>}
-      </div>
-      <div className="actions" style={{ marginTop: 8 }}>
-        <Link to="/shop" className="btn">{t("nav.shop")}</Link>
-        <Link to="/feed" className="btn">{t("nav.feed")}</Link>
-        <Link to="/trades" className="btn">{t("nav.trades")}</Link>
-        <Link to="/top" className="btn">{t("nav.top")}</Link>
-      </div>
 
-      <EditProfile />
-      <ShareActivity userId={profile.id} />
+      <div className="account-card">
+        <EditProfile />
+        <ShareActivity userId={profile.id} />
+      </div>
 
       {canCreate(profile) ? (
-        <div className="actions" style={{ marginTop: 24 }}>
-          <Link to="/my-games" className="btn">{t("nav.myGames")}</Link>
-          <Link to="/add" className="btn">{t("nav.addGame")}</Link>
-          <Link to="/feedback/inbox" className="btn">{t("fb.inbox.title")}</Link>
+        <div className="account-card">
+          <h2>{t("account.games")}</h2>
+          <div className="actions">
+            <Link to="/my-games" className="btn">{t("nav.myGames")}</Link>
+            <Link to="/add" className="btn">{t("nav.addGame")}</Link>
+            <Link to="/feedback/inbox" className="btn">{t("fb.inbox.title")}</Link>
+          </div>
         </div>
       ) : (
         <DeveloperCard>
@@ -90,26 +95,31 @@ export function Account() {
         </DeveloperCard>
       )}
 
-      <SaveHistory />
-      <MyFeedback />
+      <div className="account-card">
+        <SaveHistory />
+      </div>
+      <div className="account-card">
+        <MyFeedback />
+      </div>
 
-      <details className="pw-change" open={pwOpen} onToggle={(e) => setPwOpen(e.currentTarget.open)}>
-        <summary>{t("pw.title")}</summary>
-        {pwOpen && (
-          <PasswordForm
-            onDone={() => {
-              setPwOpen(false);
-              setPwSaved(true);
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-          />
-        )}
-      </details>
-
-      <AccountData />
-
-      <div className="actions" style={{ marginTop: 32 }}>
-        <button type="button" className="btn" onClick={() => signOut().then(() => navigate("/"))}>{t("nav.logout")}</button>
+      <div className="account-card">
+        <h2>{t("account.settings")}</h2>
+        <details className="pw-change" open={pwOpen} onToggle={(e) => setPwOpen(e.currentTarget.open)}>
+          <summary>{t("pw.title")}</summary>
+          {pwOpen && (
+            <PasswordForm
+              onDone={() => {
+                setPwOpen(false);
+                setPwSaved(true);
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+            />
+          )}
+        </details>
+        <AccountData />
+        <div className="actions">
+          <button type="button" className="btn" onClick={() => signOut().then(() => navigate("/"))}>{t("nav.logout")}</button>
+        </div>
       </div>
     </section>
   );
