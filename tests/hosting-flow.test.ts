@@ -53,6 +53,11 @@ describe("hosting a game", () => {
     await startUpload(deps, DEV, { game_id: "11111111-1111-4111-8111-111111111111", files: big });
   });
 
+  it("counts builds waiting to be deleted until their files are gone", async () => {
+    tables.game_builds.push({ id: "old", game_id: "11111111-1111-4111-8111-111111111111", created_by: "dev", status: "deleting", bytes: 1024 ** 3 - 50, files: 1, created_at: now.toISOString() });
+    await expect(startUpload(deps, DEV, { game_id: "11111111-1111-4111-8111-111111111111", files: FILES })).rejects.toMatchObject({ code: "account_full" });
+  });
+
   it("remembers the link a game ran at before, so players' progress comes along", async () => {
     game().play_url = "https://lu.itch.io/snake";
     const s = await startUpload(deps, DEV, { game_id: "11111111-1111-4111-8111-111111111111", files: FILES });

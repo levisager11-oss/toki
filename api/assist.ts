@@ -82,16 +82,22 @@ export async function POST(request: Request) {
   }
 }
 
-function failed(e: unknown): Response {
+/** `detail`: also send the upstream error text (only for admins). Otherwise it is only logged. */
+function failed(e: unknown, detail = false): Response {
   if (e instanceof DbError && /^(ai_disabled|ai_off)$/.test(e.message)) return json({ error: "free_off" }, 403);
   if (e instanceof DbError && /^(not_allowed|rate_limited|cap_reached|quota_reached)$/.test(e.message)) return json({ error: e.message }, e.message === "not_allowed" ? 403 : 429);
   if (e instanceof AiError) {
     // A key Anthropic doesn't accept, or an account without credits: players can't do anything
     // about it (the AI page shows admins the exact reason).
     const code = e.code === "not_configured" ? "free_off" : e.code === "bad_key" || e.code === "no_credit" ? "ai_unavailable" : `ai_${e.code}`;
-    return json({ error: code, message: errorDetail(e) ?? "" }, 502);
+    if (!detail) console.error("assist AI error", errorDetail(e));
+    return json({ error: code, message: detail ? (errorDetail(e) ?? "") : "" }, 502);
   }
-  if (e instanceof GitHubError) return json({ error: "github_error", message: errorDetail(e) ?? "" }, 502);
+  if (e instanceof GitHubError) {
+    if (!detail) console.error("assist GitHub error", errorDetail(e));
+    return json({ error: "github_error", message: detail ? (errorDetail(e) ?? "") : "" }, 502);
+  }
+  console.error("assist error", e);
   return json({ error: "error" }, 500);
 }
 
@@ -773,7 +779,7 @@ async function test(ctx: Ctx, b: Record<string, unknown>) {
     });
     return json({ ok: true, text: c.text.slice(0, 200), inputTokens: c.inputTokens, outputTokens: c.outputTokens, estimated: c.estimated, cost: c.cost });
   } catch (e) {
-    const r = failed(e);
+    const r = failed(e, true);
     const out = (await r.json()) as { error: string; message?: string };
     return json({ ok: false, ...out });
   }

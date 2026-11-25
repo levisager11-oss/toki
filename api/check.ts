@@ -1,5 +1,6 @@
 // For members adding a game: can this link be shown inside Toki?
 import { SUPABASE_KEY, SUPABASE_URL } from "../server/config.js";
+import { fetchPublic } from "../server/assist/pages.js";
 import { checkHeaders, isCheckableUrl, type EmbedCheck } from "../server/embed-check.js";
 
 const json = (body: unknown, status = 200) =>
@@ -11,19 +12,8 @@ async function isMember(auth: string | null) {
   return res.ok;
 }
 
-/** Follows up to 5 redirects, each only to a public https site (never to local or private addresses). */
-async function fetchChecked(url: string): Promise<Response | null> {
-  const signal = AbortSignal.timeout(8000);
-  for (let hops = 0; hops <= 5; hops++) {
-    if (!isCheckableUrl(url)) return null;
-    const res = await fetch(url, { redirect: "manual", headers: { "user-agent": "TokiLinkCheck/1.0" }, signal });
-    const next = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
-    if (!next) return res;
-    await res.body?.cancel();
-    url = new URL(next, url).toString();
-  }
-  return null;
-}
+/** Follows up to 5 redirects, each only to a public https site whose name resolves to public addresses only. */
+const fetchChecked = (url: string) => fetchPublic(url, fetch, undefined, "*/*", "TokiLinkCheck/1.0");
 
 export async function GET(request: Request) {
   if (!(await isMember(request.headers.get("authorization")))) return json({ error: "login required" }, 401);

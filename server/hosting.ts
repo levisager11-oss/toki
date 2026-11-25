@@ -179,7 +179,7 @@ export async function startUpload(deps: Deps, user: HostUser, b: Record<string, 
     if (recent.length >= perHour) throw new HostingError("rate_limited", 429);
   }
 
-  const kept = await db.select<{ bytes: number; created_by: string | null }>("game_builds", "status=in.(uploading,live,previous)&select=bytes,created_by");
+  const kept = await db.select<{ bytes: number; created_by: string | null }>("game_builds", "status=in.(uploading,live,previous,deleting)&select=bytes,created_by");
   const total = kept.reduce((n, r) => n + Number(r.bytes), 0);
   if (total + plan.bytes > BUCKET_BYTES) throw new HostingError("storage_full", 507);
   const mb = user.role === "admin" ? null : await limitOf(db, user.id, "storage_mb", ACCOUNT_BYTES / 1024 ** 2);
