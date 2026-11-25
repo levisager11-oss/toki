@@ -72,6 +72,16 @@ describe("hosting a game", () => {
     expect(game().moved_at).toBe("2026-11-15T10:00:00.000Z");
   });
 
+  it("doesn't take over the old link when another game on Toki runs at that site", async () => {
+    game().play_url = "https://lu.itch.io/snake";
+    tables.games.push({ id: "99999999-9999-4999-8999-999999999999", slug: "real-snake", play_url: "https://lu.itch.io/snake/play", created_by: "someone" });
+    const s = await startUpload(deps, DEV, { game_id: "11111111-1111-4111-8111-111111111111", files: FILES });
+    uploadAll(s);
+    await finishUpload(deps, DEV, { build_id: s.build_id });
+    expect(game().play_url).toBe("https://snake.playtoki.app/");
+    expect(game().moved_from ?? null).toBeNull();
+  });
+
   it("uploads, goes live at the game's own address and takes over toki.json", async () => {
     const s = await startUpload(deps, DEV, { game_id: "11111111-1111-4111-8111-111111111111", files: FILES });
     expect(s).toMatchObject({ site: "snake", entry: "index.html", bytes: 300 });

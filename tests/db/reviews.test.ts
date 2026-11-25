@@ -250,6 +250,8 @@ describe("the feed's day of achievements", () => {
       await t.admin("select public.add_activity($1, 'achievement', 'ach:test', null, $2::jsonb, 'ids')", [p.id, JSON.stringify({ ids: [`a${i}`] })]);
     const [row] = await t.admin<{ ids: string[] }>("select data->'ids' as ids from activity where user_id = $1 and key = 'ach:test'", [p.id]);
     expect(row.ids).toEqual(Array.from({ length: 10 }, (_, i) => `a${i + 3}`));
+  });
+});
 
 describe("review breakdown", () => {
   it("counts reviews per star value, without hidden ones, for anyone", async () => {

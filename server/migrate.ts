@@ -531,7 +531,7 @@ export function verifyUrls(playUrl: string): string[] {
   return [...new Set([`${u.origin}/${VERIFY_FILE}`, `${u.origin}${dir}/${VERIFY_FILE}`])];
 }
 
-export type SiteProof = "pages" | "homepage" | "file";
+export type SiteProof = "pages" | "repo" | "file";
 
 /** (a) A GitHub Pages address, and the repository is that owner's Pages repository for it. */
 export function pagesOwns(playUrl: string, repo: string): boolean {
@@ -548,14 +548,17 @@ const originOf = (u: string | null | undefined) => {
   }
 };
 
-/** (b) GitHub says the repository serves this site: its homepage, or its Pages address or custom domain, is the game's address. */
+/**
+ * (b) GitHub says the repository serves this site: its Pages address or custom domain is the
+ * game's address. (Not the "homepage" field: anyone can type any site there.)
+ */
 export async function repoServes(gh: GitHubClient, installation: number, repo: string, playUrl: string): Promise<boolean> {
   const want = originOf(playUrl);
   if (!want) return false;
   try {
     const r = (await gh.repo(installation, repo)) as { site?: () => Promise<{ homepage: string | null; cname: string | null; pagesUrl: string | null }> };
     const site = await r.site?.();
-    return !!site && [site.homepage, site.pagesUrl, site.cname].some((x) => originOf(x) === want);
+    return !!site && [site.pagesUrl, site.cname].some((x) => originOf(x) === want);
   } catch {
     return false;
   }
@@ -586,7 +589,7 @@ export async function siteProof(
   o: { fetch?: typeof fetch; resolve?: Lookup } = {},
 ): Promise<SiteProof | null> {
   if (pagesOwns(g.play_url, repo.repo)) return "pages";
-  if (await repoServes(gh, repo.installation_id, repo.repo, g.play_url)) return "homepage";
+  if (await repoServes(gh, repo.installation_id, repo.repo, g.play_url)) return "repo";
   if (secret && (await fileProves(g.play_url, verifyCode(secret, g.id, g.play_url), o))) return "file";
   return null;
 }

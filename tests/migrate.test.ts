@@ -490,11 +490,11 @@ describe("proving the game's address is the developer's", () => {
     expect(await siteProof(other, repo("lu/cool-game"), game(OTHER), SECRET, { fetch: fetchImpl, resolve: publicDns })).toBeNull();
   });
 
-  it("accepts a repository whose homepage or Pages domain is the game's address", async () => {
+  it("accepts a repository whose Pages domain is the game's address, but not its homepage field", async () => {
     const { fetchImpl } = web({});
     const o = { fetch: fetchImpl, resolve: publicDns };
-    expect(await siteProof(gh({ "lu/cool-game": { homepage: "https://Cool-Game.example", cname: null, pagesUrl: null } }), repo("lu/cool-game"), game(OTHER), SECRET, o)).toBe("homepage");
-    expect(await siteProof(gh({ "lu/cool-game": { homepage: null, cname: "cool-game.example", pagesUrl: null } }), repo("lu/cool-game"), game("https://cool-game.example/play/"), SECRET, o)).toBe("homepage");
+    expect(await siteProof(gh({ "lu/cool-game": { homepage: "https://Cool-Game.example", cname: null, pagesUrl: null } }), repo("lu/cool-game"), game(OTHER), SECRET, o)).toBeNull();
+    expect(await siteProof(gh({ "lu/cool-game": { homepage: null, cname: "cool-game.example", pagesUrl: null } }), repo("lu/cool-game"), game("https://cool-game.example/play/"), SECRET, o)).toBe("repo");
   });
 
   it("accepts the verification file with the right code, and not a wrong one", async () => {

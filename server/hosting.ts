@@ -264,7 +264,10 @@ export async function finishUpload(deps: Deps, user: HostUser, b: Record<string,
   const patch: Record<string, unknown> = { play_url: playUrl, needs_isolation: isolation };
   // The game ran at a link elsewhere until now: Toki remembers it, so players' progress comes
   // along from there (src/lib/movedSaves.ts), however the game moved (upload, GitHub, Move to Toki).
-  if (game.play_url && /^https:\/\//i.test(game.play_url) && !isHostedUrl(game.play_url, config.domain)) {
+  // Not when another game on Toki runs at that site: then it is that game's, and its players'
+  // progress there isn't this game's to take.
+  if (game.play_url && /^https:\/\//i.test(game.play_url) && !isHostedUrl(game.play_url, config.domain)
+      && !(await siteOfOtherGame(db, game.id, game.play_url))) {
     patch.moved_from = game.play_url.slice(0, 500);
     patch.moved_at = now.toISOString();
   }
@@ -362,3 +365,17 @@ export async function sweep(deps: Deps, limit = 100): Promise<{ deleted: number 
 }
 
 export const hostingDeps = (db: Db, config: R2Config, fetchImpl: typeof fetch = fetch): Deps => ({ db, store: r2(config, fetchImpl), config });
+
+/** Whether another game on Toki runs at (or moved from) the same site as this address. */
+export async function siteOfOtherGame(db: Db, gameId: string, url: string): Promise<boolean> {
+  let origin: string;
+  try {
+    origin = new URL(url).origin;
+  } catch {
+    return false;
+  }
+  // (quoted: the address has dots and colons, which PostgREST's or=() would read as its own)
+  const like = encodeURIComponent(`"${origin.replace(/"/g, "")}/*"`);
+  const rows = await db.select<{ id: string }>("games", `id=neq.${gameId}&or=(play_url.like.${like},moved_from.like.${like})&select=id&limit=1`);
+  return rows.length > 0;
+}
