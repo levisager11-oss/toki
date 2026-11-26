@@ -89,6 +89,8 @@ export interface AiStatus {
   github: boolean;
   githubSource: "env" | "toki" | null;
   githubSlug: string | null;
+  /** what the GitHub App lacks on GitHub (e.g. "workflows"), or null when unknown */
+  githubMissing?: string[] | null;
 }
 
 /** Which secret keys are set on the server. Fails with "not_configured" when the Supabase key is missing. */

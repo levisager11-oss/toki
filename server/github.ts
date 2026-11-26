@@ -44,6 +44,29 @@ export interface Installation {
   repos: string[] | null;
 }
 
+/** What the app may do in an installation, for adding the build file (see buildAccess). */
+export interface BuildAccess {
+  /** the installation lets the app change workflow files */
+  workflows: boolean;
+  /** the app itself asks for that (else the admin has to add it on GitHub first) */
+  appWorkflows: boolean;
+  /** GitHub's page of the installation, where its owner accepts new permissions */
+  installUrl: string;
+  /** GitHub's page of the app's permissions (for Toki's admins) */
+  appUrl: string;
+}
+
+/** One run of a workflow, as GitHub reports it. */
+export interface WorkflowRun {
+  /** queued, in_progress, completed, … */
+  status: string;
+  /** when completed: success, failure, cancelled, … */
+  conclusion: string | null;
+  url: string;
+  sha: string;
+  at: string;
+}
+
 export function github(cfg: ServerEnv["github"], fetchImpl: typeof fetch = fetch) {
   async function call<T>(path: string, token: string, init: RequestInit = {}, accept?: string): Promise<T> {
     const res = await fetchImpl(path.startsWith("http") ? path : `${API}${path}`, {
@@ -79,6 +102,35 @@ export function github(cfg: ServerEnv["github"], fetchImpl: typeof fetch = fetch
         body: JSON.stringify({ repositories: [repo.split("/")[1]], permissions: { contents: "read", metadata: "read" } }),
       });
       return r.token;
+    },
+
+    /**
+     * What the app may do in an installation, for the build file (server/gitBuild.ts): whether it
+     * may change workflow files there, whether the app itself asks for that at all (apps made
+     * before Toki asked for it don't), and where on GitHub each is changed.
+     */
+    async buildAccess(installationId: number): Promise<BuildAccess> {
+      const jwt = appJwt(cfg.appId, cfg.privateKey);
+      const [inst, app] = await Promise.all([
+        call<{ permissions?: Record<string, string>; html_url?: string }>(`/app/installations/${installationId}`, jwt),
+        call<{ permissions?: Record<string, string>; slug?: string; owner?: { login: string; type?: string } }>("/app", jwt),
+      ]);
+      const slug = app.slug || cfg.slug;
+      return {
+        workflows: inst.permissions?.workflows === "write",
+        appWorkflows: app.permissions?.workflows === "write",
+        installUrl: inst.html_url || `https://github.com/settings/installations/${installationId}`,
+        appUrl: app.owner?.type === "Organization"
+          ? `https://github.com/organizations/${encodeURIComponent(app.owner.login)}/settings/apps/${encodeURIComponent(slug)}/permissions`
+          : `https://github.com/settings/apps/${encodeURIComponent(slug)}/permissions`,
+      };
+    },
+
+    /** The permissions Toki's app asks for that it lacks on GitHub (the admin changes them there). */
+    async missingAppPermissions(): Promise<string[]> {
+      const app = await call<{ permissions?: Record<string, string> }>("/app", appJwt(cfg.appId, cfg.privateKey));
+      const want: Record<string, string> = { contents: "write", pull_requests: "write", workflows: "write", actions: "write" };
+      return Object.entries(want).filter(([k, v]) => app.permissions?.[k] !== v && !(v === "read" && app.permissions?.[k] === "write")).map(([k]) => k);
     },
 
     installUrl: (state: string) => `https://github.com/apps/${encodeURIComponent(cfg.slug)}/installations/new?state=${encodeURIComponent(state)}`,
@@ -217,6 +269,32 @@ export function github(cfg: ServerEnv["github"], fetchImpl: typeof fetch = fetch
           const r = await call<{ state: string; merged_at: string | null }>(`/repos/${repo}/pulls/${n}`, token);
           return r.merged_at ? "merged" : r.state === "open" ? "open" : "closed";
         },
+        /** Whether a file is on a branch (without reading the whole tree). */
+        async has(path: string, ref: string): Promise<boolean> {
+          return call(`/repos/${repo}/contents/${enc(path)}?ref=${encodeURIComponent(ref)}`, token)
+            .then(() => true)
+            .catch((e) => {
+              if (e instanceof GitHubError && e.status === 404) return false;
+              throw e;
+            });
+        },
+        /** The newest run of a workflow on a branch, or null when it never ran (or the file isn't there). */
+        async latestRun(file: string, branch: string): Promise<WorkflowRun | null> {
+          const r = await call<{ workflow_runs: { status: string; conclusion: string | null; html_url: string; head_sha: string; created_at: string }[] }>(
+            `/repos/${repo}/actions/workflows/${enc(file)}/runs?branch=${encodeURIComponent(branch)}&per_page=1`,
+            token,
+          ).catch((e) => {
+            if (e instanceof GitHubError && e.status === 404) return { workflow_runs: [] };
+            throw e;
+          });
+          const w = r.workflow_runs[0];
+          return w ? { status: w.status, conclusion: w.conclusion, url: w.html_url, sha: w.head_sha, at: w.created_at } : null;
+        },
+        /** An open pull request into base from a branch whose name starts with prefix (one Toki made before). */
+        async openPullFrom(prefix: string, base: string): Promise<string | null> {
+          const r = await call<{ html_url: string; head: { ref: string } }[]>(`/repos/${repo}/pulls?state=open&base=${encodeURIComponent(base)}&per_page=50`, token);
+          return r.find((p) => p.head.ref.startsWith(prefix))?.html_url ?? null;
+        },
         /** Starts a workflow of the repository on a branch (it must allow "workflow_dispatch"). Needs the app's "Actions: write". */
         async runWorkflow(file: string, branch: string): Promise<void> {
           await call(`/repos/${repo}/actions/workflows/${enc(file)}/dispatches`, token, { method: "POST", body: JSON.stringify({ ref: branch }) });
@@ -237,11 +315,17 @@ export function github(cfg: ServerEnv["github"], fetchImpl: typeof fetch = fetch
             body: JSON.stringify({ message: p.message, tree: tree.sha, parents: [ref.object.sha] }),
           });
           await call(`/repos/${repo}/git/refs`, token, { method: "POST", body: JSON.stringify({ ref: `refs/heads/${p.branch}`, sha: commit.sha }) });
-          const pr = await call<{ html_url: string }>(`/repos/${repo}/pulls`, token, {
-            method: "POST",
-            body: JSON.stringify({ title: p.title, head: p.branch, base: p.base, body: p.body }),
-          });
-          return pr.html_url;
+          try {
+            const pr = await call<{ html_url: string }>(`/repos/${repo}/pulls`, token, {
+              method: "POST",
+              body: JSON.stringify({ title: p.title, head: p.branch, base: p.base, body: p.body }),
+            });
+            return pr.html_url;
+          } catch (e) {
+            // No branch left behind without its pull request.
+            await call(`/repos/${repo}/git/refs/heads/${enc(p.branch)}`, token, { method: "DELETE" }).catch(() => {});
+            throw e;
+          }
         },
       };
     },

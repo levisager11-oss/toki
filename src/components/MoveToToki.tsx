@@ -231,7 +231,7 @@ export function MovedNotice({ gameId, moved, onUndone }: { gameId: string; moved
       {moved.source === "github" && moved.github && <p>{t("move.doneGithub", { repo: moved.github.repo, branch: moved.github.branch })}</p>}
       {moved.source === "site" && moved.repoHelped && <p>{t("move.doneSiteRepo", { repo: moved.repoHelped.repo, n: moved.repoHelped.files })}</p>}
       {b && "cannot" in b && <p className="check">{t("move.doneNoBuild", { engine: b.cannot === "unknown" ? t("git.thisEngine") : b.cannot })}</p>}
-      {b && !("cannot" in b) && <BuildInfo repo={b.repo} branch={b.branch} link={b.pr ?? b.manual} ready={b.ready} />}
+      {b && !("cannot" in b) && <BuildInfo gameId={gameId} repo={b.repo} branch={b.branch} setup={b} />}
       <small>{moved.saves ? t("move.keepOld") : t("move.savesStayed")}</small>
       <small>{t("move.checkIt")}</small>
       <div className="actions">

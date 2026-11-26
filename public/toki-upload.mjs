@@ -25,7 +25,7 @@
 // In GitHub Actions no key is needed: with "id-token: write" in the workflow, the script proves
 // to Toki which repository and branch it runs for, and Toki takes it for the game that follows
 // them. Toki adds that workflow to a game's repository for you (game settings → From GitHub).
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
@@ -49,6 +49,8 @@ const flag = (name) => {
   return i >= 0;
 };
 let key = opt("key") || process.env.TOKI_KEY || "";
+// A key of the developer's own: then no GitHub proof is used, and failures aren't reported to Toki.
+const ownKey = !!key;
 const slug = opt("game") || process.env.TOKI_GAME || undefined;
 const dryRun = flag("dry-run");
 const build = flag("build");
@@ -211,7 +213,35 @@ let godotIsolation = false;
 
 function fail(msg) {
   console.error(`\n✗ ${msg}`);
+  tellToki(msg);
   process.exit(1);
+}
+
+/**
+ * In a GitHub Actions build without a key: tells Toki why it failed, so the game's page on Toki
+ * can say it. Runs to the end before the script stops (a small node process, at most 20 seconds),
+ * and never makes things worse when it can't.
+ */
+function tellToki(msg) {
+  if (process.env.GITHUB_ACTIONS !== "true" || ownKey || !process.env.ACTIONS_ID_TOKEN_REQUEST_URL) return;
+  const code = `
+    const u = new URL(process.env.ACTIONS_ID_TOKEN_REQUEST_URL);
+    u.searchParams.set("audience", "toki-upload");
+    const t = await (await fetch(u, { headers: { authorization: "Bearer " + process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN } })).json();
+    await fetch(process.env.TOKI_FAIL_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: "Bearer " + t.value },
+      body: JSON.stringify({ action: "build_failed", reason: process.env.TOKI_FAIL_REASON }),
+    });`;
+  try {
+    execFileSync(process.execPath, ["--input-type=module", "-e", code], {
+      stdio: "ignore",
+      timeout: 20_000,
+      env: { ...process.env, TOKI_FAIL_URL: `${TOKI}/api/hosting`, TOKI_FAIL_REASON: String(msg).slice(0, 280) },
+    });
+  } catch {
+    /* Toki just won't know why */
+  }
 }
 
 async function walk(dir, root, out) {

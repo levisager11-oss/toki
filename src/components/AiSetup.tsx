@@ -196,6 +196,7 @@ export function AiSetup({ ai, onTurnOn }: { ai: AiSwitch | null; onTurnOn: () =>
             {!ready ? (
               <p className="sub">{t("setup.afterStep1")}</p>
             ) : s?.github ? (
+              <>
               <div className="setup-row">
                 <span className="sub">
                   {s.githubSource === "env" ? t("setup.fromVercel") : t("setup.github.connected")}{" "}
@@ -205,6 +206,16 @@ export function AiSetup({ ai, onTurnOn }: { ai: AiSwitch | null; onTurnOn: () =>
                   <button type="button" className="linkish" disabled={removing} onClick={() => remove("github")}>{confirm === "github" ? t("setup.removeSure") : t("setup.remove")}</button>
                 )}
               </div>
+              {/* Apps made before Toki asked for them: the build file for games can't be added by pull request. */}
+              {!!s.githubMissing?.length && (
+                <div className="check warn setup-how" role="status">
+                  <p>{t("setup.github.missing", { list: s.githubMissing.join(", ") })}</p>
+                  {s.githubSlug && (
+                    <a className="btn" href={`https://github.com/settings/apps/${s.githubSlug}/permissions`} target="_blank" rel="noopener noreferrer">{t("setup.github.permissions")} ↗</a>
+                  )}
+                </div>
+              )}
+              </>
             ) : (
               <div className="setup-how">
                 <p>{t("setup.github.how")}</p>

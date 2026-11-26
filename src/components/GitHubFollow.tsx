@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../lib/i18n";
+import { useAuth } from "../lib/auth";
 import { githubConnectLink, githubManage, githubRepos, type GitHubInfo } from "../lib/ai";
 import { BUILD_WORKFLOW_PATH } from "../lib/hostingRules";
-import { gitBranches, gitBuild, gitDeploy, gitDisconnect, hostError, type GitChoice, type GitResult, type GitRow } from "../lib/hosting";
+import { gitBranches, gitBuild, gitBuildStatus, gitDeploy, gitDisconnect, hostError, type BuildSetup, type BuildStatus, type GitChoice, type GitResult, type GitRow } from "../lib/hosting";
 
 /** The error code of a failed update, also for GitHub's own answers saved before Toki knew them. */
 export function gitErrorCode(error: string | null | undefined): string {
@@ -19,32 +20,194 @@ export function gitFailed(t: ReturnType<typeof useI18n>["t"], error: string | un
   return code === "error" ? t("git.failed", { error: error ?? "" }) : t(`host.err.${code}`, { mb: "100 MB" });
 }
 
+/** How often the build panel asks GitHub while something is happening, and for how long at most. */
+const POLL_MS = 10_000;
+const POLL_FOR_MS = 15 * 60_000;
+
 /**
- * GitHub Actions builds this game on every push: where its build file is (a pull request to
- * merge, or GitHub's page to add it with one click), and "Run it once" on GitHub.
+ * GitHub Actions builds this game on every push. Shows, live while it's on screen, the two steps:
+ * the build file (a pull request to merge, a permission to give on GitHub, or GitHub's reason for
+ * saying no) and the newest build (running, live, or why it failed), each with its next step.
  */
-export function BuildInfo({ repo, branch, link, ready, waiting }: { repo: string; branch: string; link: string | null | undefined; ready?: boolean; waiting?: boolean }) {
-  const { t } = useI18n();
-  const isPr = !!link && /\/pull\/\d+/.test(link);
+export function BuildInfo({ gameId, repo, branch, setup, onChanged }: {
+  gameId: string;
+  repo: string;
+  branch: string;
+  /** what setting it up just said, until GitHub is asked */
+  setup?: BuildSetup | null;
+  onChanged?: () => void;
+}) {
+  const { t, lang } = useI18n();
+  const { profile } = useAuth();
+  const [st, setSt] = useState<BuildStatus | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [retryErr, setRetryErr] = useState("");
+  const [tick, setTick] = useState(0);
+  const since = useRef(Date.now());
+
+  useEffect(() => {
+    let gone = false;
+    gitBuildStatus(gameId).then(
+      (s) => { if (!gone) { setSt(s); setFailed(false); } },
+      () => { if (!gone) setFailed(true); },
+    );
+    return () => { gone = true; };
+  }, [gameId, tick]);
+
+  // Asked again while something is happening (and the tab is open), and whenever the developer
+  // comes back to this tab (e.g. from merging or allowing something on GitHub).
+  const active = !!st && (st.file === "pr" || (st.file === "added" && (!st.run || st.run.state === "queued" || st.run.state === "running" || (st.run.state === "success" && !st.live))));
+  useEffect(() => {
+    const again = () => { if (!document.hidden) setTick((n) => n + 1); };
+    document.addEventListener("visibilitychange", again);
+    window.addEventListener("focus", again);
+    const id = active && Date.now() - since.current < POLL_FOR_MS ? window.setInterval(again, POLL_MS) : undefined;
+    return () => {
+      document.removeEventListener("visibilitychange", again);
+      window.removeEventListener("focus", again);
+      if (id) window.clearInterval(id);
+    };
+  }, [active]);
+
+  const retry = async () => {
+    setBusy(true);
+    setRetryErr("");
+    try {
+      const r = await gitBuild(gameId);
+      if (!r.ok) setRetryErr(gitFailed(t, r.error, r.engine));
+    } catch (e) {
+      setRetryErr(t(`host.err.${hostError(e)}`, { mb: "100 MB" }));
+    }
+    setBusy(false);
+    since.current = Date.now();
+    setTick((n) => n + 1);
+    onChanged?.();
+  };
+
+  const workflowPage = `https://github.com/${repo}/actions/workflows/${BUILD_WORKFLOW_PATH.split("/").pop()}`;
+  const ext = { target: "_blank", rel: "noreferrer" } as const;
+  // Until GitHub is asked: what setting it up said.
+  const file = st?.file ?? (setup?.ready ? "added" : setup?.pr ? "pr" : "missing");
+  const pr = st?.pr ?? setup?.pr ?? null;
+  const manual = st?.manual ?? setup?.manual ?? null;
+  const blocked = st ? st.blocked ?? (st.error?.startsWith("pr_refused: ") ? "refused" : null) : setup?.blocked ?? null;
+  const permissionUrl = st?.permissionUrl ?? setup?.permissionUrl ?? null;
+  const refusal = st?.error?.startsWith("pr_refused: ") ? st.error.slice("pr_refused: ".length) : setup?.error ?? "";
+  const buildWhy = st?.error?.startsWith("build: ") ? st.error.slice("build: ".length) : "";
+  const run = st?.run ?? null;
+  const done = file === "added";
+  const live = !!st?.live && (!run || run.state === "success" || run.state === "cancelled");
+  const time = (s: string) => new Date(s).toLocaleTimeString(lang === "de" ? "de-CH" : "en", { hour: "2-digit", minute: "2-digit" });
+  const admin = profile?.role === "admin";
+
   return (
-    <div className="build-info">
+    <div className="build-info" aria-live="polite">
       <p>{t("git.buildAction", { branch })}</p>
-      {!ready && link && (
-        <p>
-          <b>{isPr ? t("git.buildMergePr") : t("git.buildAddFile")}</b>{" "}
-          <a className="btn" href={link} target="_blank" rel="noreferrer">{isPr ? t("git.buildOpenPr") : t("git.buildOpenNew")}</a>
-        </p>
-      )}
-      {waiting && !link && (
-        <p>
-          {t("git.buildFirst")}{" "}
-          <a className="btn" href={`https://github.com/${repo}/actions/workflows/${BUILD_WORKFLOW_PATH.split("/").pop()}`} target="_blank" rel="noreferrer">{t("git.buildRunNow")}</a>
-        </p>
-      )}
+      <ol className="setup-steps build-steps">
+        <li className={done ? "done" : "todo"}>
+          <span className="setup-head">
+            <span className={`setup-num ${done ? "done" : ""}`} aria-hidden="true">{done ? "✓" : 1}</span>
+            <b>{t("git.build.fileTitle")}</b>
+          </span>
+          {!st && !setup ? (
+            <p className="sub" aria-busy="true">{failed ? t("git.build.unknown") : t("loading")}</p>
+          ) : done ? (
+            <p className="sub">{t("git.build.fileIn")}</p>
+          ) : file === "pr" && pr ? (
+            <div className="setup-how">
+              <p>{t("git.buildMergePr")}</p>
+              <p><a className="btn primary" href={pr} {...ext}>{t("git.buildOpenPr")} ↗</a></p>
+            </div>
+          ) : blocked === "install" ? (
+            <div className="setup-how">
+              <p>{t("git.build.needInstall")}</p>
+              <p>
+                {permissionUrl && <a className="btn primary" href={permissionUrl} {...ext}>{t("git.build.allow")} ↗</a>}{" "}
+                <button type="button" className="btn" onClick={retry} disabled={busy}>{busy ? t("git.deploying") : t("git.build.retry")}</button>
+              </p>
+              <small>{t("git.build.allowHow")}</small>
+            </div>
+          ) : blocked === "app" ? (
+            <div className="setup-how">
+              <p>{admin ? t("git.build.needAppAdmin") : t("git.build.needApp")}</p>
+              {admin && permissionUrl && (
+                <p>
+                  <a className="btn primary" href={permissionUrl} {...ext}>{t("git.build.appPermissions")} ↗</a>{" "}
+                  <button type="button" className="btn" onClick={retry} disabled={busy}>{busy ? t("git.deploying") : t("git.build.retry")}</button>
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="setup-how">
+              <p>{blocked === "refused" ? t("git.build.refused", { error: refusal || t("error") }) : t("git.build.noFile")}</p>
+              <p><button type="button" className="btn primary" onClick={retry} disabled={busy}>{busy ? t("git.deploying") : blocked === "refused" ? t("git.build.retry") : t("git.build.openPr")}</button></p>
+            </div>
+          )}
+          {!done && blocked && manual && (
+            <small className="setup-how">{t("git.build.orByHand")} <a href={manual} {...ext}>{t("git.buildOpenNew")} ↗</a></small>
+          )}
+          {retryErr && <p className="error setup-how" role="alert">{retryErr}</p>}
+        </li>
+
+        <li className={live ? "done" : "todo"}>
+          <span className="setup-head">
+            <span className={`setup-num ${live ? "done" : ""}`} aria-hidden="true">{live ? "✓" : 2}</span>
+            <b>{t("git.build.runTitle")}</b>
+          </span>
+          {!done ? (
+            <p className="sub">{t("git.build.afterFile")}</p>
+          ) : !run ? (
+            <div className="setup-how">
+              <p>{t("git.buildFirst")}</p>
+              <p><a className="btn" href={workflowPage} {...ext}>{t("git.buildRunNow")} ↗</a></p>
+            </div>
+          ) : run.state === "queued" || run.state === "running" ? (
+            <p className="sub" aria-busy="true">
+              {t(run.state === "queued" ? "git.build.queued" : "git.build.running", { time: time(run.at) })}{" "}
+              <a href={run.url} {...ext}>{t("git.build.watch")} ↗</a>
+            </p>
+          ) : run.state === "failed" ? (
+            <div className="setup-how">
+              <p className="check warn">{buildWhy ? t("git.build.failedWhy", { error: buildWhy }) : t("git.build.failed")}</p>
+              <p>
+                <a className="btn" href={run.url} {...ext}>{t("git.build.log")} ↗</a>{" "}
+                <a className="btn" href={workflowPage} {...ext}>{t("git.build.runAgain")} ↗</a>
+              </p>
+            </div>
+          ) : run.state === "cancelled" ? (
+            <p className="sub">{t("git.build.cancelled")} <a href={workflowPage} {...ext}>{t("git.build.runAgain")} ↗</a></p>
+          ) : live ? (
+            <p className="sub">
+              {t("git.build.live", { time: time(run.at) })}{" "}
+              <a href={`https://github.com/${repo}/commit/${st?.last_sha ?? run.sha}`} {...ext}><code>{(st?.last_sha ?? run.sha).slice(0, 7)}</code></a>
+            </p>
+          ) : (
+            <p className="sub" aria-busy="true">{t("git.build.uploading")}</p>
+          )}
+        </li>
+      </ol>
       <small>
-        {t("git.buildHow")}{" "}
-        <a href={`https://github.com/${repo}/actions`} target="_blank" rel="noreferrer">{t("git.buildRuns")}</a>
+        {t("git.buildHow")} <a href={`https://github.com/${repo}/actions`} {...ext}>{t("git.buildRuns")} ↗</a>
       </small>
+    </div>
+  );
+}
+
+/**
+ * Asked once when a repository holds the game's source: should GitHub Actions build it on every
+ * push? "Not now" leaves it for later (the game's settings still offer it).
+ */
+export function BuildAsk({ onYes, onLater, busy }: { onYes: () => void; onLater?: () => void; busy?: boolean }) {
+  const { t } = useI18n();
+  return (
+    <div className="check build-ask" role="group" aria-labelledby="build-ask-q">
+      <p id="build-ask-q"><b>{t("git.ask.q")}</b></p>
+      <p className="sub">{t("git.ask.why")}</p>
+      <div className="actions">
+        <button type="button" className="btn primary" onClick={onYes} disabled={busy}>{busy ? t("git.deploying") : t("git.ask.yes")}</button>
+        {onLater && <button type="button" className="btn" onClick={onLater} disabled={busy}>{t("git.ask.later")}</button>}
+      </div>
     </div>
   );
 }
@@ -68,6 +231,8 @@ export function GitHubFollow({ gameId, row, choice, onChoice, onChanged }: {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [editing, setEditing] = useState(!row);
+  // "Not now" on the question whether GitHub Actions should build the game.
+  const [later, setLater] = useState(false);
 
   const [loadFailed, setLoadFailed] = useState(false);
   const loadRepos = () =>
@@ -144,7 +309,8 @@ export function GitHubFollow({ gameId, row, choice, onChoice, onChanged }: {
               {row.last_message ? ` “${row.last_message}”` : ""} · {date(row.updated_at)}
             </p>
           )}
-          {row.status === "failed" && row.error && (
+          {/* The build panel below says why a build failed, and asks about building. */}
+          {row.status === "failed" && row.error && row.error !== "needs_build" && !(row.build === "action" && /^(build|pr_refused): /.test(row.error)) && (
             <p className="sub">{t("git.error", { error: hostError(gitErrorCode(row.error)) === "error" ? row.error : t(`host.err.${hostError(gitErrorCode(row.error))}`, { mb: "100 MB" }) })}</p>
           )}
           {row.status === "failed" && gitErrorCode(row.error) === "repo_lost" && info?.installUrl && (
@@ -153,12 +319,16 @@ export function GitHubFollow({ gameId, row, choice, onChoice, onChanged }: {
               <button type="button" className="btn primary" onClick={() => moreRepos(() => run("deploy"))} disabled={busy}>{t("git.giveAccess")}</button>
             </p>
           )}
-          {row.build === "action" && <BuildInfo repo={row.repo} branch={row.branch} link={row.build_pr} ready={row.status === "live" || !!row.last_sha} waiting={row.status === "waiting"} />}
+          {row.build === "action" && gameId && <BuildInfo gameId={gameId} repo={row.repo} branch={row.branch} onChanged={onChanged} />}
           {row.build !== "action" && row.error === "needs_build" && (
-            <p className="sub">
-              {t("git.buildOffer")}{" "}
-              <button type="button" className="btn primary" onClick={() => run("build")} disabled={busy}>{t("git.buildStart")}</button>
-            </p>
+            later ? (
+              <p className="sub">
+                {t("git.buildOffer")}{" "}
+                <button type="button" className="linkish" onClick={() => run("build")} disabled={busy}>{t("git.buildStart")}</button>
+              </p>
+            ) : (
+              <BuildAsk busy={busy} onYes={() => run("build")} onLater={() => setLater(true)} />
+            )
           )}
           <div className="actions">
             {row.build !== "action" && <button type="button" className="btn" onClick={() => run("deploy")} disabled={busy}>{busy ? t("git.deploying") : t("git.deployNow")}</button>}

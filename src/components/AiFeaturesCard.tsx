@@ -21,6 +21,8 @@ export function AiFeaturesCard({ baseUrl, aiOn, onChanged }: { baseUrl: string; 
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<"" | "saved" | "error">("");
   const [tests, setTests] = useState<Partial<Record<AiFeature, TestResult | "running">>>({});
+  // Every hook stays above the early returns below (a hook after them broke the page once the list loaded).
+  const [testingAll, setTestingAll] = useState(false);
 
   useEffect(() => {
     getAiFeatures()
@@ -97,7 +99,6 @@ export function AiFeaturesCard({ baseUrl, aiOn, onChanged }: { baseUrl: string; 
   };
 
   // Every feature that has a model, one tiny call each (in turn, so the list fills as they finish).
-  const [testingAll, setTestingAll] = useState(false);
   const testAll = async () => {
     setTestingAll(true);
     for (const r of rows.filter((x) => x.model && !dirty(x))) await test(r.feature);

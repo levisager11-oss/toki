@@ -1,13 +1,16 @@
 // Games whose repository holds their source: GitHub Actions builds them and uploads without a key
 // (GitHub's signed token says which repository and branch the run is for).
 import { generateKeyPairSync, createSign, type KeyObject } from "node:crypto";
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
+import { promisify } from "node:util";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ACTIONS_AUDIENCE, ACTIONS_ISSUER, gameForAction, looksLikeJwt, verifyActionToken } from "../server/actionsAuth";
-import { buildKind, manualBuildLink, setUpBuild } from "../server/gitBuild";
+import { buildKind, buildStatus, manualBuildLink, setUpBuild } from "../server/gitBuild";
 import { GitHubError } from "../server/github";
 import { gamesForPush } from "../server/gitDeploy";
 import { buildWorkflow } from "../src/lib/hostingRules";
@@ -163,39 +166,119 @@ describe("the upload script's --build", () => {
 
 describe("setting up the build", () => {
   const row = { game_id: "g1", installation_id: 7, repo: "lu/moon-hop", branch: "main" };
-  const db = () => fakeDb({ game_git: [{ game_id: "g1", repo: "lu/moon-hop", branch: "main", build: "none" }] });
-  const client = (o: { has: boolean; run?: () => Promise<void> }) => {
+  const tables = () => ({ game_git: [{ game_id: "g1", repo: "lu/moon-hop", branch: "main", build: "none" } as Record<string, unknown>] });
+  const db = () => fakeDb(tables());
+  const ACCESS = { workflows: true, appWorkflows: true, installUrl: "https://github.com/settings/installations/7", appUrl: "https://github.com/settings/apps/toki/permissions" };
+  const client = (o: { has: boolean; run?: () => Promise<void>; open?: string | null; access?: Partial<typeof ACCESS>; pr?: () => Promise<string>; latest?: unknown }) => {
     const calls: string[] = [];
     const gh = {
+      buildAccess: async () => {
+        calls.push("access");
+        return { ...ACCESS, ...o.access };
+      },
       repo: async () => ({
-        tree: async () => (o.has ? [{ path: ".github/workflows/toki.yml", type: "blob" }] : []),
+        has: async (path: string) => o.has && path === ".github/workflows/toki.yml",
+        openPullFrom: async (prefix: string) => (o.open && prefix === "toki-build-" ? o.open : null),
+        latestRun: async () => o.latest ?? null,
         runWorkflow: async (file: string, branch: string) => {
           calls.push(`run ${file} on ${branch}`);
           await o.run?.();
         },
         openPullRequest: async () => {
           calls.push("pr");
-          return "https://github.com/lu/moon-hop/pull/3";
+          return o.pr ? o.pr() : "https://github.com/lu/moon-hop/pull/3";
         },
       }),
     } as unknown as GitHubClient;
     return { gh, calls };
   };
+  const base = { pr: null, manual: null, ready: false, started: false, blocked: null, permissionUrl: null, error: null };
+  const manual = manualBuildLink("lu/moon-hop", "main", "https://www.playtoki.app");
 
   it("starts the first build when the build file is in the repository already", async () => {
     const { gh, calls } = client({ has: true });
-    expect(await setUpBuild(db(), gh, row, "https://www.playtoki.app")).toEqual({ pr: null, manual: null, ready: true, started: true });
+    expect(await setUpBuild(db(), gh, row, "https://www.playtoki.app")).toEqual({ ...base, ready: true, started: true });
     expect(calls).toEqual(["run toki.yml on main"]);
   });
 
   it("leaves the first build to the developer when GitHub doesn't let the app start it", async () => {
     const { gh } = client({ has: true, run: async () => { throw new GitHubError("GitHub 403: Resource not accessible by integration", 403); } });
-    expect(await setUpBuild(db(), gh, row, "https://www.playtoki.app")).toEqual({ pr: null, manual: null, ready: true, started: false });
+    expect(await setUpBuild(db(), gh, row, "https://www.playtoki.app")).toEqual({ ...base, ready: true, started: false });
   });
 
   it("opens a pull request with the build file when it is missing, and starts nothing", async () => {
     const { gh, calls } = client({ has: false });
-    expect(await setUpBuild(db(), gh, row, "https://www.playtoki.app")).toEqual({ pr: "https://github.com/lu/moon-hop/pull/3", manual: null, ready: false, started: false });
-    expect(calls).toEqual(["pr"]);
+    expect(await setUpBuild(db(), gh, row, "https://www.playtoki.app")).toEqual({ ...base, pr: "https://github.com/lu/moon-hop/pull/3" });
+    expect(calls).toEqual(["access", "pr"]);
+  });
+
+  it("keeps the pull request that's open already instead of opening another", async () => {
+    const { gh, calls } = client({ has: false, open: "https://github.com/lu/moon-hop/pull/2" });
+    expect(await setUpBuild(db(), gh, row, "https://www.playtoki.app")).toEqual({ ...base, pr: "https://github.com/lu/moon-hop/pull/2" });
+    expect(calls).toEqual([]);
+  });
+
+  it("asks the developer to allow workflow files on GitHub first, instead of trying", async () => {
+    const { gh, calls } = client({ has: false, access: { workflows: false } });
+    const tb = tables();
+    expect(await setUpBuild(fakeDb(tb), gh, row, "https://www.playtoki.app")).toEqual({ ...base, manual, blocked: "install", permissionUrl: ACCESS.installUrl });
+    expect(calls).toEqual(["access"]);
+    expect(tb.game_git[0]).toMatchObject({ build: "action", build_pr: manual, status: "waiting", error: null });
+  });
+
+  it("says when Toki's app itself doesn't ask for workflow files yet (its admins add it)", async () => {
+    const { gh } = client({ has: false, access: { workflows: false, appWorkflows: false } });
+    expect(await setUpBuild(db(), gh, row, "https://www.playtoki.app")).toMatchObject({ blocked: "app", permissionUrl: ACCESS.appUrl, manual });
+  });
+
+  it("keeps GitHub's reason when it refuses the pull request", async () => {
+    const { gh } = client({ has: false, pr: async () => { throw new GitHubError("GitHub 403: Resource not accessible by integration", 403); } });
+    const tb = tables();
+    expect(await setUpBuild(fakeDb(tb), gh, row, "https://www.playtoki.app")).toEqual({ ...base, manual, blocked: "refused", error: "GitHub 403: Resource not accessible by integration" });
+    expect(tb.game_git[0].error).toBe("pr_refused: GitHub 403: Resource not accessible by integration");
+  });
+
+  it("reports how the build is doing: the file, the pull request, the permission and the newest run", async () => {
+    const r = { ...row, build_pr: null };
+    const origin = "https://www.playtoki.app";
+    expect(await buildStatus(client({ has: false, open: "https://github.com/lu/moon-hop/pull/2" }).gh, r, origin)).toMatchObject({ file: "pr", pr: "https://github.com/lu/moon-hop/pull/2", blocked: null, run: null });
+    expect(await buildStatus(client({ has: false, access: { workflows: false } }).gh, r, origin)).toMatchObject({ file: "missing", blocked: "install", permissionUrl: ACCESS.installUrl });
+    const latest = (status: string, conclusion: string | null) => ({ status, conclusion, url: "https://github.com/lu/moon-hop/actions/runs/1", sha: "b".repeat(40), at: "2026-11-26T10:00:00Z" });
+    expect((await buildStatus(client({ has: true, latest: latest("in_progress", null) }).gh, r, origin)).run?.state).toBe("running");
+    expect((await buildStatus(client({ has: true, latest: latest("queued", null) }).gh, r, origin)).run?.state).toBe("queued");
+    expect((await buildStatus(client({ has: true, latest: latest("completed", "success") }).gh, r, origin))).toMatchObject({ file: "added", run: { state: "success" } });
+    expect((await buildStatus(client({ has: true, latest: latest("completed", "failure") }).gh, r, origin)).run?.state).toBe("failed");
+  });
+});
+
+describe("the upload script in GitHub Actions", () => {
+  it("tells Toki why the build failed, with GitHub's proof", async () => {
+    const got: { path: string; auth: string; body: string }[] = [];
+    const server = createServer((req, res) => {
+      let body = "";
+      req.on("data", (c) => (body += c));
+      req.on("end", () => {
+        got.push({ path: req.url ?? "", auth: req.headers.authorization ?? "", body });
+        res.setHeader("content-type", "application/json");
+        res.end(req.url?.startsWith("/token") ? JSON.stringify({ value: "proof-from-github" }) : JSON.stringify({ ok: true }));
+      });
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    const port = (server.address() as AddressInfo).port;
+    const dir = mkdtempSync(join(tmpdir(), "toki-fail-"));
+    mkdirSync(join(dir, "ProjectSettings"));
+    writeFileSync(join(dir, "ProjectSettings", "ProjectVersion.txt"), "m_EditorVersion: 6000.0");
+    const env = {
+      ...process.env, TOKI_KEY: "", GITHUB_ACTIONS: "true", TOKI_URL: `http://127.0.0.1:${port}`,
+      ACTIONS_ID_TOKEN_REQUEST_URL: `http://127.0.0.1:${port}/token?x=1`, ACTIONS_ID_TOKEN_REQUEST_TOKEN: "runner-token",
+    };
+    const script = join(__dirname, "..", "public", "toki-upload.mjs");
+    const failed = await promisify(execFile)("node", [script, "--build"], { cwd: dir, env }).then(() => false, () => true);
+    server.close();
+    expect(failed).toBe(true);
+    expect(got[0]).toMatchObject({ auth: "Bearer runner-token" });
+    expect(got[0].path).toContain("audience=toki-upload");
+    expect(got[1]).toMatchObject({ path: "/api/hosting", auth: "Bearer proof-from-github" });
+    expect(JSON.parse(got[1].body)).toMatchObject({ action: "build_failed", reason: expect.stringMatching(/Unity project.*own editor/) });
   });
 });

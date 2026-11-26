@@ -316,7 +316,15 @@ export function GameForm() {
       let msg = "";
       try {
         const r = await gitConnect(res.data.id, gitChoice);
-        if (!r.ok) msg = gitFailed(t, r.error, r.engine);
+        // needs_build isn't a failure: the game's settings ask whether GitHub Actions should build it.
+        if (!r.ok && r.error !== "needs_build") msg = gitFailed(t, r.error, r.engine);
+        if (r.error === "needs_build" && !orig) {
+          setProgress(null);
+          setBusy(false);
+          invalidateGames();
+          return navigate(`/edit/${row.slug}`, { replace: true });
+        }
+        if (r.error === "needs_build" && orig) loadGit(orig.id);
       } catch (e) {
         msg = t(`host.err.${hostError(e)}`, { mb: "100 MB" });
       }

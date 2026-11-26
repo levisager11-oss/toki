@@ -259,6 +259,26 @@ export interface BuildSetup {
   ready: boolean;
   /** Toki started the first build itself */
   started: boolean;
+  /** why there's no pull request: "install" = allow it on GitHub; "app" = Toki's admins must first; "refused" = GitHub said no (error) */
+  blocked?: "install" | "app" | "refused" | null;
+  /** GitHub's page where that permission is given */
+  permissionUrl?: string | null;
+  /** GitHub's own answer when it refused */
+  error?: string | null;
+}
+/** How a game's build with GitHub Actions is doing right now (server/gitBuild.ts buildStatus). */
+export interface BuildStatus {
+  file: "added" | "pr" | "missing";
+  pr: string | null;
+  manual: string;
+  blocked: BuildSetup["blocked"];
+  permissionUrl: string | null;
+  run: { state: "queued" | "running" | "success" | "failed" | "cancelled"; url: string; sha: string; at: string } | null;
+  /** the game is live on Toki from its last upload */
+  live: boolean;
+  last_sha: string | null;
+  /** Toki's note: "build: <why the build failed>", "pr_refused: <GitHub's answer>", or another error */
+  error: string | null;
 }
 /** Engines GitHub Actions can't build (their editor needs a license): they need an exported web build. */
 export type NoBuild = "Unity" | "GameMaker" | "Construct" | "Godot C#" | "unknown";
@@ -275,6 +295,7 @@ export const gitConnect = (gameId: string, c: GitChoice) => post<GitResult>({ ac
 export const gitDeploy = (gameId: string) => post<GitResult>({ action: "git_deploy", game_id: gameId });
 /** Let GitHub Actions build the game on every push (server/gitBuild.ts). */
 export const gitBuild = (gameId: string) => post<GitResult>({ action: "git_build", game_id: gameId });
+export const gitBuildStatus = (gameId: string) => post<BuildStatus>({ action: "git_build_status", game_id: gameId });
 export const gitDisconnect = (gameId: string) => post<{ ok: true }>({ action: "git_disconnect", game_id: gameId });
 
 

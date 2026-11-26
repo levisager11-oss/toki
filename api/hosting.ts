@@ -18,7 +18,7 @@ import { allows, connections } from "../server/githubAccess.js";
 import { MAX_GAME_BYTES } from "../src/lib/hostingRules.js";
 import { checkMove, moveBack, moveGame, type GitHubAccess } from "../server/migrate.js";
 import { ACTIONS_ISSUER, ActionsAuthError, gameForAction, looksLikeJwt, verifyActionToken, type ActionClaims } from "../server/actionsAuth.js";
-import { buildKind, setUpBuild, type BuildSetup } from "../server/gitBuild.js";
+import { BUILD_FAILED, buildKind, buildStatus, setUpBuild, type BuildSetup } from "../server/gitBuild.js";
 import { sweepPictures } from "../server/pictures.js";
 
 interface Who {
@@ -140,7 +140,7 @@ export async function POST(request: Request) {
   const b = await body(request);
 
   // Settings, keys and GitHub: only when logged in on the website.
-  const SESSION_ONLY = ["create_key", "set_config", "clear_config", "test_config", "set_webhook_secret", "git_branches", "git_connect", "git_deploy", "git_disconnect", "git_build"];
+  const SESSION_ONLY = ["create_key", "set_config", "clear_config", "test_config", "set_webhook_secret", "git_branches", "git_connect", "git_deploy", "git_disconnect", "git_build", "git_build_status"];
   if (typeof b.action === "string" && SESSION_ONLY.includes(b.action)) {
     if (!w.session) return json({ error: "not_allowed" }, 403);
     if (b.action === "create_key") return createKey(w, b);
@@ -226,6 +226,12 @@ async function actionUpload(w: Who, deps: ReturnType<typeof hostingDeps>, b: Rec
       const out = await finishUpload(deps, w.user, b);
       await mark({ status: "live", last_sha: a.sha, error: null });
       return json(out);
+    }
+    // The upload script couldn't build the game: why, in its words, for the game's page.
+    if (b.action === "build_failed") {
+      const reason = typeof b.reason === "string" ? b.reason.replace(/\s+/g, " ").trim().slice(0, 290 - BUILD_FAILED.length) : "";
+      await mark({ status: "failed", last_sha: a.sha, error: BUILD_FAILED + (reason || "error") });
+      return json({ ok: true });
     }
     return json({ error: "not_allowed" }, 403);
   } catch (e) {
@@ -334,6 +340,16 @@ async function git(w: Who, b: Record<string, unknown>, origin: string): Promise<
     const setup: BuildSetup = await setUpBuild(w.db, gh, r, origin);
     return json({ ok: true, building: setup });
   };
+  // How the build is doing (the game's page asks while it's on screen).
+  if (b.action === "git_build_status") {
+    const [r] = await w.db.select<GitRow & { build: string; build_pr: string | null; status: string; error: string | null; last_sha: string | null }>(
+      "game_git",
+      `game_id=eq.${g.id}&select=game_id,installation_id,repo,branch,folder,created_by,build,build_pr,status,error,last_sha`,
+    );
+    if (!r || r.build !== "action") return json({ error: "no_repo" }, 404);
+    // Toki's side too: what the last upload did, and why a build failed (the upload script says).
+    return json({ ...(await buildStatus(gh, r, origin)), live: r.status === "live", last_sha: r.last_sha, error: r.error });
+  }
   if (b.action === "git_build") {
     const [r] = await w.db.select<GitRow>("game_git", `game_id=eq.${g.id}&select=game_id,installation_id,repo,branch,folder,created_by`);
     if (!r) return json({ error: "no_repo" }, 404);
@@ -374,8 +390,13 @@ async function git(w: Who, b: Record<string, unknown>, origin: string): Promise<
   const { config } = await r2Config(w.db, w.serviceKey);
   if (!config) return json({ error: "hosting_off" }, 503);
   const out = await deployCommit(hostingDeps(w.db, config), gh, row);
-  // The repository holds the source, which must be built first: let GitHub Actions build it.
-  if (!out.ok && out.error === "needs_build") return build(row);
+  // The repository holds the source, which must be built first. The developer is asked once
+  // whether GitHub Actions should build it ("git_build"); engines it can't build say so now.
+  if (!out.ok && out.error === "needs_build") {
+    const can = await buildKind(gh, row).catch(() => ({ kind: "web" as const }));
+    if ("cannot" in can) return json({ ok: false, error: "cant_build", engine: can.cannot }, 422);
+    return json({ ok: false, error: "needs_build" });
+  }
   return json(out, out.ok ? 200 : 422);
 }
 
