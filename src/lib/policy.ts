@@ -20,7 +20,7 @@ export interface PolicyFacts {
 /** The day the texts in src/lib/texts/legal*.ts were last changed. Change it with them. */
 export const LEGAL_DATE = "2026-11-13";
 /** The same for the privacy policy alone, when only it changed (the terms keep their date). */
-export const PRIVACY_DATE = "2026-11-20";
+export const PRIVACY_DATE = "2026-11-25";
 /** The same for the legal notice alone. */
 export const IMPRINT_DATE = "2026-11-20";
 

@@ -225,6 +225,16 @@ describe("game helper", async () => {
     expect(helpPrompt(null, [{ role: "user", content: "?" }], "en")[0].content).toContain("isn't on a game's page");
   });
 
+  it("points a player in danger to real help, before the games-only rule", async () => {
+    const { SAFETY_RULE } = await import("../server/assist/help");
+    for (const g of [game, null]) {
+      const system = helpPrompt(g, [{ role: "user", content: "?" }], "en")[0].content as string;
+      expect(system).toContain(SAFETY_RULE);
+      expect(system.indexOf(SAFETY_RULE)).toBeLessThan(system.indexOf("Only talk about this game"));
+    }
+    for (const line of ["147", "116 111", "988", "112", "911"]) expect(SAFETY_RULE).toContain(line);
+  });
+
   it("knows where the player is: their save, best score and playtime", async () => {
     const { scoreText, span } = await import("../server/assist/help");
     const ask = [{ role: "user" as const, content: "What now?" }];
