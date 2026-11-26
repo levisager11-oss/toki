@@ -199,16 +199,20 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
 
     // The files: uploaded, or the branch's newest version from GitHub.
     set("files", "busy");
+    // Source code only: nothing goes live until GitHub Actions has built it.
+    let waitsForBuild = false;
     try {
       if (kind === "upload" && picked) await uploadGame(row.id, picked.files, p.isolation, (d, total) => setPct(d / total));
       else if (git) {
         const r = await gitConnect(row.id, git);
         // The repository holds the source: the developer is asked whether GitHub Actions should build it.
-        if (!r.ok && r.error === "needs_build") setAsk({ repo: git.repo, branch: git.branch });
-        else if (!r.ok) throw new Error(r.error === "cant_build" ? gitFailed(t, r.error, r.engine) : r.error ?? "error");
+        if (!r.ok && r.error === "needs_build") {
+          setAsk({ repo: git.repo, branch: git.branch });
+          waitsForBuild = true;
+        } else if (!r.ok) throw new Error(r.error === "cant_build" ? gitFailed(t, r.error, r.engine) : r.error ?? "error");
         if (r.building) setBuilding({ ...r.building, repo: git.repo, branch: git.branch });
       }
-      set("files", "ok");
+      set("files", waitsForBuild ? "skip" : "ok");
     } catch (e) {
       set("files", "fail");
       // A file that didn't reach Cloudflare is "upload"; GitHub deploys say what went wrong.
@@ -299,13 +303,13 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
   }
 
   if (phase === "review" && p && scan) {
-    if (kind === "github" && scan.folder === null) {
+    // Source code only: carried on below (the game is added, then GitHub Actions is offered to build it).
+    if (kind === "github" && scan.folder === null && !scan.needsBuild) {
       return (
         <section className="panel quick-add">
           <h1 className="h">{t("quick.title")}</h1>
-          <p className="check warn">{scan.needsBuild ? t("quick.needsBuild") : t("quick.noGame")}</p>
+          <p className="check warn">{t("quick.noGame")}</p>
           <div className="actions">
-            {scan.needsBuild && <Link to="/my-games#upload-keys" className="btn primary">{t("quick.useAction")}</Link>}
             <button type="button" className="btn" onClick={() => setPhase("pick")}>{t("quick.back")}</button>
           </div>
         </section>
@@ -327,6 +331,7 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
           <button type="button" className="btn" onClick={advanced} title={t("quick.advancedHelp")}>{t("quick.advanced")}</button>
         </div>
         <p className="lead">{scan.ai ? t("quick.reviewLead") : t("quick.reviewLeadNoAi")}</p>
+        {kind === "github" && scan.needsBuild && <p className="check">{t("quick.willBuild")}</p>}
         <div className="form quick-form">
           <label htmlFor="q-title">{t("form.title")}</label>
           <input id="q-title" maxLength={60} value={p.title} onChange={(e) => field("title")(e.target.value)} />
