@@ -118,6 +118,11 @@ describe("a repository that holds the game's source", () => {
     expect(await deploy({ "project.godot": "", "toki.json": JSON.stringify({ folder: "export" }) })).toEqual({ ok: false, error: "needs_build" });
   });
 
+  it("has to be built first when the whole repository is a project without a page (e.g. Godot)", async () => {
+    expect(await deploy({ "project.godot": "", "player.gd": "extends Node" })).toEqual({ ok: false, error: "needs_build" });
+    expect(await deploy({ "package.json": '{"scripts":{"build":"vite build"}}', "src/main.ts": "go()" })).toEqual({ ok: false, error: "needs_build" });
+  });
+
   it("isn't offered when nothing in the repository could build the folder", async () => {
     expect(await deploy({ "README.md": "#" }, "dist")).toEqual({ ok: false, error: "no_files" });
     expect(isSource(filesIn(readTar(tar({ "package.json": '{"scripts":{"test":"x"}}' })), ""))).toBe(false);

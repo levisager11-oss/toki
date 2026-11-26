@@ -184,6 +184,8 @@ export async function deployCommit(deps: Deps, gh: GitHubClient, row: GitRow, co
     const pkg = files.find((f) => f.path === "package.json") ?? filesIn(all, "").find((f) => f.path === "package.json");
     const hasBuild = !!pkg && new TextDecoder().decode(pkg.data).includes('"build"');
     if (page && isSourcePage(new TextDecoder().decode(page.data.subarray(0, 200_000)), hasBuild)) throw new HostingError("needs_build");
+    // No page at all, but a project to build (a Godot project, or package.json with "build").
+    if (!page && isSource(filesIn(all, ""))) throw new HostingError("needs_build");
 
     const start = await startUpload(deps, user, { game_id: row.game_id, toki, files: files.map((f) => ({ path: f.path, size: f.data.length })) });
     const byPath = new Map(files.map((f) => [f.path, f.data]));
