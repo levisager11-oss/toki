@@ -14,10 +14,10 @@ import { GamePictures, type Pictures } from "./GamePictures";
 import { ApiError, connectError, runJob, type ConnectJob } from "../lib/ai";
 import {
   type BuildSetup,
-  gitConnect, hostError, scanRepo, scanSample, scanUpload, startAdditions, uploadGame, uploadName, type GitChoice, type HostingStatus, type Proposal, type ScanResult,
+  gitBuild, gitConnect, hostError, scanRepo, scanSample, scanUpload, startAdditions, uploadGame, uploadName, type GitChoice, type HostingStatus, type Proposal, type ScanResult,
 } from "../lib/hosting";
 import { HostedUpload, type Picked } from "./HostedUpload";
-import { BuildInfo, GitHubFollow, gitFailed } from "./GitHubFollow";
+import { BuildAsk, BuildInfo, GitHubFollow, gitFailed } from "./GitHubFollow";
 
 type Phase = "pick" | "scanning" | "review" | "publishing" | "done";
 type Step = "create" | "files" | "leaderboard";
@@ -91,6 +91,25 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
   const [err, setErr] = useState("");
   // The repository holds the source: GitHub Actions builds it, after its build file is merged.
   const [building, setBuilding] = useState<(BuildSetup & { repo: string; branch: string }) | null>(null);
+  // Connected, and its repository holds the source: "Build it with GitHub Actions?"
+  const [ask, setAsk] = useState<{ repo: string; branch: string } | null>(null);
+  const [askBusy, setAskBusy] = useState(false);
+  const buildIt = async () => {
+    if (!game || !ask) return;
+    setAskBusy(true);
+    setErr("");
+    try {
+      const r = await gitBuild(game.id);
+      if (!r.ok) setErr(gitFailed(t, r.error, r.engine));
+      else {
+        if (r.building) setBuilding({ ...r.building, ...ask });
+        setAsk(null);
+      }
+    } catch (e) {
+      setErr(t(`host.err.${hostError(e)}`, { mb: "100 MB" }));
+    }
+    setAskBusy(false);
+  };
   const [steps, setSteps] = useState<Record<Step, StepState>>({ create: "wait", files: "wait", leaderboard: "wait" });
   const [pct, setPct] = useState(0);
   const [game, setGame] = useState<{ id: string; slug: string } | null>(null);
@@ -184,8 +203,9 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
       if (kind === "upload" && picked) await uploadGame(row.id, picked.files, p.isolation, (d, total) => setPct(d / total));
       else if (git) {
         const r = await gitConnect(row.id, git);
-        if (!r.ok) throw new Error(r.error === "cant_build" ? gitFailed(t, r.error, r.engine) : r.error ?? "error");
-        // The repository holds the source: GitHub Actions builds it, once its build file is in.
+        // The repository holds the source: the developer is asked whether GitHub Actions should build it.
+        if (!r.ok && r.error === "needs_build") setAsk({ repo: git.repo, branch: git.branch });
+        else if (!r.ok) throw new Error(r.error === "cant_build" ? gitFailed(t, r.error, r.engine) : r.error ?? "error");
         if (r.building) setBuilding({ ...r.building, repo: git.repo, branch: git.branch });
       }
       set("files", "ok");
@@ -457,7 +477,8 @@ export function QuickAdd({ hosting, onManual }: { hosting: HostingStatus; onManu
         )}
       </ol>
       {err && <p className="error" role="alert">{err}</p>}
-      {building && <BuildInfo repo={building.repo} branch={building.branch} link={building.pr ?? building.manual} ready={building.ready} waiting={building.ready && !building.started} />}
+      {ask && game && <BuildAsk busy={askBusy} onYes={buildIt} onLater={() => setAsk(null)} />}
+      {building && game && <BuildInfo gameId={game.id} repo={building.repo} branch={building.branch} setup={building} />}
       {phase === "done" && game && (
         <div className="actions">
           {steps.files === "ok" && <button type="button" className="btn primary" onClick={() => navigate(`/game/${game.slug}`)}>{t("quick.open")}</button>}

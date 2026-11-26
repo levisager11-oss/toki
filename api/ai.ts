@@ -4,11 +4,17 @@ import { anthropicCheckKey } from "../server/ai/anthropic.js";
 import { AiError, listModels } from "../server/ai/provider.js";
 import { errorCode } from "../server/connect/agent.js";
 import { body, context, json, type Ctx } from "../server/http.js";
+import { github } from "../server/github.js";
 import { githubFromManifestCode, removeSecret, saveSecret } from "../server/secrets.js";
 
 export async function GET(request: Request) {
   const ctx = await context(request, ["admin"]);
   if (ctx instanceof Response) return ctx;
+  // What the GitHub App asks for on GitHub but lacks (apps made before Toki asked for it): the
+  // admin adds it on GitHub, or games' build files can't be added by pull request.
+  const missing = ctx.sources.github
+    ? await github(ctx.env.github).missingAppPermissions().catch(() => null)
+    : null;
   return json({
     serviceKey: true,
     anthropicKey: !!ctx.sources.anthropicKey,
@@ -16,6 +22,7 @@ export async function GET(request: Request) {
     github: !!ctx.sources.github,
     githubSource: ctx.sources.github,
     githubSlug: ctx.env.github.slug || null,
+    githubMissing: missing,
   });
 }
 

@@ -972,6 +972,12 @@ main.content:focus { outline: none; }
 .build-info { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
 .build-info p { margin: 0; font-size: 14px; }
 .build-info .btn { margin-left: 4px; }
+.build-steps { margin-top: 2px; }
+.build-steps > li { padding: 10px 0; }
+.build-steps .btn { margin-left: 0; }
+.build-steps p { margin: 0; }
+.build-ask { display: flex; flex-direction: column; gap: 6px; }
+.build-ask p { margin: 0; }
 .host-box .check p { margin: 0 0 4px; }
 /* The status box of a game that follows GitHub: text in lines, not the checkbox row of forms. */
 .form .host-box div.check { display: block; font-weight: 400; overflow-wrap: anywhere; }
