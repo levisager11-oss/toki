@@ -663,6 +663,7 @@ a.author:hover { text-decoration: underline; color: var(--fg); }
 .msg-row:hover .msg-tools, .msg-row:focus-within .msg-tools { display: flex; }
 .report-form { margin: 6px 0 0 32px; display: flex; gap: 6px; flex-wrap: wrap; }
 .report-form input { flex: 1 1 200px; }
+.report-form .report-danger { flex-basis: 100%; }
 .composer { display: flex; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--line); align-items: flex-end; }
 .composer textarea { flex: 1; min-width: 0; resize: none; border: 1px solid var(--line); background: var(--bg); padding: 9px 10px; max-height: 140px; field-sizing: content; }
 .composer textarea:focus { border-color: var(--fg); outline: none; }

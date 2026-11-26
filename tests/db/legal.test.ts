@@ -321,3 +321,44 @@ describe("what the privacy policy says about AI", () => {
     expect((await facts()).games_hosted).toBe(false);
   });
 });
+
+describe("safety fixes", () => {
+  it("takes reports about someone who may be in danger", async () => {
+    const a = await t.user();
+    const b = await t.user();
+    await rpc(a, "report_content", ["profile", b.id, "danger", "says they want to hurt themselves"], ["text", "uuid", "text", "text"]);
+    const rows = await t.admin<{ category: string }>("select category from content_reports where reporter_id = $1", [a.id]);
+    expect(rows).toEqual([{ category: "danger" }]);
+  });
+
+  it("finds pictures that nothing uses any more, only for the server", async () => {
+    const dev = await t.user("creator");
+    const game = await t.game(dev);
+    const base = "https://oygszctxhkubofspywzr.supabase.co/storage/v1/object/public";
+    const used = `${dev.id}/cover.webp`;
+    const shot = `${dev.id}/shot.webp`;
+    const avatar = `${dev.id}/me.webp`;
+    const old = "now() - interval '2 days'";
+    await t.admin(
+      `insert into storage.objects (bucket_id, name, created_at) values
+        ('thumbnails', $1, ${old}), ('thumbnails', $2, ${old}), ('avatars', $3, ${old}),
+        ('thumbnails', $4, ${old}), ('avatars', $5, ${old}), ('thumbnails', $6, now())`,
+      [used, shot, avatar, `${dev.id}/replaced.webp`, `${dev.id}/old-me.webp`, `${dev.id}/in-a-form.webp`],
+    );
+    await t.admin("update games set thumbnail_url = $1, screenshots = array[$2] where id = $3", [`${base}/thumbnails/${used}?v=2`, `${base}/thumbnails/${shot}`, game.id]);
+    await t.admin("update profiles set avatar_url = $1 where id = $2", [`${base}/avatars/${avatar}`, dev.id]);
+    const unused = await t.service<{ bucket: string; name: string }>("select * from unused_pictures(100) where name like $1 order by name", [`${dev.id}/%`]);
+    expect(unused).toEqual([
+      { bucket: "avatars", name: `${dev.id}/old-me.webp` },
+      { bucket: "thumbnails", name: `${dev.id}/replaced.webp` },
+    ]);
+    await expect(t.as(dev, "select * from unused_pictures(10)")).rejects.toThrow(/permission denied/);
+    await expect(t.as(null, "select * from unused_pictures(10)")).rejects.toThrow(/permission denied/);
+  });
+
+  it("puts used invite codes, the AI free-use counter and release notes in the copy of your data", async () => {
+    const a = await t.user();
+    const data = await rpc<Record<string, unknown>>(a, "export_my_data");
+    for (const key of ["ai_free_use", "invite_used", "release_notes"]) expect(data).toHaveProperty(key, []);
+  });
+});

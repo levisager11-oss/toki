@@ -136,13 +136,14 @@ export function Reports() {
       <p className="lead">{t("rep.other.help")}</p>
       {other === null ? <p className="msg">{t("loading")}</p> : other.length === 0 ? <p className="msg">{t("rep.none")}</p> : (
         <ul className="report-list">
-          {other.map((r) => (
+          {[...other].sort((a, b) => Number(b.category === "danger") - Number(a.category === "danger")).map((r) => (
             <li key={r.id}>
               <div className="msg-head">
                 <b>{t(`mod.what.${r.kind}`)}: {where(r) ? <Link to={where(r)!}>{r.title}</Link> : r.title}</b>
                 <span className="st st-planned">{t(`report.cat.${r.category}`)}</span>
                 <time className="sub">{ago(r.created_at, lang)}</time>
               </div>
+              {r.category === "danger" && <p className="error">{t("rep.danger")}</p>}
               {r.reason && <blockquote>{r.reason}</blockquote>}
               <AiVerdict verdict={r.ai_verdict} reason={r.ai_reason} />
               <p className="sub">

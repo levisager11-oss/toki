@@ -19,6 +19,7 @@ import { MAX_GAME_BYTES } from "../src/lib/hostingRules.js";
 import { checkMove, moveBack, moveGame, type GitHubAccess } from "../server/migrate.js";
 import { ACTIONS_ISSUER, ActionsAuthError, gameForAction, looksLikeJwt, verifyActionToken, type ActionClaims } from "../server/actionsAuth.js";
 import { buildKind, setUpBuild, type BuildSetup } from "../server/gitBuild.js";
+import { sweepPictures } from "../server/pictures.js";
 
 interface Who {
   db: Db;
@@ -99,10 +100,12 @@ export async function GET(request: Request) {
     const env = serverEnv();
     if (!env.serviceKey) return json({ error: "not_configured" }, 503);
     const db = serviceDb(env.serviceKey);
+    // Unused pictures go too (server/pictures.ts); that must not stop the games' clean-up.
+    const pics = await sweepPictures(db, env.serviceKey).catch(() => ({ pictures: 0 }));
     const { config } = await r2Config(db, env.serviceKey);
-    if (!config) return json({ deleted: 0 });
+    if (!config) return json({ deleted: 0, ...pics });
     try {
-      return json(await sweep(hostingDeps(db, config), 200));
+      return json({ ...(await sweep(hostingDeps(db, config), 200)), ...pics });
     } catch (e) {
       return failed(e);
     }

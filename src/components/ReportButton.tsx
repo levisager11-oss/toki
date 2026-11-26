@@ -16,7 +16,13 @@ export function ReportButton({ kind, target, className = "linkish", startOpen = 
   const [done, setDone] = useState(false);
   const [err, setErr] = useState("");
 
-  if (done) return <span className="sub" role="status">{t("report.sent")}</span>;
+  if (done)
+    return (
+      <span className="sub" role="status">
+        {t("report.sent")}
+        {category === "danger" && <> {t("report.dangerHelp")}</>}
+      </span>
+    );
   if (!open) return <button type="button" className={className} onClick={() => setOpen(true)}>{t("chat.report")}</button>;
   // Without an account: by email, so anyone can report.
   if (!session)
@@ -50,6 +56,7 @@ export function ReportButton({ kind, target, className = "linkish", startOpen = 
       <label htmlFor={`report-why-${target}`}>{t("report.why")}</label>
       <textarea id={`report-why-${target}`} rows={3} maxLength={REPORT_REASON_MAX} required={category === "illegal" || category === "copyright"} value={reason} onChange={(e) => setReason(e.target.value)} aria-describedby={`report-help-${target}`} />
       <small id={`report-help-${target}`}>{t(category === "copyright" ? "report.copyrightHelp" : "report.help")}</small>
+      {category === "danger" && <p className="hint" role="note">{t("report.dangerHelp")}</p>}
       {err && <p className="error" role="alert">{err}</p>}
       <div className="actions">
         <button className="btn" disabled={busy}>{busy ? t("loading") : t("report.send")}</button>

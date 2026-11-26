@@ -271,6 +271,7 @@ export function ChatView({ chatId, kind, compact, unread }: {
                   <input autoFocus maxLength={LIMITS.reason} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t("chat.reportWhy")} aria-label={t("chat.reportWhy")} />
                   <button className="btn">{t("chat.sendReport")}</button>
                   <button type="button" className="btn" onClick={() => setReporting(null)}>{t("form.cancel")}</button>
+                  <small className="sub report-danger">{t("report.dangerHelp")}</small>
                 </form>
               )}
             </div>
