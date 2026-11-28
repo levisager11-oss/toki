@@ -7,6 +7,7 @@ import { SUPABASE_KEY, SUPABASE_URL } from "./server/config.js";
 import { gameSlug, ISOLATION_HEADERS, needsIsolation } from "./server/isolation.js";
 import { injectMeta, PREVIEW_BOT, type PageMeta } from "./server/meta.js";
 import { gameMeta, homeMeta, missingMeta, SEO_GAME_COLUMNS, staticMeta, type GameSubpage, type SeoGame } from "./server/seo.js";
+import { scoreHeadline, sharedScore } from "./server/score-share.js";
 
 export const config = { matcher: ["/", "/game/:slug*", "/updates", "/feedback", "/terms", "/privacy"] };
 
@@ -40,6 +41,17 @@ async function metaFor(url: URL): Promise<PageMeta | null | undefined> {
   const g = rows.find((r) => r.slug === path.slug) ?? rows[0];
   if (!g) return null;
   if (path.sub === "stats") return { ...gameMeta(g, origin), url: `${origin}/game/${g.slug}/stats`, noindex: true, body: undefined };
+  // A shared high score ("?by=<username>"): the preview shows that player's score as a picture.
+  const by = url.searchParams.get("by");
+  if (!path.sub && by) {
+    const s = await sharedScore(g.slug, by).catch(() => null);
+    if (s)
+      return {
+        ...gameMeta(g, origin),
+        ...scoreHeadline(s),
+        image: `${origin}/api/score-card?game=${encodeURIComponent(s.slug)}&by=${encodeURIComponent(s.username)}`,
+      };
+  }
   return gameMeta(g, origin, path.sub);
 }
 

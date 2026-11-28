@@ -347,7 +347,8 @@ export async function clearNotifications() {
 // ---------- high scores ----------
 
 export type ScoreOrder = "high" | "low";
-export type ScoreFormat = "points" | "time";
+export type { ScoreFormat } from "./scoreFormat";
+import type { ScoreFormat } from "./scoreFormat";
 
 export interface ScoreRow extends Person {
   rank: number;
@@ -422,20 +423,7 @@ export async function removeScore(gameId: string, userId: string, board = "") {
   if (error) throw fail(error);
 }
 
-/** A score as players read it: 12,345 points, or a time like 1:02.345. */
-export function formatScore(score: number, format: ScoreFormat | undefined, lang: "en" | "de"): string {
-  if (format === "time") {
-    const neg = score < 0;
-    const ms = Math.abs(Math.round(score));
-    const h = Math.floor(ms / 3_600_000);
-    const m = Math.floor((ms % 3_600_000) / 60_000);
-    const s = Math.floor((ms % 60_000) / 1000);
-    const rest = String(ms % 1000).padStart(3, "0");
-    const mm = h ? String(m).padStart(2, "0") : String(m);
-    return `${neg ? "-" : ""}${h ? `${h}:` : ""}${mm}:${String(s).padStart(2, "0")}.${rest}`;
-  }
-  return Math.round(score).toLocaleString(lang === "de" ? "de-CH" : "en");
-}
+export { formatScore } from "./scoreFormat";
 
 /** Whether a score sent by a game can be saved: a finite number in range. */
 export const validScore = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && Math.abs(v) <= 1e12;

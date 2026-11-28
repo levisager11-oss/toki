@@ -1,3 +1,4 @@
+import { badgeCode } from "../components/TokiBadge";
 import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { useI18n } from "../lib/i18n";
@@ -114,6 +115,7 @@ TOKI_KEY="toki_…" node toki-upload.mjs --build
 node toki-upload.mjs path/to/build --dry-run`,
   },
   workflow: { lang: "yaml", code: githubWorkflow(WWW) },
+  badge: { lang: "html", code: badgeCode("your-game").html },
 };
 
 /** Inline `code` and [links](/path) in a line of text. */

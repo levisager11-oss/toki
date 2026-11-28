@@ -92,6 +92,10 @@
     },
     "api/push.ts": {
       "maxDuration": 30
+    },
+    "api/score-card.ts": {
+      "maxDuration": 15,
+      "includeFiles": "server/fonts/**"
     }
   },
   "crons": [
