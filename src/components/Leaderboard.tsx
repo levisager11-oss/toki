@@ -1,3 +1,4 @@
+import { scoreSharePath } from "../lib/scoreFormat";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
@@ -215,7 +216,7 @@ export function Leaderboard({ game, version, last, boards }: { game: Game; versi
           ) : last.isNew || last.dayNew || last.weekNew ? (
             <>
               {t(last.isNew ? "score.newBest" : last.dayNew ? "daily.newBest" : "week.newBest", { score: fmtLast(last.score) })}{" "}
-              <ShareButton className="linkish" path={`/game/${game.slug}#scores`} title={game.title} text={t("score.shareText", { score: fmtLast(last.score), title: game.title })} />
+              <ShareButton className="linkish" path={scoreSharePath(game.slug, last.isNew && last.board === MAIN ? profile?.username : undefined)} title={game.title} text={t("score.shareText", { score: fmtLast(last.score), title: game.title })} />
             </>
           ) : t("score.notBest", { score: fmtLast(last.score), best: fmtLast(last.best ?? last.score) })}
         </p>

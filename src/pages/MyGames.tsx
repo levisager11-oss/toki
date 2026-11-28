@@ -1,3 +1,4 @@
+import { TokiBadge } from "../components/TokiBadge";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../lib/auth";
@@ -110,6 +111,7 @@ export function MyGames() {
       )}
       {/* Only the developer's own games, also for admins: the others are their developers' to update. */}
       <DevUpdates games={list.filter((g) => g.created_by === profile.id)} />
+      <TokiBadge games={list.filter((g) => g.created_by === profile.id)} />
       {list.length > 0 && <MultiplayerSetup id="toki-features" open={location.hash === "#toki-features"} />}
       {hosting?.enabled && <UploadKeys />}
     </section>

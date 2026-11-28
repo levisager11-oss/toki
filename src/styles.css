@@ -986,6 +986,10 @@ main.content:focus { outline: none; }
 .import-row { display: flex; gap: 8px; margin-top: 8px; }
 .import-row input { flex: 1; min-width: 0; }
 .upload-keys { margin-top: 24px; }
+.toki-badge { margin-top: 24px; }
+.toki-badge .badge-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 12px 0; }
+.toki-badge .badge-row select { padding: 8px 10px; font-size: 15px; }
+.toki-badge .badge-preview { display: inline-block; margin: 4px 0 14px; line-height: 0; }
 .key-list { list-style: none; padding: 0; margin: 10px 0; display: flex; flex-direction: column; gap: 6px; }
 .key-list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; border: 1px solid var(--line); padding: 8px 10px; background: var(--surface); }
 .key-list li .linkish { margin-left: auto; }
